@@ -1,0 +1,9 @@
+{
+  "name": "@byoa/browser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./index.ts",
+  "types": "./index.ts",
+  "license": "MIT"
+}

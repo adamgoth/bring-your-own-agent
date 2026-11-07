@@ -1,0 +1,31 @@
+/* BYOA brand tokens — Dock identity v1.0 */
+:root {
+  /* Light */
+  --byoa-ink: #15171C;          /* cradle, wordmark, text, primary button */
+  --byoa-paper: #FAF9F6;        /* backgrounds */
+  --byoa-tangerine: #F05A28;    /* the dot only = connected; never text */
+  --byoa-stone: #5E6168;        /* secondary text */
+  --byoa-pebble: #A3A6AD;       /* idle dot, disabled */
+  --byoa-mist: #E7E5E0;         /* borders, dividers */
+
+  /* Dark */
+  --byoa-night: #15171C;
+  --byoa-surface-dark: #1F2228;
+  --byoa-chalk: #F3F2EE;
+  --byoa-tangerine-bright: #FF6B3D;
+  --byoa-stone-dark: #A3A6AD;
+  --byoa-line-dark: #33363D;
+
+  /* Type */
+  --byoa-font-wordmark: Nunito, system-ui, sans-serif; /* weight 900, +0.01em; the logo files are outlined */
+  --byoa-font-display: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --byoa-font-ui: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Connect button */
+  --byoa-button-height: 40px;
+  --byoa-button-radius: 10px;
+  --byoa-button-padding: 0 14px 0 12px;
+  --byoa-button-gap: 8px;
+  --byoa-button-height-compact: 32px;
+  --byoa-button-radius-compact: 8px;
+}

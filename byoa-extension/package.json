@@ -1,0 +1,99 @@
+{
+  "name": "byoa-extension",
+  "version": "0.11.0",
+  "description": "BYOA: bring your own agent to browser apps with WebMCP tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "prebuild": "pnpm run typecheck && pnpm run lint",
+    "build": "vite build",
+    "build:force": "vite build",
+    "build:release": "RELEASE=1 vite build",
+    "preview": "vite preview",
+    "test": "vitest --run",
+    "test:browser": "pnpm run build && pnpm run test:browser:built",
+    "test:browser:built": "node tests/browser/read-page-headless.js",
+    "test:browser:mv3": "pnpm run build && pnpm run test:browser:mv3:built",
+    "test:browser:mv3:built": "node tests/browser/mv3-extension.mjs",
+    "test:browser:webmcp-wpt": "pnpm run build && pnpm run test:browser:webmcp-wpt:built",
+    "test:browser:webmcp-wpt:built": "node tests/browser/webmcp-wpt.mjs",
+    "test:ai:integration": "vitest --run --config vitest.ai-integration.config.ts",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives",
+    "lint:fix": "eslint . --ext ts,tsx --fix",
+    "lint:strict": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\" \"*.{json,md}\"",
+    "check": "pnpm run typecheck && pnpm run lint:strict && pnpm run test",
+    "check:generated": "git diff --exit-code HEAD -- src/lib/webmcp/tools/registry.ts src/lib/webmcp/builtin-sources.ts",
+    "clean": "rm -rf dist release",
+    "prerelease": "pnpm run clean && pnpm run check",
+    "release": "pnpm run build:release && pnpm run check:generated && node scripts/package-release.js --stamp && pnpm run test:browser:built && pnpm run test:browser:mv3:built && pnpm run test:browser:webmcp-wpt:built && node scripts/package-release.js",
+    "release:github": "node scripts/github-release.js",
+    "postinstall": "husky || true",
+    "test:browser:apps:built": "node tests/browser/app-provider.mjs",
+    "test:browser:sidebar:built": "node tests/browser/sidebar-setup.mjs",
+    "test:browser:images:built": "node tests/browser/markdown-image-privacy.mjs"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "2.0.91",
+    "@ai-sdk/google": "^2.0.108",
+    "@ai-sdk/openai": "^2.0.140",
+    "@cfworker/json-schema": "^4.1.6",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/nunito": "^5.3.0",
+    "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@types/json-schema": "^7.0.15",
+    "@types/prismjs": "^1.26.6",
+    "ai": "^5.0.285",
+    "json-formatter-js": "^2.5.23",
+    "linkedom": "^0.18.15",
+    "loglevel": "^1.9.2",
+    "pdfjs-dist": "6.2.108",
+    "prismjs": "^1.30.0",
+    "streaming-markdown": "^0.2.15",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@ai-sdk/provider": "2.0.3",
+    "@crxjs/vite-plugin": "^2.7.1",
+    "@eslint/js": "^9.39.5",
+    "@types/chrome": "^0.0.286",
+    "@types/jsdom": "^27.0.0",
+    "@types/node": "^22.20.5",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
+    "archiver": "^7.0.1",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.7",
+    "husky": "^9.1.7",
+    "jsdom": "^26.1.0",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.3",
+    "terser": "^5.51.2",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.5",
+    "vitest": "^4.1.12"
+  },
+  "pnpm": {
+    "overrides": {
+      "@ai-sdk/provider-utils@3.0.44>undici": "6.29.1"
+    }
+  },
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{css,json,md}": [
+      "prettier --write"
+    ]
+  }
+}

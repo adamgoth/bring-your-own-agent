@@ -1,0 +1,19 @@
+{
+  "name": "bring-your-own-agent",
+  "private": true,
+  "version": "0.1.0",
+  "description": "BYOA browser extension and two WebMCP app demos",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "setup": "node scripts/projects.mjs setup",
+    "dev": "node scripts/projects.mjs dev",
+    "build": "node scripts/projects.mjs build",
+    "test": "node scripts/projects.mjs test",
+    "check": "node scripts/projects.mjs check",
+    "test:browser": "pnpm --dir byoa-extension run test:browser:apps:built",
+    "dev:demos": "node scripts/projects.mjs dev"
+  }
+}

@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BYOA: settings</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="page-brand">
+        <svg class="byoa-symbol" viewBox="0 0 24 24" width="32" height="32" aria-hidden="true">
+          <path class="cradle" stroke-width="3.5" d="M5 5.5V11.5A7 7 0 0 0 19 11.5V5.5" />
+          <circle class="dot" cx="12" cy="8" r="3.5" />
+        </svg>
+        <span class="wordmark">BYOA</span>
+        <h1 class="page-title">Settings</h1>
+      </div>
+      <main>
+        <section class="agents-section">
+          <div class="agents-header">
+            <h2>AI Agents</h2>
+            <button id="create-agent" class="button button-primary">+ New Agent</button>
+          </div>
+
+          <div id="agents-list" class="agents-list">
+            <!-- Agent cards will be populated dynamically -->
+          </div>
+
+          <div id="no-agents" class="no-agents hidden">
+            <div class="no-agents-content">
+              <h3>No agents configured</h3>
+              <p>
+                Create your first AI agent to get started. Each agent can be configured with a
+                different provider, model, and personality.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Commands Section -->
+        <section class="commands-section">
+          <div class="commands-header">
+            <h2>Commands</h2>
+            <button id="create-command" class="button button-primary">+ New Command</button>
+          </div>
+
+          <div id="commands-list" class="commands-list">
+            <!-- Command cards will be populated dynamically -->
+          </div>
+
+          <div id="no-commands" class="no-commands hidden">
+            <div class="no-commands-content">
+              <h3>No commands configured</h3>
+              <p>
+                Create custom commands that expand into reusable prompt templates. Trigger them with
+                <code>/name</code> in the chat. Use <code>$ARGUMENTS</code> to capture any text
+                after the command.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- WebMCP Tools Section -->
+        <section class="webmcp-section">
+          <div class="webmcp-header">
+            <h2>WebMCP Tools</h2>
+            <div class="header-actions">
+              <button id="create-script" class="button button-primary">+ New Script</button>
+            </div>
+          </div>
+
+          <div id="scripts-list" class="scripts-list">
+            <!-- Script cards will be populated dynamically -->
+          </div>
+
+          <div id="no-scripts" class="no-scripts hidden">
+            <div class="no-scripts-content">
+              <h3>No scripts configured</h3>
+              <p>
+                Create custom WebMCP tools that interact with web pages. Scripts can extract data,
+                manipulate DOM, or provide page-specific functionality to your AI assistant.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section class="mcp-section">
+          <div class="mcp-header">
+            <h2>MCP Servers</h2>
+            <button id="test-mcp-config" class="button button-primary">Test Connections</button>
+          </div>
+
+          <div class="form-group">
+            <span class="field-hint"
+              >Enter your MCP server configuration in JSON format. Each server should have transport
+              type (http), URL, and optional auth token.</span
+            >
+            <textarea
+              id="mcp-config"
+              rows="10"
+              placeholder='{
+  "mcpServers": {
+    "filesystem": {
+      "transport": "http",
+      "url": "http://localhost:3000/mcp",
+      "authToken": "optional-bearer-token"
+    }
+  }
+}'
+            ></textarea>
+          </div>
+
+          <div id="mcp-status" class="mcp-status hidden">
+            <h3>Server Status</h3>
+            <div id="mcp-status-content" class="mcp-status-content">
+              <!-- Status will be populated dynamically -->
+            </div>
+          </div>
+        </section>
+
+        <!-- Settings Section -->
+        <section class="settings-section">
+          <h2>Settings</h2>
+
+          <div class="form-group">
+            <label for="log-level">Log Level</label>
+            <select id="log-level">
+              <option value="trace">TRACE - All application events</option>
+              <option value="debug">DEBUG - Debug application events</option>
+              <option value="info">INFO - Information events</option>
+              <option value="warn" selected>WARN - Warning events (default)</option>
+              <option value="error">ERROR - Failure events</option>
+              <option value="silent">SILENT - No application or relay logs</option>
+            </select>
+            <span class="field-hint"
+              >DEBUG and TRACE include local context that may contain sensitive application, page,
+              and tool data. Basic credential sanitization is applied, but review logs before
+              sharing them externally. Other levels discard caller values. Generated page-tool
+              wrappers and browser/provider code log independently.</span
+            >
+          </div>
+
+          <!-- Backup & Restore -->
+          <div class="settings-subsection">
+            <h3>Backup & Restore</h3>
+            <p class="section-description">
+              Backup files are plaintext and can contain API keys, authentication tokens, endpoints,
+              model IDs, executable user scripts, and commands. Store them as secrets. Exports never
+              include Local Workspace connections or files.
+            </p>
+            <p class="section-description">
+              Importing settings removes every Local Workspace connection on this device before the
+              imported agents become active. It never deletes folders or files; reconnect them
+              afterward.
+            </p>
+
+            <div class="backup-actions">
+              <button id="export-settings" class="button button-secondary">
+                📥 Export Settings
+              </button>
+              <button id="import-settings" class="button button-secondary">
+                📤 Import Settings
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <div id="status-message" class="status-message"></div>
+      </main>
+
+      <!-- Agent Edit Modal -->
+      <dialog id="agent-modal" class="modal hidden" aria-labelledby="modal-title">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="modal-title">Create Agent</h3>
+            <button id="modal-close" class="modal-close" aria-label="Close agent editor">
+              &times;
+            </button>
+          </div>
+
+          <form id="agent-form" class="modal-body">
+            <div class="form-group">
+              <label for="agent-name">Agent Name *</label>
+              <input
+                type="text"
+                id="agent-name"
+                name="name"
+                placeholder="e.g., Code Assistant, Creative Writer"
+                pattern="[A-Za-z0-9\s\-_\(\)]+"
+                title="Use only letters, numbers, spaces, hyphens, underscores, and parentheses"
+                required
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="agent-description">Description (optional)</label>
+              <input
+                type="text"
+                id="agent-description"
+                name="description"
+                placeholder="Brief description of this agent's purpose"
+              />
+            </div>
+
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="agent-is-default" name="isDefault" />
+                <span class="checkmark"></span>
+                Set as default agent
+              </label>
+            </div>
+
+            <fieldset
+              id="agent-memory-section"
+              class="agent-config-section agent-memory-section hidden"
+              aria-busy="false"
+            >
+              <legend>Local Workspace <span class="field-label-qualifier">Optional</span></legend>
+              <p class="field-hint" id="agent-memory-description">
+                Without a workspace, this agent uses BYOA’s built-in behavior. Connect a folder to
+                bootstrap each new chat from <code>IDENTITY.md</code>, <code>SOUL.md</code>,
+                <code>USER.md</code>, <code>AGENTS.md</code>, and <code>MEMORY.md</code>.
+              </p>
+
+              <details class="agent-memory-details">
+                <summary>File access and sharing</summary>
+                <ul>
+                  <li>
+                    Their contents are sent to this agent’s configured AI service. Switching agents
+                    keeps the chat history and loads the selected agent’s workspace.
+                  </li>
+                  <li>
+                    The agent can list and read other bounded UTF-8 files in this folder through
+                    visible tool calls, and read contents may be sent to its configured AI service.
+                  </li>
+                  <li>
+                    <code>IDENTITY.md</code>, <code>SOUL.md</code>, <code>USER.md</code>, and
+                    <code>AGENTS.md</code> are model-read-only.
+                  </li>
+                  <li>
+                    Visible tool calls can create or update <code>MEMORY.md</code> and files under
+                    <code>memory/</code>, and delete individual files under
+                    <code>memory/</code> after reading their current version. Connecting creates
+                    <code>MEMORY.md</code> and <code>memory/</code> when missing; chats are never
+                    saved automatically.
+                  </li>
+                  <li>
+                    Connecting the same folder to multiple agents shares live file changes across
+                    their configured services. Parent and child folder overlaps are rejected.
+                  </li>
+                  <li>
+                    The chat bootstrap is limited to 128 KiB, including a 64 KiB
+                    <code>MEMORY.md</code> limit. Other reads are limited to 256 KiB and listings to
+                    200 matching entries.
+                  </li>
+                  <li>
+                    Disconnecting or deleting the agent removes the connection, not your files.
+                    Connections stay on this device, are excluded from settings backups, and are
+                    removed by settings imports.
+                  </li>
+                </ul>
+              </details>
+
+              <div
+                id="agent-memory-status"
+                class="agent-memory-status"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                <strong id="agent-memory-state">Not connected</strong>
+                <span id="agent-memory-detail">Save this agent before connecting a folder.</span>
+              </div>
+              <div
+                class="agent-memory-actions"
+                role="group"
+                aria-label="Local Workspace actions"
+                aria-describedby="agent-memory-description"
+              >
+                <button
+                  id="agent-memory-connect"
+                  type="button"
+                  class="button button-secondary"
+                  disabled
+                >
+                  Connect folder
+                </button>
+                <button
+                  id="agent-memory-disconnect"
+                  type="button"
+                  class="button button-danger hidden"
+                  disabled
+                >
+                  Disconnect
+                </button>
+              </div>
+            </fieldset>
+
+            <fieldset class="agent-config-section">
+              <legend>Model & Connection</legend>
+
+              <div class="form-group">
+                <label for="agent-provider">Provider</label>
+                <select id="agent-provider" aria-describedby="agent-provider-hint">
+                  <option value="openai">OpenAI</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="anthropic">Anthropic</option>
+                  <option value="google">Google Gemini</option>
+                  <option value="custom">Custom / other provider</option>
+                </select>
+                <span class="field-hint" id="agent-provider-hint"
+                  >Connection details are filled in for you. Enter your model ID and API key.</span
+                >
+              </div>
+
+              <div class="form-group" id="connection-api-group">
+                <label for="agent-connection-api">Connection API *</label>
+                <select
+                  id="agent-connection-api"
+                  name="connectionApi"
+                  aria-describedby="agent-connection-api-hint"
+                  required
+                >
+                  <option value="openai">OpenAI-style API</option>
+                  <option value="anthropic">Anthropic Messages API</option>
+                  <option value="google">Google Generative AI API</option>
+                </select>
+                <span class="field-hint" id="agent-connection-api-hint"
+                  >Choose the API contract implemented by the endpoint, not the model vendor. A
+                  Gemini model behind an OpenAI-compatible proxy uses OpenAI-style.</span
+                >
+              </div>
+
+              <div class="form-group" id="openai-api-mode-group">
+                <label for="agent-openai-api-mode"
+                  >API mode <span class="field-label-qualifier">Advanced</span></label
+                >
+                <select
+                  id="agent-openai-api-mode"
+                  name="openAIProtocol"
+                  aria-describedby="agent-openai-api-mode-hint"
+                >
+                  <option value="openai-responses">Responses (recommended)</option>
+                  <option value="openai-chat-completions">Chat Completions (compatibility)</option>
+                </select>
+                <span class="field-hint" id="agent-openai-api-mode-hint"
+                  >Responses is recommended. Choose Chat Completions if your provider requires it.
+                  BYOA never switches modes automatically.</span
+                >
+              </div>
+
+              <div class="form-group">
+                <label for="agent-model">Model ID *</label>
+                <input
+                  type="text"
+                  id="agent-model"
+                  name="model"
+                  aria-describedby="agent-model-hint"
+                  placeholder="Enter the exact model ID"
+                  required
+                />
+                <span class="field-hint" id="agent-model-hint"
+                  >Passed unchanged to the selected Connection API</span
+                >
+              </div>
+
+              <div class="form-group">
+                <label for="agent-endpoint">API endpoint</label>
+                <input
+                  type="url"
+                  id="agent-endpoint"
+                  name="endpoint"
+                  autocomplete="off"
+                  aria-describedby="agent-endpoint-hint"
+                />
+                <span class="field-hint" id="agent-endpoint-hint"
+                  >Must implement the selected Connection API, including its authentication and
+                  streaming format.</span
+                >
+              </div>
+
+              <div class="form-group">
+                <label for="agent-api-key"
+                  >API Key <span id="agent-api-key-required">*</span></label
+                >
+                <input
+                  type="password"
+                  id="agent-api-key"
+                  name="apiKey"
+                  autocomplete="off"
+                  aria-describedby="agent-api-key-hint"
+                  placeholder="Your API key"
+                />
+                <span class="api-key-hint" id="agent-api-key-hint" aria-live="polite"></span>
+              </div>
+
+              <!-- Reasoning Configuration -->
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="reasoning-enabled" name="reasoningEnabled" />
+                  <span class="checkmark"></span>
+                  Enable and show thinking process before responding
+                </label>
+              </div>
+
+              <div id="reasoning-settings" class="reasoning-settings hidden">
+                <!-- Provider-specific reasoning controls will be populated dynamically -->
+                <div id="reasoning-openai" class="provider-reasoning hidden">
+                  <div class="form-group">
+                    <label for="reasoning-effort">Reasoning Effort</label>
+                    <select id="reasoning-effort" name="reasoningEffort">
+                      <option value="minimal">Minimal - Quick analysis</option>
+                      <option value="low">Low - Basic reasoning</option>
+                      <option value="medium" selected>Medium - Balanced thinking</option>
+                      <option value="high">High - Deep analysis</option>
+                    </select>
+                    <span class="field-hint"
+                      >Higher effort uses more tokens but provides deeper insights</span
+                    >
+                  </div>
+                  <div class="form-group" id="reasoning-summary-group">
+                    <label for="reasoning-summary">Reasoning Summary</label>
+                    <select id="reasoning-summary" name="reasoningSummary">
+                      <option value="auto" selected>Auto - Model decides</option>
+                      <option value="detailed">Detailed - Full thinking trace</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div id="reasoning-anthropic" class="provider-reasoning hidden">
+                  <div class="form-group">
+                    <label for="thinking-budget">Thinking Budget (tokens)</label>
+                    <input
+                      type="number"
+                      id="thinking-budget"
+                      name="anthropicThinkingBudget"
+                      min="1000"
+                      max="20000"
+                      value="12000"
+                    />
+                    <span class="field-hint"
+                      >Token budget for reasoning (1,000-20,000). Higher = deeper thinking</span
+                    >
+                  </div>
+                </div>
+
+                <div id="reasoning-google" class="provider-reasoning hidden">
+                  <div class="form-group">
+                    <label for="thinking-budget-google">Thinking Budget</label>
+                    <input
+                      type="number"
+                      id="thinking-budget-google"
+                      name="googleThinkingBudget"
+                      min="-1"
+                      max="24576"
+                      value="8192"
+                    />
+                    <span class="field-hint"
+                      >Token budget (0-24576, -1 for dynamic). Flash models only</span
+                    >
+                  </div>
+                  <div class="form-group">
+                    <label class="checkbox-label">
+                      <input
+                        type="checkbox"
+                        id="include-thoughts"
+                        name="googleIncludeThoughts"
+                        checked
+                      />
+                      <span class="checkmark"></span>
+                      Include Thought Summaries
+                    </label>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="checkbox-label">
+                    <input
+                      type="checkbox"
+                      id="reasoning-auto-expand"
+                      name="reasoningAutoExpand"
+                      checked
+                    />
+                    <span class="checkmark"></span>
+                    Auto-expand reasoning when streaming
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="agent-temperature">Temperature</label>
+                  <input
+                    type="number"
+                    id="agent-temperature"
+                    name="temperature"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value="0.7"
+                    required
+                  />
+                  <span class="field-hint">0 = focused, 2 = creative</span>
+                </div>
+
+                <div class="form-group">
+                  <label for="agent-max-steps">Max Steps</label>
+                  <input
+                    type="number"
+                    id="agent-max-steps"
+                    name="maxSteps"
+                    min="1"
+                    max="50"
+                    value="10"
+                    required
+                  />
+                  <span class="field-hint">Tool calls per turn (1-50)</span>
+                </div>
+              </div>
+            </fieldset>
+          </form>
+
+          <div
+            id="agent-modal-status"
+            class="modal-status hidden"
+            role="status"
+            aria-live="polite"
+          ></div>
+
+          <div class="modal-footer">
+            <!-- Footer buttons will be dynamically generated -->
+          </div>
+        </div>
+      </dialog>
+
+      <!-- WebMCP Script Editor Modal -->
+      <dialog id="script-modal" class="modal hidden" aria-labelledby="script-modal-title">
+        <div class="modal-content modal-large">
+          <div class="modal-header">
+            <h3 id="script-modal-title">Create WebMCP Script</h3>
+            <button id="script-modal-close" class="modal-close" aria-label="Close script editor">
+              &times;
+            </button>
+          </div>
+
+          <form id="script-form" class="modal-body script-editor-body">
+            <!-- Built-in Tool Banner (hidden by default) -->
+            <div id="builtin-banner" class="builtin-banner hidden">
+              <strong>Built-in Tool:</strong> This is a precompiled system tool. The code is
+              read-only and cannot be modified.
+            </div>
+
+            <div class="editor-layout">
+              <!-- Code Editor Section -->
+              <div class="editor-section">
+                <div class="editor-toolbar">
+                  <label>Script Code</label>
+                  <div class="editor-actions">
+                    <button type="button" id="insert-template" class="button button-small">
+                      Insert Template
+                    </button>
+                    <button type="button" id="format-code" class="button button-small">
+                      Format
+                    </button>
+                  </div>
+                </div>
+                <div id="code-editor-container" class="code-editor-container">
+                  <!-- CodeMirror will be inserted here -->
+                  <textarea
+                    id="script-code"
+                    class="script-code-fallback"
+                    rows="20"
+                    placeholder="// Your WebMCP tool script here..."
+                  ></textarea>
+                </div>
+              </div>
+
+              <!-- Preview & Validation Section -->
+              <div class="preview-section">
+                <div class="preview-tabs">
+                  <button type="button" class="tab-button active" data-tab="metadata">
+                    Metadata
+                  </button>
+                  <button type="button" class="tab-button" data-tab="validation">Validation</button>
+                </div>
+
+                <div class="tab-content" id="metadata-tab">
+                  <h4>Parsed Metadata</h4>
+                  <div id="metadata-preview" class="metadata-preview">
+                    <div class="metadata-empty">Write a script to see metadata</div>
+                  </div>
+                </div>
+
+                <div class="tab-content hidden" id="validation-tab">
+                  <h4>Validation Results</h4>
+                  <div id="validation-results" class="validation-results">
+                    <div class="validation-empty">No validation issues</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </form>
+
+          <div
+            id="script-modal-status"
+            class="modal-status hidden"
+            role="status"
+            aria-live="polite"
+          ></div>
+
+          <div class="modal-footer">
+            <button id="validate-script" class="button button-secondary">Validate</button>
+            <!-- Other footer buttons will be dynamically generated -->
+          </div>
+        </div>
+      </dialog>
+
+      <!-- Command Edit Modal -->
+      <dialog id="command-modal" class="modal hidden" aria-labelledby="command-modal-title">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="command-modal-title">Create Command</h3>
+            <button id="command-modal-close" class="modal-close" aria-label="Close command editor">
+              &times;
+            </button>
+          </div>
+
+          <form id="command-form" class="modal-body">
+            <div class="form-group">
+              <label for="command-name">Command Name *</label>
+              <input
+                type="text"
+                id="command-name"
+                placeholder="e.g., pr-reviewer, sql-expert"
+                pattern="[A-Za-z0-9\-_]+"
+                title="Use only letters, numbers, hyphens, and underscores (no slashes or spaces)"
+                required
+                maxlength="50"
+              />
+              <span class="field-hint"
+                >Letters, numbers, hyphens, and underscores only. No slashes or spaces. (1-50
+                characters)</span
+              >
+            </div>
+
+            <div class="form-group">
+              <label for="command-instructions">Instructions Template *</label>
+              <textarea
+                id="command-instructions"
+                rows="6"
+                maxlength="5000"
+                placeholder="You are an expert software developer. Review this code focusing on: $ARGUMENTS"
+                required
+              ></textarea>
+              <span class="field-hint"
+                >Use $ARGUMENTS where you want the command arguments to be inserted</span
+              >
+            </div>
+
+            <div class="form-group">
+              <h4>Example Usage</h4>
+              <div class="example-usage">
+                <div class="example-input">
+                  <strong>Input:</strong>
+                  <code id="example-input">/command your arguments here</code>
+                </div>
+                <div class="example-output">
+                  <strong>Expands to:</strong>
+                  <span id="example-output">Your template with arguments replaced</span>
+                </div>
+              </div>
+            </div>
+          </form>
+
+          <div
+            id="command-modal-status"
+            class="modal-status hidden"
+            role="status"
+            aria-live="polite"
+          ></div>
+
+          <div class="modal-footer">
+            <!-- Footer buttons will be dynamically generated -->
+          </div>
+        </div>
+      </dialog>
+
+      <!-- Hidden file input for settings import -->
+      <input type="file" id="import-file-input" class="hidden" accept=".json" />
+    </div>
+
+    <script type="module" src="./index.ts"></script>
+  </body>
+</html>
