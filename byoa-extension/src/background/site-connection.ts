@@ -1,7 +1,12 @@
 import type { ConfigStorage } from '../lib/storage/config';
 
 // Local prototype allowlist, not app-specific behavior. Hosted origins require explicit approval.
-export const DEMO_ORIGINS = new Set(['http://localhost:5173', 'http://localhost:5174']);
+export const DEMO_ORIGINS = new Set([
+  'http://localhost:5183',
+  'http://localhost:5184',
+  'http://127.0.0.1:5183',
+  'http://127.0.0.1:5184',
+]);
 export const siteConnectionKey = (origin: string) => `agentboard_connection_${origin}`;
 export function siteOrigin(sender: chrome.runtime.MessageSender): string | undefined {
   if (sender.tab?.id === undefined || sender.frameId !== 0 || !sender.url) return;

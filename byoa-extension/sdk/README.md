@@ -24,7 +24,7 @@ for await (const event of task.events) showProgress(event);
 
 ## Prototype boundaries
 
-- Only the top-level `http://localhost:5173` and `http://localhost:5174` documents are allowed. Both use the same bridge; the origin allowlist contains no tool names or app-specific handlers. Use `localhost`, not `127.0.0.1`, for the page URL.
+- Only top-level demo documents on ports 5183 and 5184 at `localhost` or `127.0.0.1` are allowed. Both use the same bridge; the origin allowlist contains no tool names or app-specific handlers. Approvals remain separate for each exact origin, including the hostname.
 - Configure API profiles in BYOA Options and explicitly choose one when connecting. API provider billing applies. This does not authenticate through a ChatGPT or Claude subscription.
 - A trusted app click opens the BYOA-owned approval window. The popup is extension-private and validates the original tab, document, origin, request token, expiry, and selected profile before granting access. Closing or cancelling rejects the request. Pending approvals expire after three minutes; short status polls let the flow survive service-worker restarts. Permissions remain per origin and browser session. Production hosted-site permissions, budgets, and a complete capability-session system remain future work.
 - Treat every script in an approved origin as sharing that origin's authority. Page messages are not a security boundary between scripts on the same page. The extension does not return secrets through the interface.

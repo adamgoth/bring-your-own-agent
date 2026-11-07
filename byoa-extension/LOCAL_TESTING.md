@@ -12,9 +12,9 @@ pnpm run check
 pnpm run build
 ```
 
-Load `byoa-extension/dist` using **Load unpacked** at `chrome://extensions`. After rebuilding, reload BYOA there, then reload the demo tabs. The extension needs no development server. Git is deliberately disabled; the inherited `check:generated` and release commands require Git and are not the local build workflow.
+Load `byoa-extension/dist` using **Load unpacked** at `chrome://extensions`. After rebuilding, reload BYOA there, then reload the demo tabs. The extension needs no development server. The repository now has a local initial commit. Release packaging additionally requires a clean annotated tag.
 
-Margin runs at `http://localhost:5173/` and Boardwalk at `http://localhost:5174/`. Use `localhost`, not `127.0.0.1`. Do not start another server if those ports are occupied. Current app setup commands are in the [root README](../README.md).
+Margin runs at `http://localhost:5183/` and Boardwalk at `http://localhost:5184/`. The equivalent `127.0.0.1` URLs also support BYOA; approve each exact origin separately. Do not start another server if those ports are occupied. Current app setup commands are in the [root README](../README.md).
 
 ## Connect and try the demos
 
@@ -137,3 +137,5 @@ This supersedes the preceding app-owned profile picker. Both apps call `agentboa
 The extension folder is now `bring-your-own-agent/byoa-extension/`; older `agentboard/` paths in historical entries above refer to prior layouts. Load the current extension from `byoa-extension/dist`. The SDK remains under `byoa-extension/sdk`, with both app imports updated.
 
 Both demo apps now live under `demos/margin/` and `demos/boardwalk/`. Run setup, dev, build, and check from the repository root; historical paths above remain for provenance.
+
+Current demo ports are 5183/5184, avoiding Vite’s common 5173 port. Earlier port numbers below the setup section are historical. The old 5173/5174 origins are no longer allowed to connect to BYOA.

@@ -8,7 +8,7 @@ import {
 } from '../src/background/connection-prompt';
 import { siteConnectionKey } from '../src/background/site-connection';
 import type { ConfigStorage } from '../src/lib/storage/config';
-const origin = 'http://localhost:5174';
+const origin = 'http://localhost:5184';
 const sender = {
   id: 'fixture',
   tab: { id: 7 },

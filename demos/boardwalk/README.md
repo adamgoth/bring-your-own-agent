@@ -10,8 +10,8 @@ From the BYOA repository root, the source layout is:
 bring-your-own-agent/
   byoa-extension/       # modified extension and shared sdk/
   demos/
-    margin/        # Margin, port 5173
-    boardwalk/     # Boardwalk, port 5174
+    margin/        # Margin, port 5183
+    boardwalk/     # Boardwalk, port 5184
 ```
 
 ```sh
@@ -19,7 +19,7 @@ pnpm setup
 pnpm dev
 ```
 
-Open **http://localhost:5174/**. The server binds to loopback. Manual card creation, editing, moving (drag or Move menu), selection, and undo work without an extension. Accepted board state is saved in this browser's local storage. Pending proposals are session-only. This is a single-browser demo; avoid editing the same board in multiple tabs.
+Open **http://localhost:5184/**. The server binds to loopback. Manual card creation, editing, moving (drag or Move menu), selection, and undo work without an extension. Accepted board state is saved in this browser's local storage. Pending proposals are session-only. This is a single-browser demo; avoid editing the same board in multiple tabs.
 
 Build BYOA with `pnpm build`, then reload the unpacked extension from `byoa-extension/dist` in `chrome://extensions`. Reload both app tabs after the extension reload. Configure an API agent in its Options and choose it in the connection picker. Connect separately in each app using **Not connected → Connect agent**. The header shows your connected profile name.
 

@@ -52,7 +52,7 @@ const action = process.argv[2];
 try {
   if (action === "dev") {
     console.log(
-      "Margin: http://localhost:5173/\nBoardwalk: http://localhost:5174/\nPress Ctrl+C to stop both demo servers.",
+      "Margin: http://localhost:5183/\nBoardwalk: http://localhost:5184/\nPress Ctrl+C to stop both demo servers.",
     );
     const jobs = projects
       .slice(1)
