@@ -1,0 +1,117 @@
+/*
+ * BYOA design tokens (Dock identity v1.0).
+ * Mirrors the BYOA design system's tokens.json; change values in both places together.
+ * Every extension surface imports this file and styles itself through --byoa-* properties.
+ */
+
+/* Bundled variable fonts (SIL Open Font License), served from the extension itself. */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/plus-jakarta-sans';
+@import '@fontsource-variable/nunito';
+
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces */
+  --byoa-paper: #faf9f6;
+  --byoa-surface: #ffffff;
+  --byoa-surface-sunk: #f3f2ee;
+
+  /* Text and marks */
+  --byoa-ink: #15171c;
+  --byoa-ink-hover: #2b2e35;
+  --byoa-ink-muted: #5e6168;
+  --byoa-ink-inverse: #ffffff;
+
+  /* Edges */
+  --byoa-line: #e7e5e0;
+  --byoa-line-strong: #8e9198;
+
+  /* The symbol's dot: connected vs idle. Graphics only, never text. */
+  --byoa-dot: #f05a28;
+  --byoa-dot-idle: #a3a6ad;
+
+  /* Focus */
+  --byoa-focus: #2f6fdb;
+  --byoa-focus-ring: rgba(47, 111, 219, 0.18);
+
+  /* States */
+  --byoa-danger: #b42318;
+  --byoa-danger-surface: #fdecea;
+  --byoa-danger-line: #f4b4ae;
+  --byoa-success: #1f7a45;
+  --byoa-success-surface: #e8f5ec;
+  --byoa-success-line: #9fd4b1;
+  --byoa-warning: #8a5a00;
+  --byoa-warning-surface: #fff4d6;
+  --byoa-warning-line: #e8c66a;
+
+  /* Code */
+  --byoa-code-surface: #1f2228;
+  --byoa-code-text: #e4e3df;
+
+  /* Elevation: floating layers only; cards use a line border. */
+  --byoa-shadow-popover: 0 12px 32px rgba(21, 23, 28, 0.1);
+
+  /* Type. The bundled variable fonts come first; each stack falls back to the system UI font. */
+  --byoa-font-wordmark: 'Nunito Variable', Nunito, system-ui, sans-serif;
+  --byoa-font-display:
+    'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto,
+    sans-serif;
+  --byoa-font-body:
+    'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --byoa-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Spacing */
+  --byoa-space-1: 4px;
+  --byoa-space-2: 8px;
+  --byoa-space-3: 12px;
+  --byoa-space-4: 16px;
+  --byoa-space-5: 24px;
+  --byoa-space-6: 32px;
+  --byoa-space-7: 48px;
+
+  /* Radius */
+  --byoa-radius-sm: 6px;
+  --byoa-radius-md: 10px;
+  --byoa-radius-lg: 12px;
+  --byoa-radius-xl: 16px;
+  --byoa-radius-pill: 999px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --byoa-paper: #15171c;
+    --byoa-surface: #1f2228;
+    --byoa-surface-sunk: #191b20;
+
+    --byoa-ink: #f3f2ee;
+    --byoa-ink-hover: #ffffff;
+    --byoa-ink-muted: #a3a6ad;
+    --byoa-ink-inverse: #15171c;
+
+    --byoa-line: #33363d;
+    --byoa-line-strong: #6b6f78;
+
+    --byoa-dot: #ff6b3d;
+    --byoa-dot-idle: #6b6f78;
+
+    --byoa-focus: #7ea6f0;
+    --byoa-focus-ring: rgba(126, 166, 240, 0.22);
+
+    --byoa-danger: #f97066;
+    --byoa-danger-surface: #3a1f1e;
+    --byoa-danger-line: #6b2a26;
+    --byoa-success: #5cc48a;
+    --byoa-success-surface: #17301f;
+    --byoa-success-line: #2b5a3b;
+    --byoa-warning: #f2b84b;
+    --byoa-warning-surface: #3a2e12;
+    --byoa-warning-line: #6b5420;
+
+    --byoa-code-surface: #0f1114;
+    --byoa-code-text: #e4e3df;
+
+    --byoa-shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.45);
+  }
+}

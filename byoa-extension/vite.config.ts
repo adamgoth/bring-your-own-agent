@@ -1,0 +1,143 @@
+import { defineConfig, type Plugin } from 'vite';
+import { crx } from '@crxjs/vite-plugin';
+import manifest from './manifest.json' with { type: 'json' };
+import pkg from './package.json' with { type: 'json' };
+import path from 'node:path';
+import { webmcpCompilerPlugin } from './scripts/vite-plugin-webmcp-compiler';
+import {
+  HTML_READER_HOST_FILE,
+  HTML_READER_HOST_KEY,
+  HTML_READER_HOST_VERSION,
+} from './src/lib/webmcp/tools/read_page/html-protocol';
+import { PDF_DOCUMENT_HOST_FILE } from './src/lib/webmcp/tools/read_page/pdf/protocol';
+
+// Single source of truth: inject version from package.json into manifest
+const manifestWithVersion = {
+  ...manifest,
+  version: pkg.version,
+};
+const isReleaseBuild = process.env.RELEASE === '1';
+
+/** Wrap configured file-injected entries so their minified top-level bindings cannot collide. */
+function classicScriptIifePlugin(entries: Readonly<Record<string, string | undefined>>): Plugin {
+  return {
+    name: 'classic-script-iife',
+    enforce: 'post',
+    generateBundle(_options, bundle) {
+      for (const output of Object.values(bundle)) {
+        if (output.type !== 'chunk' || !(output.fileName in entries)) continue;
+        if (output.imports.length > 0 || output.dynamicImports.length > 0) {
+          throw new Error(`Classic script ${output.fileName} must be self-contained`);
+        }
+        if (output.exports.length > 0) {
+          throw new Error(`Classic script ${output.fileName} must not export module bindings`);
+        }
+        const alreadyInstalled = entries[output.fileName];
+        const guard = alreadyInstalled ? `if (${alreadyInstalled}) return;\n` : '';
+        output.code = `(() => {\n${guard}${output.code}\n})();\n`;
+      }
+    },
+  };
+}
+
+export default defineConfig({
+  plugins: [
+    webmcpCompilerPlugin(), // Compile WebMCP tools first
+    crx({ manifest: manifestWithVersion }),
+    classicScriptIifePlugin({
+      [HTML_READER_HOST_FILE]: `globalThis[${JSON.stringify(HTML_READER_HOST_KEY)}]?.version === ${HTML_READER_HOST_VERSION}`,
+      [PDF_DOCUMENT_HOST_FILE]: undefined,
+    }),
+  ],
+  resolve: {
+    alias: [
+      { find: '@', replacement: path.resolve(__dirname, './src') },
+      { find: '@lib', replacement: path.resolve(__dirname, './src/lib') },
+      { find: '@types', replacement: path.resolve(__dirname, './src/types') },
+      // The MCP SDK statically imports its eval-based Ajv fallback even though
+      // MCPClientService supplies the CSP-safe CfWorker validator explicitly.
+      { find: /^ajv$/, replacement: path.resolve(__dirname, 'src/lib/ajv-csp-safe.js') },
+      // ajv-formats reaches Ajv's compiler through `ajv/dist/...` subpaths that the
+      // bare-specifier alias above cannot catch; stub the whole package instead.
+      {
+        find: /^ajv-formats$/,
+        replacement: path.resolve(__dirname, 'src/lib/ajv-formats-csp-safe.js'),
+      },
+    ],
+  },
+  build: {
+    // Never let a prior release stamp survive into a new build.
+    emptyOutDir: true,
+    // Preload hints exist to hide network latency. Extension pages load from local disk over
+    // chrome-extension://, so there is none to hide: the hints only produce duplicate fetches and
+    // console warnings on the page console, which is the surface used to debug user script
+    // injection. Chunks load on demand at import instead.
+    modulePreload: false,
+    // Chrome extensions need to output multiple entry points
+    rollupOptions: {
+      input: {
+        // These will be auto-detected from manifest.json by crx plugin
+        // but we can add manual chunks if needed
+        // Manually include sidebar since we removed it from manifest
+        sidebar: path.resolve(__dirname, 'src/sidebar/index.html'),
+        connect: path.resolve(__dirname, 'src/connect/index.html'),
+        // WebMCP content scripts
+        'content-scripts/webmcp-polyfill': path.resolve(
+          __dirname,
+          'src/content-scripts/webmcp-polyfill.js'
+        ),
+        'content-scripts/page-bridge': path.resolve(
+          __dirname,
+          'src/content-scripts/page-bridge.js'
+        ),
+        'content-scripts/relay': path.resolve(__dirname, 'src/content-scripts/relay.js'),
+        [HTML_READER_HOST_FILE.replace(/\.js$/, '')]: path.resolve(
+          __dirname,
+          'src/lib/webmcp/tools/read_page/html-host.ts'
+        ),
+        [PDF_DOCUMENT_HOST_FILE.replace(/\.js$/, '')]: path.resolve(
+          __dirname,
+          'src/lib/webmcp/tools/read_page/pdf/document-host.ts'
+        ),
+        'pdf-worker-host': path.resolve(
+          __dirname,
+          'src/lib/webmcp/tools/read_page/pdf/worker-host.html'
+        ),
+      },
+      output: {
+        // Ensure consistent chunk naming
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: '[name].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+      },
+    },
+    // The service-worker registry intentionally keeps provider and MCP adapters in
+    // one graph; warn on growth beyond its reviewed release baseline instead of
+    // Vite's web-page-oriented 500 kB default.
+    chunkSizeWarningLimit: 660,
+    // Chrome extensions have stricter CSP, can't use inline scripts
+    // Only minify for release builds (`pnpm run build:release`).
+    minify: isReleaseBuild ? 'terser' : false,
+    terserOptions: isReleaseBuild
+      ? {
+          format: {
+            // Remove all comments in production
+            comments: false,
+          },
+        }
+      : undefined,
+    // Generate source maps for dev, exclude for release (smaller package, protects source)
+    sourcemap: !isReleaseBuild,
+  },
+  server: {
+    port: 5173,
+    strictPort: true,
+    hmr: {
+      port: 5173,
+    },
+  },
+  // Chrome extension specific optimizations
+  optimizeDeps: {
+    // With our CSP-safe ajv shim, we can pre-bundle normally
+  },
+});

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Connect to BYOA</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header class="bar">
+        <span class="brand">
+          <svg class="symbol" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+            <path class="cradle" d="M3.25 3.5V7.75A4.75 4.75 0 0 0 12.75 7.75V3.5" />
+            <circle class="dot" cx="8" cy="5.5" r="2.25" />
+          </svg>
+          <span class="wordmark">BYOA</span>
+        </span>
+        <span class="tag">Connection request</span>
+      </header>
+
+      <form id="connect-form">
+        <h1 id="title">Connect your agent to this site?</h1>
+        <div id="origin" class="origin">Checking the requesting site…</div>
+
+        <fieldset id="profiles">
+          <legend>Choose a profile</legend>
+          <p role="status">Loading your profiles…</p>
+        </fieldset>
+
+        <ul class="scope" aria-label="What this site can do">
+          <li>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path class="tick" d="M5 12.5l4.5 4.5L19 7.5" />
+            </svg>
+            Send tasks to your agent and use this site’s tools
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path class="tick" d="M5 12.5l4.5 4.5L19 7.5" />
+            </svg>
+            Show you progress and results
+          </li>
+          <li class="cannot">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path class="dash" d="M6 12H18" />
+            </svg>
+            Can’t see your API keys or other profiles
+          </li>
+        </ul>
+
+        <p class="note">
+          Results come from your agent, not from BYOA. API usage may be billed by your provider.
+          Disconnect from the app anytime.
+        </p>
+
+        <p id="error" role="alert" hidden></p>
+        <div class="actions">
+          <button id="cancel" class="secondary" type="button">Not now</button>
+          <button id="approve" class="primary" type="submit" disabled>Connect</button>
+        </div>
+        <button id="settings" class="settings" type="button">Manage profiles in BYOA settings</button>
+      </form>
+    </main>
+    <script type="module" src="./index.ts"></script>
+  </body>
+</html>

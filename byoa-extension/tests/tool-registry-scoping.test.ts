@@ -1,0 +1,755 @@
+/**
+ * Tests for tab-scoped tool registry behavior
+ *
+ * Regression test for bug where tools from ALL tabs were displayed
+ * in the sidebar regardless of URL match patterns.
+ */
+
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { getEnabledSystemToolRegistrations } from '../src/lib/webmcp/system-tools';
+import { ToolRegistryManager } from '../src/lib/webmcp/tool-registry';
+import { FETCH_URL_TOOL_NAME } from '../src/lib/webmcp/tools/fetch';
+import { NAVIGATE_TOOL_NAME } from '../src/lib/webmcp/tools/navigate';
+import { READ_PAGE_TOOL_NAME } from '../src/lib/webmcp/tools/read_page';
+
+const mocks = vi.hoisted(() => ({
+  createReadPageTool: vi.fn((tabId: number) => ({
+    systemReadPage: true,
+    tabId,
+    execute: vi.fn(),
+  })),
+}));
+
+// Mock the dependencies
+vi.mock('../src/lib/logger', () => ({
+  default: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+vi.mock('../src/lib/mcp/manager', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/mcp/manager')>();
+  return {
+    ...actual,
+    getRemoteMCPManager: vi.fn(() => ({
+      reconcile: vi.fn(),
+      getCurrentSession: vi.fn(() => actual.EMPTY_REMOTE_MCP_SESSION),
+      revoke: vi.fn(),
+    })),
+  };
+});
+
+vi.mock('../src/lib/webmcp/tools/read_page', () => ({
+  READ_PAGE_TOOL_NAME: 'agentboard_read_page',
+  createReadPageTool: mocks.createReadPageTool,
+}));
+
+vi.mock('../src/lib/storage/config', () => ({
+  ConfigStorage: {
+    getInstance: vi.fn(() => ({
+      get: vi.fn().mockResolvedValue({}),
+    })),
+  },
+}));
+
+describe('ToolRegistryManager Tab Scoping', () => {
+  let registry: ToolRegistryManager;
+
+  beforeEach(() => {
+    mocks.createReadPageTool.mockClear();
+    registry = new ToolRegistryManager();
+  });
+
+  describe('system tool registration', () => {
+    it('atomically reconciles independently enabled system registrations', () => {
+      registry.replaceSystemTools(getEnabledSystemToolRegistrations({}));
+      expect(registry.getToolsForTab(1)).toHaveProperty(FETCH_URL_TOOL_NAME);
+      expect(registry.getToolsForTab(1)).toHaveProperty(NAVIGATE_TOOL_NAME);
+      expect(registry.getToolsForTab(1)).toHaveProperty(READ_PAGE_TOOL_NAME);
+
+      registry.replaceSystemTools(
+        getEnabledSystemToolRegistrations({
+          builtinScripts: [
+            { id: FETCH_URL_TOOL_NAME, enabled: false },
+            { id: READ_PAGE_TOOL_NAME, enabled: false },
+          ],
+        })
+      );
+      expect(registry.getToolsForTab(1)).not.toHaveProperty(FETCH_URL_TOOL_NAME);
+      expect(registry.getToolsForTab(1)).toHaveProperty(NAVIGATE_TOOL_NAME);
+      expect(registry.getToolsForTab(1)).not.toHaveProperty(READ_PAGE_TOOL_NAME);
+
+      registry.replaceSystemTools(
+        getEnabledSystemToolRegistrations({
+          builtinScripts: [
+            { id: NAVIGATE_TOOL_NAME, enabled: false },
+            { id: READ_PAGE_TOOL_NAME, enabled: false },
+          ],
+        })
+      );
+      expect(registry.getToolsForTab(1)).toHaveProperty(FETCH_URL_TOOL_NAME);
+      expect(registry.getToolsForTab(1)).not.toHaveProperty(NAVIGATE_TOOL_NAME);
+      expect(registry.getToolsForTab(1)).not.toHaveProperty(READ_PAGE_TOOL_NAME);
+    });
+  });
+
+  describe('remote/system collision projection', () => {
+    it('restores an unchanged remote candidate after a static system owner is disabled', async () => {
+      const remoteSession = {
+        getToolCapabilities: () => [
+          {
+            serverName: 'agentboard',
+            tool: {
+              name: 'fetch_url',
+              description: 'Remote collision',
+              inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+          },
+        ],
+        getMCPInstructions: () => undefined,
+        executeTool: vi.fn(),
+      };
+      const remoteManager = {
+        reconcile: vi.fn().mockResolvedValue(undefined),
+        getCurrentSession: vi.fn(() => remoteSession),
+        revoke: vi.fn(),
+      };
+      const collisionRegistry = new ToolRegistryManager(remoteManager as never);
+      await collisionRegistry.loadRemoteTools({ schemaVersion: 2, agents: [] });
+      expect(collisionRegistry.captureToolSnapshot().toolSources.get(FETCH_URL_TOOL_NAME)).toBe(
+        'remote'
+      );
+
+      const systemTool = { execute: vi.fn() };
+      collisionRegistry.replaceSystemTools([
+        { name: FETCH_URL_TOOL_NAME, tool: systemTool, description: 'System owner' },
+      ]);
+      expect(collisionRegistry.getAllTools()[FETCH_URL_TOOL_NAME]).toBe(systemTool);
+      expect(collisionRegistry.captureToolSnapshot().toolSources.get(FETCH_URL_TOOL_NAME)).toBe(
+        'system'
+      );
+
+      collisionRegistry.replaceSystemTools([]);
+      expect(collisionRegistry.getAllTools()).toHaveProperty(FETCH_URL_TOOL_NAME);
+      expect(collisionRegistry.getAllTools()[FETCH_URL_TOOL_NAME]).not.toBe(systemTool);
+      expect(collisionRegistry.captureToolSnapshot().toolSources.get(FETCH_URL_TOOL_NAME)).toBe(
+        'remote'
+      );
+    });
+  });
+
+  describe('getToolsForTab', () => {
+    it('should only return tools from the specified tab', () => {
+      // Simulate tools registered from two different tabs
+      const mockTool1 = { execute: vi.fn() };
+      const mockTool2 = { execute: vi.fn() };
+
+      registry.addTool('google_docs_document_context', {
+        tool: mockTool1,
+        source: 'site',
+        origin: 'tab-100', // Tab 100 is on Google Docs
+      });
+
+      registry.addTool('slack_conversation_context', {
+        tool: mockTool2,
+        source: 'site',
+        origin: 'tab-200', // Tab 200 is on Slack
+      });
+
+      // Get tools for tab 100 (Google Docs)
+      const tab100Tools = registry.getToolsForTab(100);
+      expect(Object.keys(tab100Tools)).toContain('google_docs_document_context');
+      expect(Object.keys(tab100Tools)).not.toContain('slack_conversation_context');
+
+      // Get tools for tab 200 (Slack)
+      const tab200Tools = registry.getToolsForTab(200);
+      expect(Object.keys(tab200Tools)).toContain('slack_conversation_context');
+      expect(Object.keys(tab200Tools)).not.toContain('google_docs_document_context');
+    });
+
+    it('should keep same-named tools isolated to their registering tabs', () => {
+      const tab100Tool = { execute: vi.fn() };
+      const tab200Tool = { execute: vi.fn() };
+
+      registry.addTool('shared_tool', {
+        tool: tab100Tool,
+        source: 'site',
+        origin: 'tab-100',
+      });
+      registry.addTool('shared_tool', {
+        tool: tab200Tool,
+        source: 'site',
+        origin: 'tab-200',
+      });
+
+      expect(registry.getToolsForTab(100).shared_tool).toBe(tab100Tool);
+      expect(registry.getToolsForTab(200).shared_tool).toBe(tab200Tool);
+
+      registry.removeToolsByOrigin('tab-200');
+      expect(registry.getToolsForTab(100).shared_tool).toBe(tab100Tool);
+      expect(registry.getToolsForTab(200)).not.toHaveProperty('shared_tool');
+    });
+
+    it('should prefer extension-owned global tools over same-named page tools', () => {
+      const systemTool = { execute: vi.fn() };
+      const pageTool = { execute: vi.fn() };
+
+      registry.addTool('agentboard_fetch_url', {
+        tool: systemTool,
+        source: 'system',
+        origin: 'system',
+      });
+      registry.addTool('agentboard_fetch_url', {
+        tool: pageTool,
+        source: 'site',
+        origin: 'tab-100',
+      });
+
+      expect(registry.getToolsForTab(100).agentboard_fetch_url).toBe(systemTool);
+      expect(registry.isProtectedToolName('agentboard_fetch_url')).toBe(true);
+      expect(registry.getSiteToolHints(100)).not.toContainEqual(
+        expect.objectContaining({ name: 'agentboard_fetch_url' })
+      );
+    });
+
+    it('reserves mounted-memory tool names even before an agent mounts a root', () => {
+      for (const name of [
+        'agentboard_list_files',
+        'agentboard_read_file',
+        'agentboard_write_file',
+        'agentboard_delete_file',
+      ]) {
+        registry.addTool(name, {
+          tool: { execute: vi.fn() },
+          source: 'site',
+          origin: 'tab-100',
+        });
+        registry.addTool(name, {
+          tool: { execute: vi.fn() },
+          source: 'remote',
+          origin: 'untrusted-server',
+        });
+
+        expect(registry.isProtectedToolName(name)).toBe(true);
+        expect(registry.getToolsForTab(100)).not.toHaveProperty(name);
+        expect(registry.getSiteToolHints(100)).not.toContainEqual(
+          expect.objectContaining({ name })
+        );
+      }
+    });
+
+    it('should never let a remote tool replace a protected system capability', () => {
+      const systemTool = { execute: vi.fn() };
+      const remoteTool = { execute: vi.fn() };
+
+      registry.addTool('agentboard_fetch_url', {
+        tool: systemTool,
+        source: 'system',
+        origin: 'system',
+      });
+      registry.addTool('agentboard_fetch_url', {
+        tool: remoteTool,
+        source: 'remote',
+        origin: 'agentboard',
+      });
+
+      expect(registry.getAllTools().agentboard_fetch_url).toBe(systemTool);
+      expect(registry.getToolsForTab(100).agentboard_fetch_url).toBe(systemTool);
+    });
+
+    it('should reject site tools that lack an explicit tab scope', () => {
+      const systemTool = { execute: vi.fn() };
+      registry.addTool('protected_tool', {
+        tool: systemTool,
+        source: 'system',
+        origin: 'system',
+      });
+
+      expect(() =>
+        registry.addTool('protected_tool', {
+          tool: { execute: vi.fn() },
+          source: 'site',
+          origin: 'https://example.com',
+        })
+      ).toThrow('requires a tab-scoped origin');
+      expect(registry.getAllTools().protected_tool).toBe(systemTool);
+    });
+
+    it('should return empty object for tab with no tools', () => {
+      registry.addTool('some_tool', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-100',
+      });
+
+      const tab999Tools = registry.getToolsForTab(999);
+      expect(Object.keys(tab999Tools)).toHaveLength(0);
+    });
+
+    it('should include system tools for all tabs', () => {
+      const systemTool = { execute: vi.fn() };
+      const siteTool = { execute: vi.fn() };
+
+      registry.addTool('agentboard_fetch_url', {
+        tool: systemTool,
+        source: 'system',
+        origin: 'system',
+      });
+
+      registry.addTool('google_docs_document_context', {
+        tool: siteTool,
+        source: 'site',
+        origin: 'tab-100',
+      });
+
+      // System tool should appear for any tab
+      const tab100Tools = registry.getToolsForTab(100);
+      expect(Object.keys(tab100Tools)).toContain('agentboard_fetch_url');
+      expect(Object.keys(tab100Tools)).toContain('google_docs_document_context');
+
+      const tab200Tools = registry.getToolsForTab(200);
+      expect(Object.keys(tab200Tools)).toContain('agentboard_fetch_url');
+      expect(Object.keys(tab200Tools)).not.toContain('google_docs_document_context');
+    });
+
+    it('should include tab-bound factory tools for any tab', () => {
+      const mockFactory = vi.fn((tabId: number) => ({ execute: vi.fn(), _tabId: tabId }));
+
+      // Access private tabBoundFactories to register a factory
+      (registry as any).tabBoundFactories.set('agentboard_navigate', mockFactory);
+
+      const tab100Tools = registry.getToolsForTab(100);
+      expect(Object.keys(tab100Tools)).toContain('agentboard_navigate');
+      expect(mockFactory).toHaveBeenCalledWith(100);
+
+      const tab200Tools = registry.getToolsForTab(200);
+      expect(Object.keys(tab200Tools)).toContain('agentboard_navigate');
+      expect(mockFactory).toHaveBeenCalledWith(200);
+    });
+
+    it('should NOT include tab-bound factory tools in getAllTools', () => {
+      const mockFactory = vi.fn(() => ({ execute: vi.fn() }));
+
+      (registry as any).tabBoundFactories.set('agentboard_navigate', mockFactory);
+
+      const allTools = registry.getAllTools();
+      expect(Object.keys(allTools)).not.toContain('agentboard_navigate');
+      expect(mockFactory).not.toHaveBeenCalled();
+    });
+
+    it('captures the source of the exact selected tool and tab-bound factories', () => {
+      const pageTool = { execute: vi.fn() };
+      const shadowedPageTool = { execute: vi.fn() };
+      const systemTool = { execute: vi.fn() };
+      const remoteTool = { execute: vi.fn() };
+      const navigateTool = { execute: vi.fn() };
+
+      registry.addTool('page_context', {
+        tool: pageTool,
+        source: 'site',
+        origin: 'tab-100',
+      });
+      registry.addTool('shared_name', {
+        tool: shadowedPageTool,
+        source: 'site',
+        origin: 'tab-100',
+      });
+      registry.addTool('shared_name', {
+        tool: systemTool,
+        source: 'system',
+        origin: 'system',
+      });
+      registry.addTool('remote_search', {
+        tool: remoteTool,
+        source: 'remote',
+        origin: 'remote-server',
+      });
+      (registry as any).tabBoundFactories.set('agentboard_navigate', () => navigateTool);
+
+      const snapshot = registry.captureToolSnapshot(100);
+
+      expect(snapshot.tools).toMatchObject({
+        page_context: pageTool,
+        shared_name: systemTool,
+        remote_search: remoteTool,
+        agentboard_navigate: navigateTool,
+      });
+      expect(Object.fromEntries(snapshot.toolSources)).toEqual({
+        page_context: 'site',
+        shared_name: 'system',
+        remote_search: 'remote',
+        agentboard_navigate: 'system',
+      });
+    });
+
+    it('should include remote MCP tools for all tabs', () => {
+      const remoteTool = { execute: vi.fn() };
+      const siteTool = { execute: vi.fn() };
+
+      registry.addTool('mcp_server_tool', {
+        tool: remoteTool,
+        source: 'remote',
+        origin: 'my-mcp-server',
+      });
+
+      registry.addTool('vault_project_context', {
+        tool: siteTool,
+        source: 'site',
+        origin: 'tab-300',
+      });
+
+      // Remote tool should appear for any tab
+      const tab300Tools = registry.getToolsForTab(300);
+      expect(Object.keys(tab300Tools)).toContain('mcp_server_tool');
+      expect(Object.keys(tab300Tools)).toContain('vault_project_context');
+
+      const tab400Tools = registry.getToolsForTab(400);
+      expect(Object.keys(tab400Tools)).toContain('mcp_server_tool');
+      expect(Object.keys(tab400Tools)).not.toContain('vault_project_context');
+    });
+  });
+
+  describe('getAllTools vs getToolsForTab', () => {
+    it('getAllTools should return tools from all tabs', () => {
+      registry.addTool('tool_tab_1', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-1',
+      });
+
+      registry.addTool('tool_tab_2', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-2',
+      });
+
+      registry.addTool('tool_tab_3', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-3',
+      });
+
+      const allTools = registry.getAllTools();
+      expect(Object.keys(allTools)).toHaveLength(3);
+      expect(Object.keys(allTools)).toContain('tool_tab_1');
+      expect(Object.keys(allTools)).toContain('tool_tab_2');
+      expect(Object.keys(allTools)).toContain('tool_tab_3');
+    });
+
+    it('getAllTools should omit same-named page tools that lack a tab execution context', () => {
+      registry.addTool('shared_tool', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-100',
+      });
+      registry.addTool('shared_tool', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-200',
+      });
+
+      expect(registry.getAllTools()).not.toHaveProperty('shared_tool');
+    });
+
+    it('getToolsForTab should NOT leak tools from other tabs', () => {
+      // This is the regression test for the bug
+      registry.addTool('google_docs_tool', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-100', // Google Docs tab
+      });
+
+      registry.addTool('slack_tool', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-200', // Slack tab
+      });
+
+      registry.addTool('vault_tool', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-300', // Vault tab
+      });
+
+      // When on Vault (tab 300), should NOT see Google Docs or Slack tools
+      const vaultTools = registry.getToolsForTab(300);
+      expect(Object.keys(vaultTools)).toEqual(['vault_tool']);
+
+      // Verify the bug scenario: user on vault.shopify.io should not see
+      // google_docs_document_context or slack_conversation_context
+      expect(Object.keys(vaultTools)).not.toContain('google_docs_tool');
+      expect(Object.keys(vaultTools)).not.toContain('slack_tool');
+    });
+  });
+
+  describe('updateWebMCPTools', () => {
+    it('should replace tools for a tab when updated', () => {
+      // We need to mock the tool bridge for this
+      vi.doMock('../src/lib/webmcp/tool-bridge', () => ({
+        convertWebMCPToAISDKTool: vi.fn((tool) => ({
+          ...tool,
+          execute: vi.fn(),
+        })),
+      }));
+
+      // Initial tools for tab 100
+      registry.addTool('old_tool', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-100',
+      });
+
+      // Simulate removeToolsByOrigin (called by updateWebMCPTools)
+      registry.removeToolsByOrigin('tab-100');
+
+      // Add new tool
+      registry.addTool('new_tool', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-100',
+      });
+
+      const tools = registry.getToolsForTab(100);
+      expect(Object.keys(tools)).toContain('new_tool');
+      expect(Object.keys(tools)).not.toContain('old_tool');
+    });
+
+    it('omits one malformed schema without suppressing valid tools or notification', () => {
+      const listener = vi.fn();
+      registry.addListener(listener);
+
+      registry.updateWebMCPTools(100, [
+        { name: 'first_tool', description: 'First' },
+        {
+          name: 'malformed_tool',
+          description: 'Malformed',
+          inputSchema: { type: 'string' },
+        },
+        { name: 'second_tool', description: 'Second' },
+      ]);
+
+      expect(Object.keys(registry.getToolsForTab(100))).toEqual(['first_tool', 'second_tool']);
+      expect(registry.hasSiteTool(100, 'first_tool')).toBe(true);
+      expect(registry.hasSiteTool(100, 'malformed_tool')).toBe(false);
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(Object.keys(listener.mock.calls[0][0])).toEqual(['first_tool', 'second_tool']);
+    });
+
+    it('publishes page tools whose schemas carry constraints the extension does not interpret', () => {
+      // neohack.dev registers eleven tools; ten constrain sessionId with a regex. All must appear.
+      registry.updateWebMCPTools(100, [
+        {
+          name: 'session',
+          description: 'Create, resume, suspend or explicitly quit a run.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', pattern: '^[^\\u0000-\\u001f\\u007f]*$', 'x-maxBytes': 31 },
+              itemTypes: { type: 'array', uniqueItems: true, items: { type: 'string' } },
+            },
+          },
+        },
+        {
+          name: 'observe',
+          description: 'Observe the current scene.',
+          inputSchema: {
+            type: 'object',
+            required: ['sessionId'],
+            properties: { sessionId: { type: 'string', pattern: '^[A-Za-z0-9_-]+$' } },
+          },
+        },
+      ]);
+
+      expect(Object.keys(registry.getToolsForTab(100))).toEqual(['session', 'observe']);
+    });
+
+    it('keeps page-tool ingestion generic while the system reader owns the public name', () => {
+      registry.replaceSystemTools(getEnabledSystemToolRegistrations({}));
+      registry.updateWebMCPTools(100, [
+        {
+          name: READ_PAGE_TOOL_NAME,
+          description: 'Page-owned HTML reader',
+          inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        },
+      ]);
+
+      expect(mocks.createReadPageTool).not.toHaveBeenCalled();
+      expect(registry.hasSiteTool(100, READ_PAGE_TOOL_NAME)).toBe(true);
+
+      const selected = registry.getToolsForTab(100)[READ_PAGE_TOOL_NAME];
+      expect(mocks.createReadPageTool).toHaveBeenCalledWith(100);
+      expect(selected).toMatchObject({ systemReadPage: true, tabId: 100 });
+      expect(registry.getAllTools()).not.toHaveProperty(READ_PAGE_TOOL_NAME);
+    });
+
+    it('does not permanently reserve the reader name while its system registration is disabled', () => {
+      registry.replaceSystemTools(
+        getEnabledSystemToolRegistrations({
+          builtinScripts: [{ id: READ_PAGE_TOOL_NAME, enabled: false }],
+        })
+      );
+      registry.updateWebMCPTools(100, [
+        {
+          name: READ_PAGE_TOOL_NAME,
+          description: 'Internal page-owned HTML reader',
+        },
+      ]);
+
+      expect(registry.hasSiteTool(100, READ_PAGE_TOOL_NAME)).toBe(true);
+      expect(registry.getToolsForTab(100)).toHaveProperty(READ_PAGE_TOOL_NAME);
+      expect(registry.getAllTools()).toHaveProperty(READ_PAGE_TOOL_NAME);
+      expect(registry.captureToolSnapshot()).toHaveProperty(`tools.${READ_PAGE_TOOL_NAME}`);
+    });
+
+    it('should notify global listeners once with the complete replacement snapshot', () => {
+      registry.addTool('old_tool', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-100',
+      });
+      const listener = vi.fn();
+      registry.addListener(listener);
+
+      registry.updateWebMCPTools(100, [
+        { name: 'first_tool', description: 'First' },
+        { name: 'second_tool', description: 'Second' },
+      ]);
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(Object.keys(listener.mock.calls[0][0])).toEqual(['first_tool', 'second_tool']);
+      expect(listener.mock.calls[0][0]).not.toHaveProperty('old_tool');
+    });
+  });
+
+  describe('removeToolsByOrigin', () => {
+    it('should remove all tools from a specific tab', () => {
+      registry.addTool('tool1', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-100',
+      });
+
+      registry.addTool('tool2', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-100',
+      });
+
+      registry.addTool('tool3', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-200',
+      });
+
+      registry.removeToolsByOrigin('tab-100');
+
+      const allTools = registry.getAllTools();
+      expect(Object.keys(allTools)).toEqual(['tool3']);
+    });
+
+    it('should not affect tools from other origins', () => {
+      registry.addTool('site_tool', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-100',
+      });
+
+      registry.addTool('system_tool', {
+        tool: { execute: vi.fn() },
+        source: 'system',
+        origin: 'system',
+      });
+
+      registry.addTool('remote_tool', {
+        tool: { execute: vi.fn() },
+        source: 'remote',
+        origin: 'mcp-server',
+      });
+
+      registry.removeToolsByOrigin('tab-100');
+
+      const allTools = registry.getAllTools();
+      expect(Object.keys(allTools)).toContain('system_tool');
+      expect(Object.keys(allTools)).toContain('remote_tool');
+      expect(Object.keys(allTools)).not.toContain('site_tool');
+    });
+  });
+
+  describe('onTabToolsChanged subscription', () => {
+    it('should fire callback when tools are removed for a tab', () => {
+      const callback = vi.fn();
+      registry.onTabToolsChanged(100, callback);
+
+      registry.addTool('tool1', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-100',
+      });
+
+      // removeToolsByOrigin should fire the tab change callback
+      registry.removeToolsByOrigin('tab-100');
+      expect(callback).toHaveBeenCalledTimes(1);
+    });
+
+    it('should fire callback when updateWebMCPTools replaces tools', () => {
+      const callback = vi.fn();
+      registry.onTabToolsChanged(100, callback);
+
+      // updateWebMCPTools calls removeToolsByOrigin(silent) + addTool + notifyTabChange
+      registry.updateWebMCPTools(100, [{ name: 'new_tool', description: 'A new tool' }]);
+
+      // Fired exactly once: removeToolsByOrigin is silent, only the final notify fires
+      expect(callback).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not fire callback for different tab', () => {
+      const callback100 = vi.fn();
+      const callback200 = vi.fn();
+      registry.onTabToolsChanged(100, callback100);
+      registry.onTabToolsChanged(200, callback200);
+
+      registry.addTool('tool1', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-100',
+      });
+      registry.removeToolsByOrigin('tab-100');
+
+      expect(callback100).toHaveBeenCalled();
+      expect(callback200).not.toHaveBeenCalled();
+    });
+
+    it('should unsubscribe cleanly', () => {
+      const callback = vi.fn();
+      const unsub = registry.onTabToolsChanged(100, callback);
+
+      unsub();
+
+      registry.addTool('tool1', {
+        tool: { execute: vi.fn() },
+        source: 'site',
+        origin: 'tab-100',
+      });
+      registry.removeToolsByOrigin('tab-100');
+
+      expect(callback).not.toHaveBeenCalled();
+    });
+
+    it('should not fire for non-tab origins', () => {
+      const callback = vi.fn();
+      registry.onTabToolsChanged(100, callback);
+
+      registry.addTool('mcp_tool', {
+        tool: { execute: vi.fn() },
+        source: 'remote',
+        origin: 'mcp-server',
+      });
+      registry.removeToolsByOrigin('mcp-server');
+
+      expect(callback).not.toHaveBeenCalled();
+    });
+  });
+});

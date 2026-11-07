@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BYOA</title>
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/themes/prism.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css">
+</head>
+
+<body>
+  <div id="app">
+    <header class="sidebar-header">
+      <span id="sidebar-brand" class="sidebar-brand"><svg class="byoa-symbol" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path class="cradle" stroke-width="2.5" d="M3.25 3.5V7.75A4.75 4.75 0 0 0 12.75 7.75V3.5" /><circle class="dot" cx="8" cy="5.5" r="2.25" /></svg><span>BYOA</span></span>
+      <details id="agent-switcher" class="agent-switcher" hidden>
+        <summary id="agent-switcher-trigger" class="agent-switcher-trigger">
+          <span class="agent-dot" aria-hidden="true"></span>
+          <span class="agent-switcher-label">Loading agents…</span>
+          <svg class="agent-switcher-chevron" viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M5.5 7.5 10 12l4.5-4.5Z" />
+          </svg>
+        </summary>
+        <div id="agent-switcher-menu" class="agent-switcher-menu"></div>
+      </details>
+      <button id="settings-button" class="settings-button" type="button" title="Open Settings"
+        aria-label="Open Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 15.25A3.25 3.25 0 1 0 12 8.75a3.25 3.25 0 0 0 0 6.5Z" />
+          <path
+            d="M19.4 13.5a7.7 7.7 0 0 0 .05-3l1.62-1.25-2-3.46-1.95.78a7.7 7.7 0 0 0-2.6-1.5L14.2 3h-4l-.32 2.07a7.7 7.7 0 0 0-2.6 1.5L5.33 5.8l-2 3.46 1.62 1.25a7.7 7.7 0 0 0 .05 3l-1.67 1.28 2 3.46 2-.8a7.7 7.7 0 0 0 2.55 1.47L10.2 21h4l.32-2.08a7.7 7.7 0 0 0 2.55-1.47l2 .8 2-3.46-1.67-1.29Z" />
+        </svg>
+      </button>
+    </header>
+
+    <section id="agent-setup" class="agent-setup" aria-labelledby="setup-title" aria-live="polite">
+      <div class="setup-mark" aria-hidden="true"><svg class="byoa-symbol" viewBox="0 0 24 24" width="36" height="36"><path class="cradle" stroke-width="3.5" d="M5 5.5V11.5A7 7 0 0 0 19 11.5V5.5" /><circle class="dot" cx="12" cy="8" r="3.5" /></svg></div>
+      <h1 id="setup-title">Loading your agents…</h1>
+      <p id="setup-description">BYOA is checking your configuration.</p>
+      <button id="setup-action" type="button" hidden>Configure your first agent</button>
+      <button id="setup-retry" class="setup-retry" type="button" hidden>Try again</button>
+    </section>
+
+    <main class="chat-container" hidden>
+      <div id="messages" class="messages">
+        <!-- Messages will be rendered here -->
+      </div>
+    </main>
+
+    <footer class="input-container" hidden>
+      <div id="attachment-indicator" class="attachment-indicator" style="display: none;"></div>
+      <textarea id="message-input" placeholder="Type a message or paste an image (Cmd/Ctrl+V)..." rows="3"></textarea>
+      <button id="attach-button" type="button" title="Attach images (multi-select)" aria-label="Attach images" class="toolbar-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11.5 12.6 19.4a5 5 0 0 1-7.1-7.1l8.3-8.3a3.4 3.4 0 0 1 4.8 4.8l-8.3 8.3a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6" /></svg></button>
+      <button id="send-button" type="button" title="Send message" aria-label="Send message"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" /></svg></button>
+    </footer>
+  </div>
+
+  <script type="module" src="./index.ts"></script>
+</body>
+
+</html>

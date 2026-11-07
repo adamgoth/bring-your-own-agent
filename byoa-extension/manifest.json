@@ -1,0 +1,67 @@
+{
+  "manifest_version": 3,
+  "name": "BYOA",
+  "version": "0.0.0",
+  "description": "Bring Your Own Agent: connect the AI agent you already use to apps that support BYOA.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab",
+    "sidePanel",
+    "contextMenus",
+    "scripting",
+    "webNavigation"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "options_page": "src/options/index.html",
+  "action": {
+    "default_title": "BYOA",
+    "default_icon": {
+      "16": "icons/icon-idle-16.png",
+      "32": "icons/icon-idle-32.png"
+    }
+  },
+  "commands": {
+    "toggle-sidebar": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+A",
+        "mac": "Command+Shift+A"
+      },
+      "description": "Toggle BYOA"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost/*"],
+      "js": ["src/content-scripts/site-bridge.ts"],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": ["https://*/*", "http://localhost/*"],
+      "js": ["src/content-scripts/webmcp-polyfill.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/lib/webmcp/tools/read_page/pdf/worker-host.html"],
+      "matches": ["https://*/*", "http://localhost/*", "file:///*"]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

@@ -1,0 +1,336 @@
+import { readFileSync } from 'node:fs';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { AgentConfig } from '../src/lib/storage/config';
+import {
+  agentToEditorState,
+  defaultAgentEditorState,
+  initializeAgentEditor,
+  readAgentDraft,
+  renderAgentEditor,
+} from '../src/options/agent-editor';
+
+const optionsHTML = readFileSync('src/options/index.html', 'utf8');
+
+function agent(overrides: Partial<AgentConfig> = {}): AgentConfig {
+  return {
+    id: 'agent-1',
+    name: 'Agent',
+    provider: 'openai',
+    apiProtocol: 'openai-responses',
+    model: 'opaque-model',
+    apiKey: 'secret-key',
+    temperature: 0.7,
+    ...overrides,
+  };
+}
+
+function form(): HTMLFormElement {
+  const value = document.getElementById('agent-form');
+  if (!(value instanceof HTMLFormElement)) throw new Error('Agent form missing from fixture');
+  return value;
+}
+
+beforeEach(() => {
+  const parsed = new DOMParser().parseFromString(optionsHTML, 'text/html');
+  document.body.innerHTML = parsed.body.innerHTML;
+  initializeAgentEditor(form());
+});
+
+describe('agent editor state projection', () => {
+  it('renders and reads every current agent field through one canonical form path', () => {
+    const source = agent({
+      name: 'Legacy proxy agent',
+      description: 'Uses a compatibility endpoint',
+      apiProtocol: 'openai-chat-completions',
+      endpoint: 'https://proxy.example.test/v1',
+      apiKey: undefined,
+      temperature: 0.2,
+      maxSteps: 7,
+      isDefault: true,
+      reasoning: {
+        enabled: true,
+        openai: { reasoningEffort: 'high' },
+        autoExpand: false,
+      },
+    });
+
+    renderAgentEditor(form(), agentToEditorState(source));
+    const draft = readAgentDraft(form());
+
+    expect(draft).toEqual({
+      name: 'Legacy proxy agent',
+      description: 'Uses a compatibility endpoint',
+      apiKey: undefined,
+      model: 'opaque-model',
+      endpoint: 'https://proxy.example.test/v1',
+      apiProtocol: 'openai-chat-completions',
+      temperature: 0.2,
+      maxSteps: 7,
+      isDefault: true,
+      reasoning: {
+        enabled: true,
+        autoExpand: false,
+        openai: { reasoningEffort: 'high' },
+      },
+    });
+    expect((document.getElementById('agent-api-key') as HTMLInputElement).required).toBe(false);
+  });
+
+  it('emits explicit undefined values so edits can clear optional persisted fields', () => {
+    renderAgentEditor(
+      form(),
+      agentToEditorState(
+        agent({
+          description: 'Remove me',
+          endpoint: 'https://proxy.example.test/v1',
+          apiKey: 'remove-me',
+        })
+      )
+    );
+    (document.getElementById('agent-description') as HTMLInputElement).value = '';
+    (document.getElementById('agent-endpoint') as HTMLInputElement).value = '';
+    (document.getElementById('agent-api-key') as HTMLInputElement).value = '';
+
+    const draft = readAgentDraft(form());
+
+    expect(Object.hasOwn(draft, 'description')).toBe(true);
+    expect(Object.hasOwn(draft, 'endpoint')).toBe(true);
+    expect(Object.hasOwn(draft, 'apiKey')).toBe(true);
+    expect(draft).toMatchObject({
+      description: undefined,
+      endpoint: undefined,
+      apiKey: undefined,
+    });
+  });
+
+  it('does not carry hidden legacy Chat state into a non-OpenAI agent', () => {
+    renderAgentEditor(
+      form(),
+      agentToEditorState(agent({ apiProtocol: 'openai-chat-completions' }))
+    );
+    expect((document.getElementById('agent-openai-api-mode') as HTMLSelectElement).value).toBe(
+      'openai-chat-completions'
+    );
+
+    renderAgentEditor(
+      form(),
+      agentToEditorState(
+        agent({
+          provider: 'anthropic',
+          apiProtocol: 'anthropic-messages',
+          model: 'claude-model',
+        })
+      )
+    );
+
+    expect(readAgentDraft(form()).apiProtocol).toBe('anthropic-messages');
+    expect((document.getElementById('agent-openai-api-mode') as HTMLSelectElement).value).toBe(
+      'openai-responses'
+    );
+    expect(document.getElementById('openai-api-mode-group')?.classList.contains('hidden')).toBe(
+      true
+    );
+
+    const connectionApi = document.getElementById('agent-connection-api') as HTMLSelectElement;
+    connectionApi.value = 'openai';
+    connectionApi.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(readAgentDraft(form()).apiProtocol).toBe('openai-responses');
+  });
+
+  it('resets every provider-specific reasoning field between sequential edits', () => {
+    renderAgentEditor(
+      form(),
+      agentToEditorState(
+        agent({
+          reasoning: {
+            enabled: true,
+            openai: { reasoningEffort: 'high', reasoningSummary: 'detailed' },
+            autoExpand: false,
+          },
+        })
+      )
+    );
+
+    renderAgentEditor(
+      form(),
+      agentToEditorState(
+        agent({
+          provider: 'google',
+          apiProtocol: 'google-generative-ai',
+          reasoning: {
+            enabled: true,
+            google: { thinkingBudget: -1, includeThoughts: false },
+          },
+        })
+      )
+    );
+
+    expect((document.getElementById('reasoning-effort') as HTMLSelectElement).value).toBe('medium');
+    expect((document.getElementById('reasoning-summary') as HTMLSelectElement).value).toBe('auto');
+    expect(readAgentDraft(form()).reasoning).toEqual({
+      enabled: true,
+      autoExpand: true,
+      google: { thinkingBudget: -1, includeThoughts: false },
+    });
+  });
+
+  it('restores complete create defaults after an edit with unsaved values', () => {
+    renderAgentEditor(
+      form(),
+      agentToEditorState(agent({ apiProtocol: 'openai-chat-completions', maxSteps: 42 }))
+    );
+    (document.getElementById('agent-name') as HTMLInputElement).value = 'Unsaved';
+    (document.getElementById('reasoning-enabled') as HTMLInputElement).checked = true;
+
+    renderAgentEditor(form(), defaultAgentEditorState());
+
+    expect((document.getElementById('agent-name') as HTMLInputElement).value).toBe('');
+    expect((document.getElementById('agent-openai-api-mode') as HTMLSelectElement).value).toBe(
+      'openai-responses'
+    );
+    expect((document.getElementById('agent-max-steps') as HTMLInputElement).value).toBe('10');
+    expect((document.getElementById('reasoning-enabled') as HTMLInputElement).checked).toBe(false);
+    expect((document.getElementById('agent-api-key') as HTMLInputElement).required).toBe(true);
+  });
+
+  it('updates credential requirements without selecting a different protocol', () => {
+    renderAgentEditor(form(), defaultAgentEditorState());
+    const endpoint = document.getElementById('agent-endpoint') as HTMLInputElement;
+    const apiKey = document.getElementById('agent-api-key') as HTMLInputElement;
+
+    endpoint.value = 'https://proxy.example.test/v1';
+    endpoint.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(apiKey.required).toBe(false);
+    expect(readAgentDraft(form()).apiProtocol).toBe('openai-responses');
+  });
+});
+
+function input(id: string): HTMLInputElement {
+  return document.getElementById(id) as HTMLInputElement;
+}
+
+function chooseProvider(value: string): void {
+  const provider = document.getElementById('agent-provider') as HTMLSelectElement;
+  provider.value = value;
+  provider.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+describe('provider presets', () => {
+  it.each([
+    ['openai', 'https://api.openai.com/v1', 'openai-responses'],
+    ['openrouter', 'https://openrouter.ai/api/v1', 'openai-responses'],
+    ['anthropic', 'https://api.anthropic.com/v1', 'anthropic-messages'],
+    ['google', 'https://generativelanguage.googleapis.com/v1beta', 'google-generative-ai'],
+  ])(
+    'fills %s routing and requires a key without suggesting a model',
+    (provider, endpoint, protocol) => {
+      renderAgentEditor(form(), defaultAgentEditorState());
+      chooseProvider(provider);
+      expect(readAgentDraft(form())).toMatchObject({ endpoint, apiProtocol: protocol, model: '' });
+      expect(input('agent-api-key').required).toBe(true);
+      expect(document.getElementById('connection-api-group')?.classList.contains('hidden')).toBe(
+        true
+      );
+      expect(document.getElementById('openai-api-mode-group')?.classList.contains('hidden')).toBe(
+        provider !== 'openrouter'
+      );
+      expect(input('agent-model').placeholder).toBe('Enter the exact model ID');
+    }
+  );
+
+  it('keeps the entered model and agent details, but clears the previous provider key', () => {
+    renderAgentEditor(form(), agentToEditorState(agent({ description: 'Keep this' })));
+    chooseProvider('openrouter');
+    expect(readAgentDraft(form())).toMatchObject({
+      name: 'Agent',
+      description: 'Keep this',
+      model: 'opaque-model',
+      apiKey: undefined,
+    });
+    input('agent-api-key').value = 'dummy-router-key';
+    chooseProvider('anthropic');
+    expect(input('agent-api-key').value).toBe('');
+    expect(readAgentDraft(form()).model).toBe('opaque-model');
+  });
+
+  it('recognizes saved presets without changing existing values or credentials', () => {
+    const saved = agent({
+      endpoint: 'https://openrouter.ai/api/v1/',
+      apiProtocol: 'openai-chat-completions',
+    });
+    renderAgentEditor(form(), agentToEditorState(saved));
+    expect((document.getElementById('agent-provider') as HTMLSelectElement).value).toBe(
+      'openrouter'
+    );
+    expect(readAgentDraft(form())).toMatchObject({
+      endpoint: saved.endpoint,
+      apiProtocol: saved.apiProtocol,
+      apiKey: saved.apiKey,
+    });
+    expect(input('agent-api-key').required).toBe(true);
+  });
+
+  it('preserves custom routing and exposes manual API settings', () => {
+    const saved = agent({
+      endpoint: 'https://gateway.example.test/v1',
+      apiProtocol: 'anthropic-messages',
+    });
+    renderAgentEditor(form(), agentToEditorState(saved));
+    expect((document.getElementById('agent-provider') as HTMLSelectElement).value).toBe('custom');
+    expect(document.getElementById('connection-api-group')?.classList.contains('hidden')).toBe(
+      false
+    );
+    expect(readAgentDraft(form())).toMatchObject({
+      endpoint: saved.endpoint,
+      apiProtocol: saved.apiProtocol,
+      apiKey: saved.apiKey,
+    });
+  });
+
+  it('supports customizing a preset without resetting its protocol or model', () => {
+    renderAgentEditor(form(), defaultAgentEditorState());
+    chooseProvider('openrouter');
+    input('agent-model').value = 'my-model-id';
+    input('agent-endpoint').value = 'http://localhost:1234/v1';
+    input('agent-endpoint').dispatchEvent(new Event('input', { bubbles: true }));
+    expect((document.getElementById('agent-provider') as HTMLSelectElement).value).toBe('custom');
+    expect(document.getElementById('openai-api-mode-group')?.classList.contains('hidden')).toBe(
+      false
+    );
+    expect(readAgentDraft(form())).toMatchObject({
+      endpoint: 'http://localhost:1234/v1',
+      apiProtocol: 'openai-responses',
+      model: 'my-model-id',
+    });
+    expect(input('agent-api-key').required).toBe(false);
+    chooseProvider('google');
+    renderAgentEditor(form(), defaultAgentEditorState());
+    expect((document.getElementById('agent-provider') as HTMLSelectElement).value).toBe('openai');
+    expect(input('agent-model').value).toBe('');
+    expect(input('agent-api-key').value).toBe('');
+  });
+});
+
+it('keeps OpenRouter selected when opting into Chat Completions and preserves that mode on edit', () => {
+  renderAgentEditor(form(), defaultAgentEditorState());
+  chooseProvider('openrouter');
+  input('agent-model').value = 'dummy-model';
+  input('agent-api-key').value = 'dummy-key';
+  const mode = document.getElementById('agent-openai-api-mode') as HTMLSelectElement;
+  mode.value = 'openai-chat-completions';
+  mode.dispatchEvent(new Event('change', { bubbles: true }));
+  expect((document.getElementById('agent-provider') as HTMLSelectElement).value).toBe('openrouter');
+  expect(readAgentDraft(form())).toMatchObject({
+    apiProtocol: 'openai-chat-completions',
+    model: 'dummy-model',
+    apiKey: 'dummy-key',
+    endpoint: 'https://openrouter.ai/api/v1',
+  });
+  renderAgentEditor(form(), agentToEditorState(agent({ ...readAgentDraft(form()) })));
+  expect((document.getElementById('agent-provider') as HTMLSelectElement).value).toBe('openrouter');
+  expect(mode.value).toBe('openai-chat-completions');
+  expect(document.getElementById('openai-api-mode-group')?.classList.contains('hidden')).toBe(
+    false
+  );
+});

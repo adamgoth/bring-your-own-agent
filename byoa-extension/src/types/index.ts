@@ -1,0 +1,455 @@
+/**
+ * Shared TypeScript type definitions
+ */
+
+import type { ApiProtocol } from '../lib/ai/protocol';
+
+// Individual message type interfaces
+interface GetConfigMessage {
+  type: 'GET_CONFIG';
+}
+
+interface GetLogLevelMessage {
+  type: 'GET_LOG_LEVEL';
+}
+
+interface TestConnectionMessage {
+  type: 'TEST_CONNECTION';
+  agentId: string;
+}
+
+interface TestNewConnectionMessage {
+  type: 'TEST_NEW_CONNECTION';
+  apiProtocol: ApiProtocol;
+  apiKey?: string;
+  model: string;
+  endpoint?: string;
+}
+
+interface PingMessage {
+  type: 'PING';
+}
+
+interface StreamChatMessage {
+  type: 'STREAM_CHAT';
+  message: string;
+  agentId: string;
+  conversationId?: string;
+}
+
+interface ContextSelectionMessage {
+  type: 'CONTEXT_SELECTION';
+  text: string;
+  tabId?: number; // Tab ID to filter messages
+}
+
+// Streaming response messages (sent from background to sidebar)
+interface StreamChunkMessage {
+  type: 'STREAM_CHUNK';
+  chunk: string;
+  connectionId?: string;
+}
+
+interface StreamCompleteMessage {
+  type: 'STREAM_COMPLETE';
+  fullResponse: string;
+  connectionId?: string;
+  /** True when the stream ended because tab tools changed (e.g., navigation).
+   *  Sidebar should auto-continue with fresh tools. */
+  toolsChanged?: boolean;
+}
+
+interface StreamErrorMessage {
+  type: 'STREAM_ERROR';
+  error: string;
+  connectionId?: string;
+}
+
+interface StreamToolCallMessage {
+  type: 'STREAM_TOOL_CALL';
+  toolCall: ToolCall;
+  messageId: string;
+  connectionId?: string;
+}
+
+interface StreamToolResultMessage {
+  type: 'STREAM_TOOL_RESULT';
+  toolCallId: string;
+  output: unknown;
+  status: 'success' | 'error';
+  error?: string;
+  messageId: string;
+  connectionId?: string;
+}
+
+interface ExecuteToolMessage {
+  type: 'EXECUTE_TOOL';
+  payload: ToolExecutionRequest;
+}
+
+interface ToolResultMessage {
+  type: 'TOOL_RESULT';
+  payload: ToolExecutionResult;
+}
+
+// WebMCP messages
+export interface WebMCPCallToolMessage {
+  type: 'WEBMCP_CALL_TOOL';
+  tabId?: number;
+  toolName: string;
+  args?: unknown;
+}
+
+export interface WebMCPGetToolsMessage {
+  type: 'WEBMCP_GET_TOOLS';
+  tabId?: number;
+}
+
+/**
+ * Sent once when the sidebar page loads. Remote MCP discovery is lazy, so this
+ * gives the one cold start per browser session a head start while the user types.
+ * It is not required for correctness: serving a cached catalog is what keeps
+ * stream start non-blocking.
+ */
+export interface WebMCPWarmToolsMessage {
+  type: 'WEBMCP_WARM_TOOLS';
+  /**
+   * Discard the cache and rediscover. Used by the Options "Test connections"
+   * action so a server whose tools changed can be picked up without editing
+   * config. The background always refreshes against *saved* configuration, so a
+   * draft under test can never become live authority.
+   */
+  force?: boolean;
+}
+
+export interface WebMCPToolsChangedMessage {
+  type: 'WEBMCP_TOOLS_CHANGED';
+  tabId: number;
+  tools: Array<{
+    name: string;
+    description: string;
+    inputSchema?: unknown;
+    annotations?: Record<string, unknown>;
+  }>;
+}
+
+export interface WebMCPScriptsUpdatedMessage {
+  type: 'WEBMCP_SCRIPTS_UPDATED';
+}
+
+export interface PdfWorkerHostClaimMessage {
+  type: 'PDF_WORKER_HOST_CLAIM';
+  capability: string;
+}
+
+export interface GetSiteToolHintsMessage {
+  type: 'GET_SITE_TOOL_HINTS';
+  tabId: number;
+}
+
+export interface MemoryBindingChangedMessage {
+  type: 'MEMORY_BINDING_CHANGED';
+  agentId: string;
+}
+
+export interface MemoryBindingsResetMessage {
+  type: 'MEMORY_BINDINGS_RESET';
+}
+
+/** Worker-issued notification for live sidebar bootstrap invalidation. */
+export interface WorkspaceBindingsInvalidatedMessage {
+  type: 'WORKSPACE_BINDINGS_INVALIDATED';
+  agentId?: string;
+}
+
+// Union type for all possible extension messages
+export type ExtensionMessage =
+  | {
+      type:
+        | 'SITE_CONNECTION_RESULT'
+        | 'CONNECTION_PROMPT_GET'
+        | 'CONNECTION_PROMPT_APPROVE'
+        | 'CONNECTION_PROMPT_REJECT';
+      requestId: string;
+      agentId?: string;
+    }
+  | { type: 'SITE_VIEW_CHAT'; taskId?: string }
+  | {
+      type: 'SITE_CONNECTION_STATUS' | 'SITE_CONNECT' | 'SITE_DISCONNECT' | 'SITE_OPEN_SETTINGS';
+      agentId?: string;
+    }
+  | GetConfigMessage
+  | GetLogLevelMessage
+  | TestConnectionMessage
+  | TestNewConnectionMessage
+  | PingMessage
+  | StreamChatMessage
+  | ContextSelectionMessage
+  | StreamChunkMessage
+  | StreamCompleteMessage
+  | StreamErrorMessage
+  | StreamToolCallMessage
+  | StreamToolResultMessage
+  | ExecuteToolMessage
+  | ToolResultMessage
+  | WebMCPCallToolMessage
+  | WebMCPGetToolsMessage
+  | WebMCPWarmToolsMessage
+  | WebMCPToolsChangedMessage
+  | WebMCPScriptsUpdatedMessage
+  | PdfWorkerHostClaimMessage
+  | GetSiteToolHintsMessage
+  | MemoryBindingChangedMessage
+  | MemoryBindingsResetMessage
+  | WorkspaceBindingsInvalidatedMessage;
+
+// Response wrapper for message handlers
+export interface MessageResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
+}
+
+// Tool call tracking
+/** Informational source label captured with the executable tool snapshot. */
+export type ToolCallSource = 'agentboard' | 'webmcp' | 'custom' | 'mcp';
+
+export interface ToolCall {
+  id: string;
+  toolName: string;
+  /** UI-only attribution; never grants authority or changes tool execution. */
+  source?: ToolCallSource;
+  input: unknown;
+  output?: unknown;
+  status: 'pending' | 'running' | 'success' | 'error';
+  error?: string;
+  startTime: number;
+  endTime?: number;
+  duration?: number;
+}
+
+// Chat message types
+
+/**
+ * Message content can be simple text or multi-part (text + images)
+ * Backward compatible: string content still works everywhere
+ */
+export type MessageContent = string | MessagePart[];
+
+/**
+ * Individual part of a multi-modal message
+ * Currently supports text and image parts
+ */
+export interface MessagePart {
+  type: 'text' | 'image';
+  text?: string;
+  image?: string; // Data URL (base64 encoded)
+  mimeType?: string; // e.g., 'image/png', 'image/jpeg'
+}
+
+export interface PageContext {
+  url: string;
+  title: string;
+}
+
+/** Hidden, clone-safe workspace bootstrap owned by one live sidebar conversation. */
+export type ConversationWorkspaceContext =
+  | {
+      agentId: string;
+      state: 'unmounted';
+    }
+  | {
+      agentId: string;
+      state: 'mounted';
+      /** Null standing fields are absent; empty strings preserve present-empty files. */
+      identity: string | null;
+      soul: string | null;
+      user: string | null;
+      agents: string | null;
+      /** Mounted-but-missing MEMORY.md preserves the existing empty snapshot behavior. */
+      memory: string;
+    };
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: MessageContent;
+  timestamp: number;
+  toolCalls?: ToolCall[];
+  metadata?: {
+    provider?: string;
+    model?: string;
+    toolName?: string;
+    toolResult?: unknown;
+    agentId?: string;
+    agentName?: string;
+    hasAttachments?: boolean;
+    /** Browser-owned URL/title snapshot from when this user turn entered model history. */
+    pageContext?: PageContext;
+  };
+}
+
+// Tool types (for MCP integration)
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: unknown; // JSON schema can be any structure
+  serverId?: string;
+}
+
+export interface ToolExecutionRequest {
+  toolName: string;
+  input: unknown; // Tool input can be any JSON-serializable value
+  messageId: string;
+}
+
+export interface ToolExecutionResult {
+  toolName: string;
+  output: unknown; // Tool output can be any JSON-serializable value
+  error?: string;
+  duration?: number;
+}
+
+// Port message types (for chrome.runtime.connect communication)
+// These are different from runtime messages and have different structures
+/**
+ * Model-facing history parts. Structurally a subset of the AI SDK's ModelMessage content,
+ * declared here so the sidebar and the port contract do not depend on the SDK; the
+ * background's assignment to CoreMessage[] is what keeps the two in step.
+ */
+export type JsonValue =
+  | null
+  | string
+  | number
+  | boolean
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export interface PortToolCallPart {
+  type: 'tool-call';
+  toolCallId: string;
+  toolName: string;
+  input: unknown;
+}
+
+export interface PortToolResultPart {
+  type: 'tool-result';
+  toolCallId: string;
+  toolName: string;
+  output:
+    | { type: 'text'; value: string }
+    | { type: 'error-text'; value: string }
+    | { type: 'json'; value: JsonValue };
+}
+
+/**
+ * A tool message must directly answer the tool calls on the assistant message before it.
+ * Providers reject an unanswered tool call outright, so the projection emits the two
+ * together or not at all.
+ */
+export type PortChatMessage =
+  | { role: 'user'; content: MessageContent }
+  | {
+      role: 'assistant';
+      content: MessageContent | Array<{ type: 'text'; text: string } | PortToolCallPart>;
+    }
+  | { role: 'tool'; content: PortToolResultPart[] };
+
+interface PortStreamChatMessage {
+  type: 'STREAM_CHAT';
+  agentId: string;
+  tabId?: number; // The tab this sidebar is associated with (for tool scoping)
+  workspaceContext?: ConversationWorkspaceContext;
+  messages: PortChatMessage[];
+}
+
+// Union type for all port messages
+export type PortMessage = PortStreamChatMessage;
+
+// Browser API tool types (Phase 4)
+export interface BrowserTool {
+  name: string;
+  description: string;
+  permissions: string[];
+  execute: (input: unknown) => Promise<unknown>;
+}
+
+// JSON-RPC types for WebMCP communication
+export interface JsonRpcRequest {
+  jsonrpc: '2.0';
+  id: string;
+  method: string;
+  params?: unknown;
+}
+
+export interface JsonRpcResponse {
+  jsonrpc: '2.0';
+  id: string;
+  result?: unknown;
+  error?: {
+    code: number;
+    message: string;
+    data?: unknown;
+  };
+}
+
+export interface JsonRpcNotification {
+  jsonrpc: '2.0';
+  method: string;
+  params?: unknown;
+}
+
+export interface WebMCPMessage {
+  type: 'webmcp';
+  payload: JsonRpcRequest | JsonRpcResponse | JsonRpcNotification;
+}
+
+export interface ToolsListChangedParams {
+  tools: Array<{
+    name: string;
+    description: string;
+    inputSchema?: unknown;
+    annotations?: Record<string, unknown>;
+  }>;
+  origin: string;
+  timestamp?: number;
+  unavailable?: true;
+}
+
+// Error types
+export class ExtensionError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public details?: unknown
+  ) {
+    super(message);
+    this.name = 'ExtensionError';
+  }
+}
+
+// Slash command types
+export interface SlashCommand {
+  name: string; // e.g., "pr-reviewer"
+  instructions: string; // Template with $ARGUMENTS placeholder
+  isBuiltin: boolean; // true for system commands
+  createdAt: number; // timestamp
+}
+
+export interface CommandStorage {
+  userCommands: SlashCommand[];
+}
+
+export type CommandType = 'text' | 'action';
+
+export interface ProcessedCommand {
+  type: CommandType;
+  content?: string; // For text commands - the expanded template
+  action?: () => void; // For action commands - the function to execute
+}
+
+// Utility types
+export type DeepPartial<T> = {
+  [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
+};

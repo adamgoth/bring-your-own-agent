@@ -1,0 +1,1378 @@
+import { setupSiteChat } from './site-chat';
+/**
+ * Sidebar main entry point
+ * Handles chat UI, message management, AI streaming, and provider switching
+ */
+
+import log from '../lib/logger';
+import { raceWithAbort } from '../lib/abort';
+import {
+  DEFAULT_MAX_STEPS,
+  MAX_AUTO_CONTINUATIONS,
+  selectStreamContinuation,
+  stepLimitContinuationMessage,
+  toolsChangedContinuationMessage,
+} from '../lib/ai/stream-policy';
+import './styles.css';
+import type {
+  ChatMessage,
+  ConversationWorkspaceContext,
+  ToolCall,
+  MessageContent,
+  MessagePart,
+  PageContext,
+} from '../types';
+import { ConfigStorage, type AgentConfig } from '../lib/storage/config';
+import { ToolCallBox } from './ToolCallBox';
+import { ReasoningBox } from './ReasoningBox';
+import { TextBox } from './TextBox';
+import { createCopyMarkdownAction } from './CopyMarkdownAction';
+import { StreamingMarkdownRenderer } from './StreamingMarkdownRenderer';
+import { AgentSwitcher } from './AgentSwitcher';
+import { toModelMessages } from './model-history';
+import { CommandRegistry, CommandProcessor, createBuiltinCommands } from '../lib/commands';
+
+// Streaming session interface to encapsulate all streaming state
+interface StreamingSession {
+  port: chrome.runtime.Port;
+  cancel: () => void;
+  currentReasoningBox?: ReasoningBox; // Currently streaming reasoning box
+  reasoningBoxes: ReasoningBox[]; // All reasoning boxes in chronological order
+  currentTextBox?: TextBox; // Currently streaming text box
+  toolCalls: Map<string, ToolCallBox>; // Tool calls can execute in parallel
+}
+
+interface ResponseTurn {
+  markdownSegments: string[];
+  lastElement?: HTMLElement;
+}
+
+// DOM elements
+const messagesContainer = document.getElementById('messages') as HTMLDivElement;
+const messageInput = document.getElementById('message-input') as HTMLTextAreaElement;
+const sendButton = document.getElementById('send-button') as HTMLButtonElement;
+const agentSwitcher = new AgentSwitcher(
+  document.getElementById('agent-switcher') as HTMLDetailsElement,
+  (agentId) => void selectAgent(agentId)
+);
+const settingsButton = document.getElementById('settings-button') as HTMLButtonElement;
+
+// State
+let currentAgentId: string | null = null;
+let currentAgent: AgentConfig | null = null;
+let isLoading = false;
+let connectionRetries = 0;
+const MAX_RETRIES = 3;
+let messageHistory: ChatMessage[] = [];
+let conversationWorkspaceContext: ConversationWorkspaceContext | undefined;
+let workspaceContextEpoch = 0;
+let agentSelectionSequence = 0;
+let agentLoadSequence = 0;
+let currentSession: StreamingSession | null = null;
+let currentStreamPreparation: AbortController | null = null;
+const configStorage = ConfigStorage.getInstance();
+
+function invalidateWorkspaceContext(): void {
+  conversationWorkspaceContext = undefined;
+  workspaceContextEpoch++;
+}
+
+// Auto-continuation: when tools change mid-stream (e.g., navigation),
+// the stream stops and restarts with fresh tools. Capped to prevent loops.
+let autoContinuationCount = 0;
+
+// Image attachment state
+interface ImageAttachment {
+  id: string;
+  dataUrl: string;
+  mimeType: string;
+  size: number;
+  filename: string;
+}
+
+let pendingAttachments: ImageAttachment[] = [];
+
+// Command system
+let commandRegistry: CommandRegistry;
+let commandProcessor: CommandProcessor;
+
+// Scroll management state
+let isUserAtBottom = true; // Initially at bottom
+
+/**
+ * Resize image if it exceeds max dimensions
+ * Maintains aspect ratio and converts to JPEG for efficiency
+ * @param file Original image file
+ * @param maxDimension Max width/height (default 1920px)
+ * @param quality JPEG quality 0-1 (default 0.85)
+ * @returns Resized data URL
+ */
+async function resizeImageIfNeeded(
+  file: File,
+  maxDimension = 1920,
+  quality = 0.85
+): Promise<{ dataUrl: string; sizeKB: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      reject(new Error('Failed to create canvas context'));
+      return;
+    }
+
+    img.onload = () => {
+      let { width, height } = img;
+
+      // Check if resize needed
+      const needsResize = width > maxDimension || height > maxDimension;
+
+      if (!needsResize && file.size < 1024 * 1024) {
+        // Small enough, return original
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          const sizeKB = (dataUrl.length * 0.75) / 1024;
+          resolve({ dataUrl, sizeKB });
+        };
+        reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      // Calculate new dimensions (maintain aspect ratio)
+      if (width > height) {
+        if (width > maxDimension) {
+          height = (height * maxDimension) / width;
+          width = maxDimension;
+        }
+      } else {
+        if (height > maxDimension) {
+          width = (width * maxDimension) / height;
+          height = maxDimension;
+        }
+      }
+
+      // Resize
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Convert to JPEG with quality control
+      const resizedDataUrl = canvas.toDataURL('image/jpeg', quality);
+      const sizeKB = (resizedDataUrl.length * 0.75) / 1024;
+      resolve({ dataUrl: resizedDataUrl, sizeKB });
+    };
+
+    img.onerror = () => reject(new Error('Failed to load image'));
+
+    // Load original
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Attach an image file to pending attachments
+ * Automatically resizes large images to 1920px max dimension
+ */
+async function attachImage(file: File): Promise<void> {
+  // Validate file type
+  if (!file.type.startsWith('image/')) {
+    addMessage('error', `Invalid file type: ${file.type}. Please select an image file.`);
+    return;
+  }
+
+  try {
+    // Resize if needed (1920px max, 85% quality)
+    const { dataUrl, sizeKB } = await resizeImageIfNeeded(file);
+
+    pendingAttachments.push({
+      id: globalThis.crypto.randomUUID(),
+      dataUrl,
+      mimeType: 'image/jpeg', // Always JPEG after resize
+      size: Math.round(sizeKB * 1024),
+      filename: file.name,
+    });
+
+    updateAttachmentIndicator();
+    log.info('[Sidebar] Attached image:', file.name, `(${sizeKB.toFixed(0)}KB)`);
+  } catch (error) {
+    log.error('[Sidebar] Failed to attach image:', error);
+    addMessage(
+      'error',
+      `Failed to attach image: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Update attachment indicator display
+ */
+function updateAttachmentIndicator(): void {
+  const indicator = document.getElementById('attachment-indicator');
+  if (!indicator) return;
+
+  if (pendingAttachments.length === 0) {
+    indicator.style.display = 'none';
+  } else {
+    indicator.style.display = 'block';
+    const count = pendingAttachments.length;
+    indicator.textContent = `🖼️ ${count} image${count > 1 ? 's' : ''} attached - Press ESC to clear`;
+
+    // Tooltip shows filenames
+    indicator.title = pendingAttachments
+      .map((a) => `${a.filename} (${(a.size / 1024).toFixed(1)}KB)`)
+      .join('\n');
+  }
+}
+
+// Parse the attached tab ID from the URL hash
+const attachedTabId = (() => {
+  const hash = new URL(window.location.href).hash;
+  const match = hash.match(/#tab=(\d+)/);
+  return match ? Number(match[1]) : null;
+})();
+
+log.info('[Sidebar] Initialized for tab:', attachedTabId);
+
+/**
+ * Get current page context (URL, title) for the attached tab.
+ * Returns null if no tab attached or tab info unavailable.
+ */
+async function getPageContext(): Promise<PageContext | null> {
+  if (!attachedTabId) return null;
+  try {
+    const tab = await chrome.tabs.get(attachedTabId);
+    return { url: tab.url || '', title: tab.title || '' };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Build XML context string to prepend to user messages.
+ * Provides page awareness and domain-specific tool hints to the model.
+ *
+ * When siteToolHints are present, a <site_tools> block is appended to prime
+ * the LLM toward page-specific tools (e.g., youtube_transcript on YouTube).
+ * This is a steering hint — the full tool set is still sent via the API.
+ */
+function buildPageContextXml(
+  ctx: PageContext,
+  siteToolHints?: Array<{ name: string; description: string }>
+): string {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  let siteToolsBlock = '';
+  if (siteToolHints && siteToolHints.length > 0) {
+    const lines = siteToolHints.map((t) => `- ${esc(t.name)}: ${esc(t.description)}`).join('\n');
+    siteToolsBlock = `\n<site_tools>\nThese page-specific tools may inspect or act in the active browser tab's existing signed-in session:\n${lines}\n</site_tools>`;
+  }
+
+  return `<page_context>
+<url>${esc(ctx.url)}</url>
+<title>${esc(ctx.title)}</title>${siteToolsBlock}
+</page_context>
+
+`;
+}
+
+// Smart scroll management helpers
+function checkIfUserAtBottom(): boolean {
+  const threshold = 10; // Allow some margin for rounding errors
+  return (
+    messagesContainer.scrollTop + messagesContainer.clientHeight >=
+    messagesContainer.scrollHeight - threshold
+  );
+}
+
+function maintainScrollPosition(): void {
+  // Update our tracking of whether user is at bottom
+  isUserAtBottom = checkIfUserAtBottom();
+}
+
+function scrollToBottomIfNeeded(): void {
+  // Only scroll to bottom if user was already at bottom
+  if (isUserAtBottom) {
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', async () => {
+  // Remote MCP discovery is lazy; nudge it now so a cold browser session overlaps
+  // discovery with the user typing rather than with their first message.
+  chrome.runtime.sendMessage({ type: 'WEBMCP_WARM_TOOLS' }).catch(() => {
+    // Warming is best-effort: a cold cache simply resolves at stream start.
+  });
+
+  // Event handlers must not accept input before their command dependency exists.
+  commandRegistry = new CommandRegistry();
+  const builtinCommands = createBuiltinCommands(commandRegistry, attachedTabId);
+  commandRegistry.registerBuiltins(builtinCommands);
+  await commandRegistry.loadUserCommands();
+  commandProcessor = new CommandProcessor(commandRegistry);
+
+  setupEventListeners();
+  setupMessageListener();
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.config) void loadAgents();
+  });
+  await loadAgents();
+  setupSiteChat(attachedTabId, messagesContainer);
+
+  // Set up scroll tracking
+  messagesContainer.addEventListener('scroll', () => {
+    maintainScrollPosition();
+  });
+
+  // Listen for clear conversation event from built-in command
+  window.addEventListener('clear-conversation', () => {
+    clearConversation();
+  });
+
+  // Start health check
+  startHealthCheck();
+
+  // Initialize button state
+  updateSendButton();
+});
+
+type SidebarState = 'loading' | 'setup' | 'error' | 'chat';
+
+function setSidebarState(state: SidebarState): void {
+  const ready = state === 'chat';
+  const brand = document.getElementById('sidebar-brand');
+  if (brand) brand.hidden = ready;
+  const setup = document.getElementById('agent-setup');
+  if (setup) setup.hidden = ready;
+  for (const selector of ['.chat-container', '.input-container', '#agent-switcher']) {
+    const element = document.querySelector<HTMLElement>(selector);
+    if (element) element.hidden = !ready;
+  }
+  const title = document.getElementById('setup-title');
+  const description = document.getElementById('setup-description');
+  const action = document.getElementById('setup-action');
+  const retry = document.getElementById('setup-retry');
+  if (title)
+    title.textContent =
+      state === 'error'
+        ? 'Unable to load your agents'
+        : state === 'setup'
+          ? 'Bring your first agent to BYOA'
+          : 'Loading your agents…';
+  if (description)
+    description.textContent =
+      state === 'error'
+        ? 'BYOA couldn’t read your configuration. Try again or open settings to review it.'
+        : state === 'setup'
+          ? 'Choose your provider and model, then add your connection details to start chatting.'
+          : 'BYOA is checking your configuration.';
+  if (action) {
+    action.hidden = state !== 'setup' && state !== 'error';
+    action.textContent = state === 'error' ? 'Open settings' : 'Configure your first agent';
+    action.onclick = () => {
+      const opening =
+        state === 'error'
+          ? chrome.runtime.openOptionsPage()
+          : chrome.tabs.create({
+              url: chrome.runtime.getURL('src/options/index.html#create-agent'),
+            });
+      void Promise.resolve(opening).catch(() => {
+        if (description) description.textContent = 'Couldn’t open settings. Please try again.';
+      });
+    };
+  }
+  if (retry) {
+    retry.hidden = state !== 'error';
+    retry.onclick = () => void loadAgents();
+  }
+  messageInput.disabled = !ready;
+  updateSendButton();
+}
+
+async function loadAgents() {
+  const sequence = ++agentLoadSequence;
+  // An incoming configuration snapshot supersedes any pending agent selection.
+  ++agentSelectionSequence;
+  try {
+    const agents = await configStorage.getAgents();
+    const defaultAgent = await configStorage.getDefaultAgent();
+    if (sequence !== agentLoadSequence) return;
+    const selectedAgent =
+      agents.find(({ id }) => id === currentAgentId) ??
+      agents.find(({ id }) => id === defaultAgent?.id) ??
+      agents[0];
+    if (currentAgentId !== selectedAgent?.id) invalidateWorkspaceContext();
+    currentAgentId = selectedAgent?.id ?? null;
+    currentAgent = selectedAgent ?? null;
+    agentSwitcher.setAgents(agents, selectedAgent?.id);
+    if (!selectedAgent) {
+      cancelCurrentStream();
+      setSidebarState('setup');
+      return;
+    }
+    messageInput.placeholder = 'Ask anything. Use /help for available commands.';
+    setSidebarState('chat');
+  } catch {
+    if (sequence !== agentLoadSequence) return;
+    currentAgentId = null;
+    currentAgent = null;
+    invalidateWorkspaceContext();
+    cancelCurrentStream();
+    agentSwitcher.setAgents([]);
+    setSidebarState('error');
+    log.error('[Sidebar] Failed to load agent configuration');
+  }
+}
+
+// Setup listener for messages from background
+function setupMessageListener() {
+  chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+    // Filter messages by tabId for tab-specific messages
+    if (request.type === 'CONTEXT_SELECTION') {
+      // Only handle if the message is for our tab
+      if (request.tabId !== attachedTabId) {
+        log.debug(
+          `[Sidebar] Ignoring CONTEXT_SELECTION for tab ${request.tabId}, our tab is ${attachedTabId}`
+        );
+        sendResponse({ received: false });
+        return false;
+      }
+
+      // Handle text selected from context menu
+      if (request.text) {
+        messageInput.value = `Please help me with this text:\n\n"${request.text}"`;
+        messageInput.focus();
+      }
+    } else if (request.type === 'PING') {
+      // PING is tab-agnostic, always respond
+      // This is handled by the background script
+      sendResponse({ received: true });
+    } else if (request.type === 'WORKSPACE_BINDINGS_INVALIDATED') {
+      if (request.agentId === undefined || request.agentId === currentAgentId) {
+        invalidateWorkspaceContext();
+      }
+    } else {
+      // Don't respond to unknown messages - let other handlers deal with them
+      log.debug('[Sidebar] Ignoring message type:', request.type);
+    }
+
+    return false;
+  });
+}
+
+// Health check to detect disconnections
+function startHealthCheck() {
+  setInterval(async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'PING',
+      } as const);
+      if (response?.pong) {
+        connectionRetries = 0; // Reset retry counter on success
+      }
+    } catch {
+      connectionRetries++;
+      if (connectionRetries >= MAX_RETRIES) {
+        log.error('[Sidebar] Lost connection to background service');
+        addMessage('error', 'Connection lost. Please reload the extension.');
+      }
+    }
+  }, 30000); // Check every 30 seconds
+}
+
+// Static icon markup for the send/stop button (no user content).
+const SEND_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" /></svg>';
+const STOP_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" /></svg>';
+
+function updateSendButton() {
+  if (isLoading) {
+    sendButton.innerHTML = STOP_ICON;
+    sendButton.title = 'Stop generation (Esc)';
+    sendButton.setAttribute('aria-label', 'Stop generation');
+    sendButton.classList.add('stop-mode');
+    sendButton.disabled = false; // Keep enabled for cancellation
+  } else {
+    sendButton.innerHTML = SEND_ICON;
+    sendButton.title = 'Send message';
+    sendButton.setAttribute('aria-label', 'Send message');
+    sendButton.classList.remove('stop-mode');
+    sendButton.disabled = !currentAgent || messageInput.value.trim() === '';
+  }
+}
+
+// Agent switching affects future sends without cancelling the active response.
+// Clear the bootstrap before the async lookup so late callbacks cannot cross agents.
+async function selectAgent(selectedAgentId: string): Promise<void> {
+  const selectionSequence = ++agentSelectionSequence;
+  invalidateWorkspaceContext();
+  currentAgentId = null;
+  currentAgent = null;
+  updateSendButton();
+
+  try {
+    const agent = await configStorage.getAgent(selectedAgentId);
+    if (selectionSequence !== agentSelectionSequence) return;
+    if (!agent) throw new Error('Agent not found');
+    currentAgentId = selectedAgentId;
+    currentAgent = agent;
+    addMessage('system', `Switched to ${agent.name}`);
+  } catch {
+    if (selectionSequence !== agentSelectionSequence) return;
+    addMessage('error', 'Failed to switch agent');
+    log.error('[Sidebar] Agent switch failed');
+  } finally {
+    if (selectionSequence === agentSelectionSequence) updateSendButton();
+  }
+}
+
+function setupEventListeners() {
+  // Send message or cancel on button click
+  sendButton.addEventListener('click', () => {
+    if (isLoading) {
+      cancelCurrentStream();
+    } else {
+      handleSendMessage();
+    }
+  });
+
+  // Send message on Enter (without Shift)
+  messageInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  });
+
+  // Attach button click - open file picker
+  const attachButton = document.getElementById('attach-button') as HTMLButtonElement;
+  attachButton.addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/gif,image/webp';
+    input.multiple = true; // Allow multi-select
+    input.onchange = async (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (files) {
+        for (const file of Array.from(files)) {
+          await attachImage(file);
+        }
+      }
+    };
+    input.click();
+  });
+
+  // Clipboard paste for images
+  messageInput.addEventListener('paste', async (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    // Check for images in clipboard
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault(); // Don't paste as text
+
+        const file = item.getAsFile();
+        if (file) {
+          await attachImage(file);
+        }
+        return;
+      }
+    }
+
+    // Fall through to default text paste
+  });
+
+  // Auto-resize textarea and update button state
+  messageInput.addEventListener('input', () => {
+    const currentHeight = messageInput.offsetHeight;
+
+    // If content overflows current height, grow immediately
+    if (messageInput.scrollHeight > currentHeight && currentHeight < 140) {
+      messageInput.style.height = `${Math.min(messageInput.scrollHeight, 140)}px`;
+    }
+    // If content is less than current height, shrink by resetting
+    else if (messageInput.scrollHeight < currentHeight) {
+      messageInput.style.height = '88px'; // Reset to base height
+      if (messageInput.scrollHeight > 88) {
+        messageInput.style.height = `${Math.min(messageInput.scrollHeight, 140)}px`;
+      }
+    }
+
+    if (!isLoading) {
+      updateSendButton();
+    }
+  });
+
+  // Settings button click
+  settingsButton.addEventListener('click', () => {
+    chrome.runtime.openOptionsPage();
+  });
+}
+
+async function handleSendMessage() {
+  const text = messageInput.value.trim();
+
+  // Require either text or attachments and a fully resolved agent selection.
+  if (!text && pendingAttachments.length === 0) return;
+  if (isLoading || !currentAgentId || !currentAgent) return;
+
+  // Clear input immediately for better UX
+  messageInput.value = '';
+  messageInput.style.height = '88px';
+
+  // Process slash commands (only if there's text)
+  if (text) {
+    const processed = await commandProcessor.process(text);
+
+    if (processed) {
+      if (processed.type === 'action' && processed.action) {
+        // Execute built-in command (doesn't send to LLM)
+        try {
+          processed.action();
+        } catch (error) {
+          log.error('[Sidebar] Command execution error:', error);
+          addMessage('error', `Command failed: ${error}`);
+        }
+        return;
+      } else if (processed.type === 'text' && processed.content) {
+        // Replace message with expanded template and continue with attachments
+        const expandedMessage = processed.content;
+        await createAndSendMessage(expandedMessage);
+        return;
+      }
+    }
+  }
+
+  // Regular message (not a command)
+  await createAndSendMessage(text);
+}
+
+/**
+ * Helper to create message with attachments and send to AI
+ */
+async function createAndSendMessage(text: string) {
+  // Build multi-part content
+  const content: MessagePart[] = [];
+
+  if (text) {
+    content.push({ type: 'text', text });
+  }
+
+  for (const attachment of pendingAttachments) {
+    content.push({
+      type: 'image',
+      image: attachment.dataUrl,
+      mimeType: attachment.mimeType,
+    });
+  }
+
+  // Create message
+  const userMsg: ChatMessage = {
+    id: globalThis.crypto.randomUUID(),
+    role: 'user',
+    content:
+      content.length === 1 && content[0].type === 'text'
+        ? (content[0].text ?? '') // Keep as string if text-only (backward compatible)
+        : content, // Use multi-part for images
+    timestamp: Date.now(),
+    metadata: {
+      hasAttachments: pendingAttachments.length > 0,
+    },
+  };
+
+  messageHistory.push(userMsg);
+  addMessage('user', userMsg.content);
+
+  // Clear attachments
+  const hadAttachments = pendingAttachments.length > 0;
+  pendingAttachments = [];
+  updateAttachmentIndicator();
+
+  if (hadAttachments) {
+    log.info('[Sidebar] Sending message with attachments to AI');
+  }
+
+  await sendToAI();
+}
+
+async function sendToAI() {
+  // When user sends a message, assume they want to see the response
+  isUserAtBottom = true;
+
+  // Reset auto-continuation counter for new user-initiated messages
+  autoContinuationCount = 0;
+
+  // Set loading state
+  isLoading = true;
+  updateSendButton();
+
+  try {
+    // Check if agent is selected and configured
+    if (!currentAgentId || !currentAgent) {
+      addMessage('error', 'Please select an agent or configure agents in settings.');
+      return;
+    }
+
+    // Require API key unless custom endpoint is provided
+    if (!currentAgent.apiKey && !currentAgent.endpoint) {
+      addMessage(
+        'error',
+        `Agent "${currentAgent.name}" needs an API key or custom endpoint. Please configure it in settings.`
+      );
+      return;
+    }
+
+    // Automatic continuations are visually one reply, so they share one copy payload.
+    const responseTurn: ResponseTurn = { markdownSegments: [] };
+    await streamAIResponse(responseTurn);
+  } catch (error) {
+    addMessage('error', 'Failed to send message. Please try again.');
+    log.error('[Sidebar] Send message error:', error);
+  } finally {
+    isLoading = false;
+    updateSendButton();
+  }
+}
+
+async function streamAIResponse(responseTurn: ResponseTurn) {
+  log.debug('[Sidebar] Starting streamAIResponse for agent:', currentAgent?.name);
+
+  if (!currentAgentId || !currentAgent) {
+    throw new Error('No agent selected');
+  }
+  const streamAgentId = currentAgentId;
+  const streamAgent = currentAgent;
+  const streamWorkspaceEpoch = workspaceContextEpoch;
+  const streamWorkspaceContext =
+    conversationWorkspaceContext?.agentId === streamAgentId
+      ? conversationWorkspaceContext
+      : undefined;
+
+  // Create assistant message placeholder (don't add to history yet)
+  const assistantMsg: ChatMessage = {
+    id: globalThis.crypto.randomUUID(),
+    role: 'assistant',
+    content: '',
+    timestamp: Date.now(),
+    metadata: { agentId: streamAgentId, agentName: streamAgent.name },
+  };
+
+  // Page-context preparation is cancellable before a provider-owned port exists.
+  currentStreamPreparation?.abort();
+  const preparation = new AbortController();
+  currentStreamPreparation = preparation;
+  let pageContext: Awaited<ReturnType<typeof getPageContext>>;
+  let siteToolHints: Array<{ name: string; description: string }> | undefined;
+  try {
+    pageContext = await raceWithAbort(getPageContext(), preparation.signal);
+    siteToolHints = attachedTabId
+      ? (
+          await raceWithAbort(
+            chrome.runtime.sendMessage({
+              type: 'GET_SITE_TOOL_HINTS',
+              tabId: attachedTabId,
+            }),
+            preparation.signal
+          )
+        )?.hints
+      : undefined;
+  } catch (error) {
+    if (currentStreamPreparation === preparation) currentStreamPreparation = null;
+    if (preparation.signal.aborted) return;
+    throw error;
+  }
+  if (currentStreamPreparation !== preparation || preparation.signal.aborted) return;
+  currentStreamPreparation = null;
+
+  // Keep page identity attached to the turn that observed it. Rebuilding history with only the
+  // latest URL would falsely relocate earlier questions after cross-page or SPA navigation.
+  // A turn cancelled during preparation stays context-less rather than borrowing a later page.
+  if (pageContext) {
+    for (let index = messageHistory.length - 1; index >= 0; index--) {
+      const message = messageHistory[index];
+      if (message.role !== 'user') continue;
+      message.metadata = {
+        ...message.metadata,
+        pageContext: message.metadata?.pageContext ?? { ...pageContext },
+      };
+      break;
+    }
+  }
+
+  // Each request owns one collision-resistant port and its promise settlement.
+  const connectionId = `ai-stream-${attachedTabId || 'unknown'}-${globalThis.crypto.randomUUID()}`;
+  log.debug('[Sidebar] Creating port connection:', connectionId, 'for tab:', attachedTabId);
+  const port = chrome.runtime.connect({ name: connectionId });
+  const session: StreamingSession = {
+    port,
+    cancel: () => undefined,
+    currentReasoningBox: undefined,
+    reasoningBoxes: [],
+    currentTextBox: undefined,
+    toolCalls: new Map(),
+  };
+  currentSession = session;
+
+  // Preserve text-block boundaries that fullResponse flattens around tool calls.
+  const responseBlockIds: string[] = [];
+  const responseBlocks = new Map<string, string>();
+
+  return new Promise<void>((resolve, reject) => {
+    let expectedDisconnect = false;
+    let settled = false;
+    const resolveOnce = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    const rejectOnce = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+    session.cancel = () => {
+      if (settled) return;
+      expectedDisconnect = true;
+      if (currentSession === session) currentSession = null;
+      session.port.disconnect();
+      resolveOnce();
+    };
+
+    session.port.onMessage.addListener((msg) => {
+      if (currentSession !== session) return;
+      log.debug('[Sidebar] Received message from port:', msg.type);
+      switch (msg.type) {
+        case 'STREAM_WORKSPACE_CONTEXT': {
+          // Active responses may finish after an agent or binding change, but their
+          // bootstrap must never refill the selected chat's invalidated context slot.
+          if (
+            currentAgentId === streamAgentId &&
+            workspaceContextEpoch === streamWorkspaceEpoch &&
+            msg.workspaceContext?.agentId === streamAgentId
+          ) {
+            conversationWorkspaceContext ??= msg.workspaceContext;
+          }
+          break;
+        }
+
+        case 'STREAM_REASONING_START': {
+          // Check if we should merge with the previous reasoning box
+          // (i.e., the last child in the messages container is a reasoning wrapper)
+          const lastChild = messagesContainer.lastElementChild;
+          const isLastChildReasoningWrapper = lastChild?.classList.contains('reasoning-wrapper');
+          const lastReasoningBox =
+            currentSession?.reasoningBoxes[currentSession.reasoningBoxes.length - 1];
+
+          // If the last element is a reasoning wrapper that's not actively streaming, reuse its box
+          if (
+            isLastChildReasoningWrapper &&
+            lastReasoningBox &&
+            !lastReasoningBox.isStreamingActive()
+          ) {
+            log.debug('[Sidebar] Merging with previous reasoning box (adjacent segments)');
+            responseTurn.lastElement = lastChild as HTMLElement;
+
+            // Add simple break between merged segments
+            lastReasoningBox.appendChunk('\n\n');
+            lastReasoningBox.startStreaming(true); // Restart streaming, preserving content
+
+            if (currentSession) {
+              currentSession.currentReasoningBox = lastReasoningBox;
+            }
+          } else {
+            // Create a new reasoning box (not adjacent to another reasoning box)
+            const reasoningBox = new ReasoningBox();
+            if (currentSession) {
+              // End any previous reasoning box that might still be streaming
+              if (
+                currentSession.currentReasoningBox &&
+                currentSession.currentReasoningBox !== reasoningBox
+              ) {
+                currentSession.currentReasoningBox.finishStreaming();
+              }
+
+              // Set as current and add to list
+              currentSession.currentReasoningBox = reasoningBox;
+              currentSession.reasoningBoxes.push(reasoningBox);
+            }
+
+            // Create a wrapper for the reasoning box to maintain consistent spacing
+            const reasoningWrapper = document.createElement('div');
+            reasoningWrapper.className = 'reasoning-wrapper';
+            reasoningWrapper.appendChild(reasoningBox.getElement());
+
+            // Append chronologically - always at the end
+            messagesContainer.appendChild(reasoningWrapper);
+            responseTurn.lastElement = reasoningWrapper;
+            reasoningBox.startStreaming();
+
+            log.debug(
+              `[Sidebar] Created new reasoning box #${currentSession?.reasoningBoxes.length || 1}`,
+              {
+                offsetHeight: reasoningBox.getElement().offsetHeight,
+              }
+            );
+          }
+
+          scrollToBottomIfNeeded();
+          break;
+        }
+
+        case 'STREAM_REASONING_CHUNK': {
+          // Append to the current reasoning box
+          if (currentSession?.currentReasoningBox) {
+            currentSession.currentReasoningBox.appendChunk(msg.chunk || '');
+            scrollToBottomIfNeeded();
+          } else {
+            log.debug('[Sidebar] Received reasoning chunk without active reasoning box');
+          }
+          break;
+        }
+
+        case 'STREAM_REASONING_END': {
+          // Finish the current reasoning box
+          if (currentSession?.currentReasoningBox) {
+            currentSession.currentReasoningBox.finishStreaming(msg.usage);
+            log.debug('[Sidebar] Ended reasoning box');
+            // Clear the current reference but keep it in the list
+            currentSession.currentReasoningBox = undefined;
+          }
+          break;
+        }
+
+        case 'STREAM_TEXT_BLOCK_START': {
+          if (!responseBlocks.has(msg.blockId)) {
+            responseBlockIds.push(msg.blockId);
+            responseBlocks.set(msg.blockId, '');
+          }
+
+          // Clean up any previous text box (defensive)
+          if (currentSession?.currentTextBox) {
+            currentSession.currentTextBox.finishStreaming();
+          }
+
+          const textBox = new TextBox(msg.blockId);
+          if (currentSession) {
+            currentSession.currentTextBox = textBox;
+          }
+
+          // Append chronologically - always at the end
+          const textBoxElement = textBox.getElement();
+          messagesContainer.appendChild(textBoxElement);
+          responseTurn.lastElement = textBoxElement;
+          textBox.startStreaming();
+          scrollToBottomIfNeeded();
+
+          log.debug(`[Sidebar] Created text block ${msg.blockId}`);
+          break;
+        }
+
+        case 'STREAM_TEXT_BLOCK_CHUNK': {
+          log.debug(`[Sidebar] Chunk for block ${msg.blockId}: "${msg.chunk.substring(0, 50)}..."`);
+
+          if (!responseBlocks.has(msg.blockId)) {
+            responseBlockIds.push(msg.blockId);
+            responseBlocks.set(msg.blockId, '');
+          }
+          responseBlocks.set(msg.blockId, `${responseBlocks.get(msg.blockId) || ''}${msg.chunk}`);
+
+          if (currentSession?.currentTextBox) {
+            currentSession.currentTextBox.appendChunk(msg.chunk);
+            scrollToBottomIfNeeded();
+          } else {
+            log.error(`[Sidebar] ERROR: No text box available for block ${msg.blockId}!`);
+          }
+
+          break;
+        }
+
+        case 'STREAM_TEXT_BLOCK_END': {
+          // Finish the current text box
+          if (currentSession?.currentTextBox) {
+            currentSession.currentTextBox.finishStreaming();
+            currentSession.currentTextBox = undefined; // Clear reference
+            log.debug(`[Sidebar] Ended text block ${msg.blockId}`);
+          } else {
+            log.debug(`[Sidebar] No active text box to end for block ${msg.blockId}`);
+          }
+          break;
+        }
+
+        case 'STREAM_TOOL_CALL':
+          // Add tool call box as a separate element in the chat flow
+          if (msg.toolCall && currentSession) {
+            const toolBox = new ToolCallBox(msg.toolCall);
+            currentSession.toolCalls.set(msg.toolCall.id, toolBox);
+
+            // Add tool call to assistant message for history tracking
+            if (!assistantMsg.toolCalls) {
+              assistantMsg.toolCalls = [];
+            }
+            assistantMsg.toolCalls.push(msg.toolCall);
+
+            // Create a wrapper for the tool call to maintain consistent spacing
+            const toolCallWrapper = document.createElement('div');
+            toolCallWrapper.className = 'tool-call-wrapper';
+            toolCallWrapper.appendChild(toolBox.getElement());
+
+            // Append chronologically - always at the end
+            messagesContainer.appendChild(toolCallWrapper);
+            responseTurn.lastElement = toolCallWrapper;
+
+            // Smart scroll - only scroll if user is at bottom
+            scrollToBottomIfNeeded();
+          }
+          break;
+
+        case 'STREAM_TOOL_RESULT':
+          // Update existing tool call box
+          if (msg.toolCallId && currentSession?.toolCalls.has(msg.toolCallId)) {
+            const toolBox = currentSession.toolCalls.get(msg.toolCallId);
+            toolBox?.updateResult(msg.output, msg.status || 'success', msg.error);
+
+            // Update in message history
+            const toolCall = assistantMsg.toolCalls?.find(
+              (tc: ToolCall) => tc.id === msg.toolCallId
+            );
+            if (toolCall) {
+              toolCall.output = msg.output;
+              toolCall.status = msg.status || 'success';
+              toolCall.error = msg.error;
+              toolCall.endTime = Date.now();
+              if (toolCall.startTime) {
+                toolCall.duration = toolCall.endTime - toolCall.startTime;
+              }
+            }
+
+            // Auto-scroll
+            scrollToBottomIfNeeded();
+          }
+          break;
+
+        case 'STREAM_COMPLETE': {
+          // Streaming complete, update message history and UI
+          const responseText = msg.fullResponse || '';
+          assistantMsg.content = responseText;
+          messageHistory.push(assistantMsg);
+
+          const renderedMarkdown = responseBlockIds
+            .map((blockId) => responseBlocks.get(blockId) || '')
+            .filter((block) => block.trim())
+            .join('\n\n');
+          const copySegment = renderedMarkdown || responseText;
+          if (copySegment.trim()) responseTurn.markdownSegments.push(copySegment);
+
+          // Session cleanup (TextBox handles its own cleanup)
+          expectedDisconnect = true;
+          currentSession = null;
+          session.port.disconnect();
+
+          const sameAgentSelected = currentAgentId === streamAgentId;
+          const continuation = sameAgentSelected
+            ? selectStreamContinuation({
+                toolsChanged: Boolean(msg.toolsChanged),
+                stepsExhausted: Boolean(msg.stepsExhausted),
+                continuationCount: autoContinuationCount,
+              })
+            : null;
+
+          // Auto-continue if tools changed mid-stream (e.g., after navigation).
+          // The AI needs to restart with fresh tools to continue the task.
+          // Capped to prevent infinite loops if tools keep changing.
+          if (continuation === 'tools-changed') {
+            autoContinuationCount++;
+            log.info(
+              `[Sidebar] Tools changed during stream — auto-continuing (${autoContinuationCount}/${MAX_AUTO_CONTINUATIONS})`
+            );
+
+            // The continuation is transported as a user-role turn for provider portability, but
+            // its fixed text names BYOA as the author and never promotes tool output.
+            const contMsg: ChatMessage = {
+              id: globalThis.crypto.randomUUID(),
+              role: 'user',
+              content: toolsChangedContinuationMessage(),
+              timestamp: Date.now(),
+            };
+            messageHistory.push(contMsg);
+
+            // Chain the continuation into the same user-visible reply.
+            streamAIResponse(responseTurn).then(resolveOnce).catch(rejectOnce);
+            break;
+          }
+
+          if (msg.toolsChanged && sameAgentSelected) {
+            log.warn('[Sidebar] Max auto-continuations reached, stopping');
+          } else if (!sameAgentSelected && (msg.toolsChanged || msg.stepsExhausted)) {
+            log.info('[Sidebar] Agent changed during response; automatic continuation skipped');
+          }
+
+          // When the model exhausts its tool step budget, give it one more
+          // text-only turn to summarize progress instead of silently stopping.
+          if (continuation === 'steps-exhausted') {
+            autoContinuationCount++;
+            const limit = streamAgent.maxSteps ?? DEFAULT_MAX_STEPS;
+            log.info(`[Sidebar] Steps exhausted (${limit}) — requesting wrap-up summary`);
+
+            const contMsg: ChatMessage = {
+              id: globalThis.crypto.randomUUID(),
+              role: 'user',
+              content: stepLimitContinuationMessage(streamAgent.maxSteps),
+              timestamp: Date.now(),
+            };
+            messageHistory.push(contMsg);
+
+            // Chain continuation — model should respond with text summary.
+            streamAIResponse(responseTurn).then(resolveOnce).catch(rejectOnce);
+            break;
+          }
+
+          const responseMarkdown = responseTurn.markdownSegments.join('\n\n');
+          const anchor = responseTurn.lastElement;
+          if (responseMarkdown && anchor?.isConnected) {
+            anchor.classList.add('response-action-anchor');
+            anchor.appendChild(createCopyMarkdownAction(responseMarkdown));
+            scrollToBottomIfNeeded();
+          }
+
+          isLoading = false;
+          updateSendButton();
+          resolveOnce();
+          break;
+        }
+
+        case 'STREAM_ERROR': {
+          // Handle streaming error
+          log.error('[Sidebar] Stream error:', msg.error);
+
+          // Clean up session components
+          // Clean up this request without mutating a replacement session.
+          if (session.currentTextBox) {
+            session.currentTextBox.destroy();
+          }
+          if (session.currentReasoningBox?.isStreamingActive()) {
+            session.currentReasoningBox.finishStreaming();
+          }
+          expectedDisconnect = true;
+          currentSession = null;
+          session.port.disconnect();
+
+          // Enhanced error messages for multi-modal issues
+          let errorMessage = msg.error || 'Streaming failed';
+
+          // Check for common multi-modal errors
+          if (
+            errorMessage.toLowerCase().includes('image') ||
+            errorMessage.toLowerCase().includes('vision')
+          ) {
+            errorMessage +=
+              '\n\nNote: Make sure your agent supports vision (GPT-4V, Claude 3+, Gemini).';
+          }
+          if (
+            errorMessage.toLowerCase().includes('size') ||
+            errorMessage.toLowerCase().includes('too large')
+          ) {
+            errorMessage += '\n\nTry sending fewer or smaller images.';
+          }
+          if (errorMessage.toLowerCase().includes('format')) {
+            errorMessage += '\n\nSupported formats: PNG, JPEG, GIF, WebP.';
+          }
+
+          addMessage('error', errorMessage);
+          // Don't pop from history since we didn't add it yet
+          isLoading = false;
+          updateSendButton();
+          rejectOnce(new Error(msg.error));
+          break;
+        }
+      }
+    });
+
+    session.port.onDisconnect.addListener(() => {
+      if (currentSession === session) {
+        session.currentTextBox?.finishStreaming();
+        currentSession = null;
+      }
+      if (!expectedDisconnect) {
+        rejectOnce(new Error('AI stream connection closed unexpectedly.'));
+      }
+    });
+
+    // Send messages to the model without rewriting historical turns onto the current page.
+    const messagesToSend = toModelMessages(messageHistory, {
+      buildPageContextXml,
+      ...(siteToolHints && { siteToolHints }),
+      ...(pageContext?.url && { currentPageUrl: pageContext.url }),
+    });
+
+    log.debug('[Sidebar] Sending messages to stream:', {
+      agentId: streamAgentId,
+      agentName: streamAgent.name,
+      messageCount: messagesToSend.length,
+    });
+
+    if (currentSession !== session) {
+      rejectOnce(new Error('AI stream session is no longer active.'));
+      return;
+    }
+
+    try {
+      session.port.postMessage({
+        type: 'STREAM_CHAT',
+        agentId: streamAgentId,
+        tabId: attachedTabId || undefined, // Pass the attached tab ID for tool scoping
+        ...(streamWorkspaceContext && { workspaceContext: streamWorkspaceContext }),
+        messages: messagesToSend,
+      });
+    } catch {
+      currentSession = null;
+      expectedDisconnect = true;
+      rejectOnce(new Error('AI stream connection failed.'));
+    }
+  });
+}
+
+function addMessage(
+  role: 'user' | 'assistant' | 'system' | 'error',
+  content: MessageContent,
+  isStreaming = false
+): HTMLDivElement {
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message message-${role}`;
+  if (isStreaming) {
+    messageDiv.classList.add('streaming');
+  }
+
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'message-content';
+
+  // Handle string content (backward compatible)
+  if (typeof content === 'string') {
+    // Support markdown formatting
+    if (role === 'assistant' && content) {
+      StreamingMarkdownRenderer.renderComplete(contentDiv, content);
+    } else if (role === 'assistant' && isStreaming) {
+      // Empty content for streaming, will be filled incrementally
+      contentDiv.innerHTML = '';
+    } else {
+      contentDiv.textContent = content;
+    }
+  } else {
+    // Handle multi-part content
+    const textParts = content.filter((p) => p.type === 'text');
+    const imageParts = content.filter((p) => p.type === 'image');
+
+    // Render text parts
+    if (textParts.length > 0) {
+      const textContent = textParts.map((p) => p.text).join('\n');
+      if (role === 'assistant') {
+        StreamingMarkdownRenderer.renderComplete(contentDiv, textContent);
+      } else {
+        contentDiv.textContent = textContent;
+      }
+    }
+
+    // Add attachment badge for images
+    if (imageParts.length > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'attachment-badge';
+      badge.textContent = `📎 ${imageParts.length} image${imageParts.length > 1 ? 's' : ''}`;
+      contentDiv.appendChild(badge);
+    }
+  }
+
+  messageDiv.appendChild(contentDiv);
+  messagesContainer.appendChild(messageDiv);
+
+  // Smart scroll - only scroll if user is at bottom
+  scrollToBottomIfNeeded();
+
+  return messageDiv;
+}
+
+function displayConversationNotice(content: string): void {
+  // Sidebar chrome is not model output and must never become an assistant history turn.
+  addMessage('assistant', content);
+}
+
+// Add clear conversation functionality
+function clearConversation() {
+  messageHistory = [];
+  invalidateWorkspaceContext();
+  messagesContainer.innerHTML = '';
+  // Clean up any active or preparing request.
+  if (currentSession || currentStreamPreparation) {
+    cancelCurrentStream();
+  }
+
+  // Reset scroll state - we're back at the top/beginning
+  isUserAtBottom = true;
+
+  displayConversationNotice('Conversation cleared. How can I help you?');
+}
+
+// Add keyboard shortcut for clearing (Cmd/Ctrl+K)
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    clearConversation();
+  }
+});
+
+// Cancel current stream
+function cancelCurrentStream() {
+  if (currentStreamPreparation) {
+    const preparation = currentStreamPreparation;
+    currentStreamPreparation = null;
+    preparation.abort();
+    isLoading = false;
+    updateSendButton();
+    return;
+  }
+
+  if (currentSession) {
+    const session = currentSession;
+    // Settle the owning promise and disconnect first. The background owns this exact
+    // port, so cancellation cannot target any replacement session.
+    session.cancel();
+
+    // Clean up session components
+    if (session.currentTextBox) {
+      session.currentTextBox.destroy();
+    }
+    if (session.currentReasoningBox?.isStreamingActive()) {
+      session.currentReasoningBox.finishStreaming();
+    }
+
+    currentSession = null;
+    isLoading = false;
+    updateSendButton();
+  }
+}
+
+// Cancel current stream on Escape OR clear attachments
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    // Priority 1: Cancel active or preparing stream
+    if (currentSession || currentStreamPreparation) {
+      cancelCurrentStream();
+    }
+    // Priority 2: Clear pending attachments
+    else if (pendingAttachments.length > 0) {
+      pendingAttachments = [];
+      updateAttachmentIndicator();
+      log.info('[Sidebar] Cleared pending attachments');
+    }
+  }
+});
+
+export {};

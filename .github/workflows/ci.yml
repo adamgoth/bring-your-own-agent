@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      webmcp_wpt:
+        description: Run upstream WebMCP conformance diagnostics (known gaps remain)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and Test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22.x, 24.x]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+          cache-dependency-path: |
+            byoa-extension/pnpm-lock.yaml
+            demos/boardwalk/pnpm-lock.yaml
+      - name: Install all projects from lockfiles
+        run: pnpm run setup
+      - name: Check extension and demos
+        run: pnpm run check
+      - name: Build extension and demos
+        run: pnpm run build
+      - name: Build release extension
+        if: matrix.node-version == '24.x'
+        run: pnpm --dir byoa-extension run build:release
+      - name: Verify generated WebMCP sources
+        run: pnpm --dir byoa-extension run check:generated
+      - name: Setup Chrome for Testing
+        if: matrix.node-version == '24.x'
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+      - name: Start local demo servers
+        if: matrix.node-version == '24.x'
+        run: |
+          pnpm run dev > "$RUNNER_TEMP/byoa-demos.log" 2>&1 &
+          node --input-type=module <<'JS'
+          const urls = ['http://localhost:5173/', 'http://localhost:5174/'];
+          for (let attempt = 0; attempt < 30; attempt++) {
+            const ready = await Promise.all(urls.map(url => fetch(url).then(r => r.ok).catch(() => false)));
+            if (ready.every(Boolean)) process.exit(0);
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          throw new Error('Demo servers did not become ready');
+          JS
+      - name: Run browser regressions
+        if: matrix.node-version == '24.x'
+        run: |
+          pnpm --dir byoa-extension run test:browser:built
+          pnpm --dir byoa-extension run test:browser:mv3:built
+          pnpm --dir byoa-extension run test:browser:sidebar:built
+          pnpm --dir byoa-extension run test:browser:images:built
+          pnpm run test:browser
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROME_FOR_TESTING_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          AGENTBOARD_CHROME_NO_SANDBOX: "1"
+      # The pinned upstream suite currently has known conformance gaps. Keep it
+      # available as an explicit diagnostic; requested runs still fail on gaps.
+      - name: Run WebMCP WPT diagnostics
+        if: matrix.node-version == '24.x' && github.event_name == 'workflow_dispatch' && inputs.webmcp_wpt
+        run: pnpm --dir byoa-extension run test:browser:webmcp-wpt:built
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          AGENTBOARD_CHROME_NO_SANDBOX: "1"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dist-node-${{ matrix.node-version }}
+          path: |
+            byoa-extension/dist/
+            demos/margin/dist/
+            demos/boardwalk/dist/
+          retention-days: 7
