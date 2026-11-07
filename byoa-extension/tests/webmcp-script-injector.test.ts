@@ -7,6 +7,7 @@ import { JSDOM, VirtualConsole } from 'jsdom';
 import path from 'path';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
+  supportsWebMCPInjection,
   injectUserScripts,
   getAllScriptsForInjection,
   getMatchingScripts,
@@ -836,4 +837,13 @@ describe('WebMCP Script Injector', () => {
       expect(results[3].status).toBe('fulfilled');
     });
   });
+});
+
+it('supports both demo loopback hosts without allowing arbitrary HTTP sites', () => {
+  for (const host of ['localhost', '127.0.0.1']) {
+    for (const port of [5183, 5184])
+      expect(supportsWebMCPInjection(`http://${host}:${port}/`)).toBe(true);
+  }
+  expect(supportsWebMCPInjection('http://example.com:5183/')).toBe(false);
+  expect(supportsWebMCPInjection('http://127.0.0.1.example.com:5183/')).toBe(false);
 });

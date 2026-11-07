@@ -24,3 +24,9 @@ Current layout: `byoa-extension/`, `demos/margin/`, and `demos/boardwalk/`. Root
 - Root GitHub Actions workflow formatting was validated locally. The workflow has not run on GitHub; upstream WPT diagnostics are opt-in because documented conformance gaps remain.
 
 The two existing demo servers were restarted from their moved folders on the same ports. No real provider keys or normal browser profiles were used.
+
+## Dedicated demo ports
+
+Margin now uses 5183 and Boardwalk uses 5184, avoiding the unrelated app on port 5173. Both `localhost` and `127.0.0.1` are supported, with separate exact-origin BYOA approvals; the former 5173/5174 origins are rejected.
+
+Root checks passed with 1,048 extension tests plus 15 demo tests, strict lint/typechecking, and both demo builds. The extension was rebuilt, and the full cross-app browser suite passed separately on both hostnames with temporary profiles and dummy providers. Only the two BYOA demo servers were restarted; the other app on port 5173 was left running.

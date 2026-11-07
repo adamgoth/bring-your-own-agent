@@ -6,7 +6,7 @@ import {
   siteProfiles,
 } from '../src/background/site-connection';
 import type { ConfigStorage } from '../src/lib/storage/config';
-const origin = 'http://localhost:5173';
+const origin = 'http://localhost:5183';
 const key = siteConnectionKey(origin);
 const agents = [
   { id: 'first', name: 'Deepseek', apiKey: 'SECRET', endpoint: 'PRIVATE' },
@@ -68,10 +68,15 @@ describe('site profile choice', () => {
   it('keeps connections isolated by origin', async () => {
     stored({ agentId: 'second' });
     expect((await siteConnectionStatus(config(), origin)).connected).toBe(true);
-    expect((await siteConnectionStatus(config(), 'http://localhost:5174')).connected).toBe(false);
+    expect((await siteConnectionStatus(config(), 'http://localhost:5184')).connected).toBe(false);
   });
   it('restricts messages to top-level demo origins', () => {
-    for (const url of ['http://localhost:5173/', 'http://localhost:5174/'])
+    for (const url of [
+      'http://localhost:5183/',
+      'http://localhost:5184/',
+      'http://127.0.0.1:5183/',
+      'http://127.0.0.1:5184/',
+    ])
       expect(siteOrigin({ tab: { id: 7 }, frameId: 0, url } as chrome.runtime.MessageSender)).toBe(
         new URL(url).origin
       );
@@ -79,6 +84,12 @@ describe('site profile choice', () => {
       { tab: { id: 7 }, frameId: 1, url: origin },
       { frameId: 0, url: origin },
       { tab: { id: 7 }, frameId: 0, url: 'https://example.com' },
+      ...[
+        'http://localhost:5173/',
+        'http://localhost:5174/',
+        'http://127.0.0.1:5173/',
+        'http://localhost:5185/',
+      ].map((url) => ({ tab: { id: 7 }, frameId: 0, url })),
     ])
       expect(siteOrigin(sender as chrome.runtime.MessageSender)).toBeUndefined();
   });

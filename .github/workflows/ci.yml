@@ -54,7 +54,7 @@ jobs:
         run: |
           pnpm run dev > "$RUNNER_TEMP/byoa-demos.log" 2>&1 &
           node --input-type=module <<'JS'
-          const urls = ['http://localhost:5173/', 'http://localhost:5174/'];
+          const urls = ['http://localhost:5183/', 'http://localhost:5184/'];
           for (let attempt = 0; attempt < 30; attempt++) {
             const ready = await Promise.all(urls.map(url => fetch(url).then(r => r.ok).catch(() => false)));
             if (ready.every(Boolean)) process.exit(0);
@@ -70,6 +70,7 @@ jobs:
           pnpm --dir byoa-extension run test:browser:sidebar:built
           pnpm --dir byoa-extension run test:browser:images:built
           pnpm run test:browser
+          BYOA_DEMO_HOST=127.0.0.1 pnpm run test:browser
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
           CHROME_FOR_TESTING_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}

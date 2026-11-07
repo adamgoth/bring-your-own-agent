@@ -8,8 +8,8 @@ This repo contains the modified AgentBoard extension, the shared experimental br
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `byoa-extension/`     | Our AgentBoard fork: provider configuration, background tasks, scoped page tools, cancellation, and optional chat transcripts. The extension is branded BYOA; internal identifiers retain compatibility. |
 | `byoa-extension/sdk/` | Shared browser client used by both apps.                                                                                                                                                                 |
-| `demos/margin/`       | Selection-first writing app with inline suggestions and comments. Port 5173.                                                                                                                             |
-| `demos/boardwalk/`    | Kanban board with reviewable card and column changes. Port 5174.                                                                                                                                         |
+| `demos/margin/`       | Selection-first writing app with inline suggestions and comments. Port 5183.                                                                                                                             |
+| `demos/boardwalk/`    | Kanban board with reviewable card and column changes. Port 5184.                                                                                                                                         |
 
 ## Get running
 
@@ -26,13 +26,13 @@ pnpm dev:demos
 
 1. Open `chrome://extensions`, enable Developer mode, and **Load unpacked** → this repo's `byoa-extension/dist` folder.
 2. Configure your API agent profiles in the extension's Options.
-3. Open [Margin](http://localhost:5173/) and [Boardwalk](http://localhost:5174/). Use `localhost`, not `127.0.0.1`, in the browser.
+3. Open [Margin](http://localhost:5183/) and [Boardwalk](http://localhost:5184/). Both `localhost` and `127.0.0.1` work; each origin needs its own connection approval.
 4. In each app, choose **Not connected → Connect agent**. BYOA opens its own popup: check the requesting site, select a profile, then approve. The picker is shown even when only one profile exists. The header displays your agent's profile name.
 5. Send a request inside the app. Proposals appear there for review. **View chat** explicitly opens the extension's task transcript.
 
 An unpacked extension's installation identity depends on its path. Loading this new `byoa-extension/dist` is a separate installation from the old checkout: configure its agent or deliberately import a settings export. Keep settings exports private; they can contain credentials. Disable the old installation while testing this one so two bridges don't run on the same page. Reload the extension and app tabs after extension rebuilds.
 
-The servers bind to loopback and use strict ports. Stop any older Margin/Boardwalk servers using ports 5173/5174 before `pnpm dev`. Ctrl+C stops both servers.
+The servers bind to loopback and use strict ports. Ports 5183/5184 keep the demos separate from apps using Vite’s default port 5173. Ctrl+C stops both servers.
 
 ## Demo prompts
 
@@ -42,7 +42,7 @@ The servers bind to loopback and use strict ports. Stop any older Margin/Boardwa
 
 Also try: “Create a column called Next week, move two high-priority cards into it, rename Ready to Up next, and propose deleting the sample-board card.” Card deletion and column changes are proposals, not immediate mutations. Undo restores accepted cards and columns together. Editing the board invalidates older proposals.
 
-`pnpm dev:demos` starts both demos together: Margin at http://localhost:5173/ and Boardwalk at http://localhost:5174/. `pnpm dev` is an equivalent shortcut. Press Ctrl+C to stop both.
+`pnpm dev:demos` starts both demos together: Margin at http://localhost:5183/ and Boardwalk at http://localhost:5184/. `pnpm dev` is an equivalent shortcut. Press Ctrl+C to stop both.
 
 ## Shared contract
 
@@ -70,6 +70,6 @@ The browser test uses a fresh temporary profile and a loopback mock model provid
 
 ## Source and licensing
 
-This project was assembled from the current working copies and starts with a new local Git history. The original repositories and their history remain intact; no remote has been created or pushed. See [PROVENANCE.md](PROVENANCE.md). The AgentBoard fork retains its original MIT license and copyright notice in [byoa-extension/LICENSE](byoa-extension/LICENSE). Inherited release tooling uses BYOA artifact names; no publishing repository is configured, and upstream AgentBoard is rejected as a release destination.
+This project was assembled from the current working copies and starts with a new local Git history. The original repositories and their history remain intact. See [PROVENANCE.md](PROVENANCE.md). The AgentBoard fork retains its original MIT license and copyright notice in [byoa-extension/LICENSE](byoa-extension/LICENSE). Inherited release tooling uses BYOA artifact names; no publishing repository is configured, and upstream AgentBoard is rejected as a release destination.
 
 GitHub Actions runs from the root `.github/workflows/ci.yml`, checking all three projects and their browser integration. The upstream WebMCP WPT suite remains an opt-in workflow diagnostic because known conformance gaps remain; requested diagnostic runs still fail on those gaps.

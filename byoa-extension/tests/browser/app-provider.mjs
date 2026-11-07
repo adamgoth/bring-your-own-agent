@@ -7,6 +7,10 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { CdpPipe, chromeSandboxArgs, waitFor } from './chrome-harness.mjs';
 
+const demoHost = process.env.BYOA_DEMO_HOST || 'localhost';
+assert.ok(['localhost', '127.0.0.1'].includes(demoHost));
+const boardOrigin = `http://${demoHost}:5184`;
+const marginOrigin = `http://${demoHost}:5183`;
 const requests = [];
 let holdNext = false;
 function respond(body, res) {
@@ -203,7 +207,7 @@ try {
   await ext.evaluate(
     `chrome.storage.local.get('config').then(({config})=>chrome.storage.local.set({config:{...config,schemaVersion:2,agents:[{id:'fixture',name:'Demo deepseek',provider:'openai',apiProtocol:'openai-chat-completions',model:'fixture',endpoint:${JSON.stringify(endpoint)},temperature:0.7,maxSteps:8,isDefault:true}],defaultAgentId:'fixture'}}))`
   );
-  const board = await page('http://localhost:5174/');
+  const board = await page(`${boardOrigin}/`);
   await waitFor(
     () =>
       board.evaluate(
@@ -219,12 +223,14 @@ try {
     'board SDK bridge'
   );
   const tabId = await ext.evaluate(
-    `chrome.tabs.query({url:'http://localhost:5174/*'}).then(t=>t[0].id)`
+    `chrome.tabs.query({url:${JSON.stringify(boardOrigin + '/*')}}).then(t=>t[0].id)`
   );
-  const catalog = await ext.evaluate(
-    `chrome.runtime.sendMessage({type:'WEBMCP_GET_TOOLS',tabId:${tabId}})`
-  );
-  assert.ok(catalog.success && catalog.data.some((t) => t.name === 'propose_board_changes'));
+  await waitFor(async () => {
+    const catalog = await ext.evaluate(
+      `chrome.runtime.sendMessage({type:'WEBMCP_GET_TOOLS',tabId:${tabId}})`
+    );
+    return catalog.success && catalog.data.some((t) => t.name === 'propose_board_changes');
+  }, 'Boardwalk tools in the extension catalog');
   await board.click('#agent-indicator');
   await board.click('[data-action="connect"]');
   const firstPromptTarget = await waitFor(
@@ -241,7 +247,7 @@ try {
   );
   assert.equal(
     await firstPrompt.evaluate(`document.querySelector('#origin').textContent`),
-    'http://localhost:5174'
+    boardOrigin
   );
   assert.ok(
     await board.evaluate(
@@ -322,7 +328,7 @@ try {
   console.log('PASS manual create, move, and undo.');
   // Reset this isolated demo's storage so the deterministic provider starts at revision 1.
   await board.evaluate(`localStorage.removeItem('boardwalk-v1')`);
-  await send('Page.navigate', { url: 'http://localhost:5174/' }, board.sessionId);
+  await send('Page.navigate', { url: `${boardOrigin}/` }, board.sessionId);
   await waitFor(
     () =>
       board.evaluate(
@@ -391,7 +397,7 @@ try {
   await ext.evaluate(
     `chrome.storage.local.get('config').then(({config})=>chrome.storage.local.set({config:{...config,agents:[...config.agents,{...config.agents[0],id:'second-fixture',name:'Second profile',model:'second-fixture',isDefault:false}]}}))`
   );
-  const margin = await page('http://localhost:5173/');
+  const margin = await page(`${marginOrigin}/`);
   await margin.evaluate(
     `window.__events=[];window.addEventListener('message',e=>{if(e.data?.kind==='task')window.__events.push(e.data.event)})`
   );
@@ -432,7 +438,7 @@ try {
   );
   assert.equal(
     await secondPrompt.evaluate(`document.querySelector('#origin').textContent`),
-    'http://localhost:5173'
+    marginOrigin
   );
   assert.equal(
     await margin.evaluate(`document.querySelectorAll('input[name="agent-profile"]').length`),

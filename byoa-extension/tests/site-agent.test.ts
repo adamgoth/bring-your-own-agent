@@ -4,7 +4,7 @@ import { createSiteAgentHandler } from '../src/background/site-agent';
 import type { AIClient, StreamCallbacks } from '../src/lib/ai/client';
 import type { ConfigStorage } from '../src/lib/storage/config';
 
-const SITE_CONNECTION_KEY = siteConnectionKey('http://localhost:5173');
+const SITE_CONNECTION_KEY = siteConnectionKey('http://localhost:5183');
 
 function harness() {
   const streamChat = vi.fn().mockResolvedValue(undefined);
@@ -24,7 +24,7 @@ function harness() {
     } as unknown as ConfigStorage,
     prepare
   );
-  const connect = (url = 'http://localhost:5173/', tabId = 7) => {
+  const connect = (url = 'http://localhost:5183/', tabId = 7) => {
     let receive: (msg: object) => void = () => {};
     let disconnect: () => void = () => {};
     const port = {
@@ -137,7 +137,7 @@ describe('Site background tasks', () => {
   });
   it('rejects other origins and ports', () => {
     const h = harness();
-    for (const url of ['https://example.com/', 'http://localhost:9999/', 'http://127.0.0.1:5173/'])
+    for (const url of ['https://example.com/', 'http://localhost:9999/', 'http://127.0.0.1:5185/'])
       expect(h.connect(url).port.disconnect).toHaveBeenCalledOnce();
     expect(h.streamChat).not.toHaveBeenCalled();
   });

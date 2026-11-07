@@ -32,7 +32,8 @@ const REGISTRATION_SETTLEMENT_TIMEOUT_MS = 5_000;
 export function supportsWebMCPInjection(rawUrl: string): boolean {
   try {
     const url = new URL(rawUrl);
-    if (url.protocol === 'http:') return url.hostname === 'localhost';
+    if (url.protocol === 'http:')
+      return url.hostname === 'localhost' || url.hostname === '127.0.0.1';
     if (url.protocol !== 'https:') return false;
     if (url.hostname === 'chromewebstore.google.com') return false;
     if (url.hostname === 'chrome.google.com' && url.pathname.startsWith('/webstore')) return false;

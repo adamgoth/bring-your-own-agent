@@ -75,7 +75,7 @@ try {
     `chrome.storage.local.set({config:{schemaVersion:2,logLevel:'warn',agents:[{id:'dummy',name:'Dummy agent',provider:'openai',apiProtocol:'openai-responses',model:'dummy-model',endpoint:'http://127.0.0.1:1/v1',temperature:0.7}]}})`
   );
   await options(
-    `chrome.storage.session.set({agentboard_chat_77_review:{id:'review',origin:'http://localhost:5173',createdAt:1,prompt:'Dummy task',response:${JSON.stringify(`![preview](${url})`)},activity:[],status:'done',detail:'Dummy task'}})`
+    `chrome.storage.session.set({agentboard_chat_77_review:{id:'review',origin:'http://localhost:5183',createdAt:1,prompt:'Dummy task',response:${JSON.stringify(`![preview](${url})`)},activity:[],status:'done',detail:'Dummy task'}})`
   );
   const sidebar = await page(`${base}/src/sidebar/index.html#tab=77`);
   await waitFor(
