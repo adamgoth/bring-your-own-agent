@@ -17,6 +17,7 @@ export default [
       'node_modules/**',
       'dist/**',
       'build/**',
+      'release/**',
       'coverage/**',
       '*.min.js',
       'vitest.config.ts',  // Exclude from TypeScript project parsing

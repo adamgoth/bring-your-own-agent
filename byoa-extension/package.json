@@ -1,6 +1,6 @@
 {
   "name": "byoa-extension",
-  "version": "0.11.0",
+  "version": "0.1.1",
   "description": "BYOA: bring your own agent to browser apps with WebMCP tools",
   "private": true,
   "type": "module",
@@ -10,6 +10,7 @@
     "build": "vite build",
     "build:force": "vite build",
     "build:release": "RELEASE=1 vite build",
+    "package:store": "pnpm run check && pnpm run build:release && node scripts/package-store.js",
     "preview": "vite preview",
     "test": "vitest --run",
     "test:browser": "pnpm run build && pnpm run test:browser:built",

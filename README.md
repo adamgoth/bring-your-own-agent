@@ -22,7 +22,7 @@ pnpm build
 pnpm dev:demos
 ```
 
-`pnpm run setup` installs each project's pinned dependencies using its existing lockfile. The projects keep independent lockfiles; this is a single project folder, not a pnpm workspace. Git tracking is currently disabled. No provider credentials or browser profiles are part of the repo.
+`pnpm run setup` installs each project's pinned dependencies using its existing lockfile. The projects keep independent lockfiles; this is a single project folder, not a pnpm workspace. No provider credentials or browser profiles are part of the repo.
 
 1. Open `chrome://extensions`, enable Developer mode, and **Load unpacked** → this repo's `byoa-extension/dist` folder.
 2. Configure your API agent profiles in the extension's Options.
@@ -30,7 +30,7 @@ pnpm dev:demos
 4. In each app, choose **Not connected → Connect agent**. BYOA opens its own popup: check the requesting site, select a profile, then approve. The picker is shown even when only one profile exists. The header displays your agent's profile name.
 5. Send a request inside the app. Proposals appear there for review. **View chat** explicitly opens the extension's task transcript.
 
-An unpacked extension's installation identity depends on its path. Loading this new `byoa-extension/dist` is a separate installation from the old checkout: configure its agent or deliberately import a settings export. Keep settings exports private; they can contain credentials. Disable the old installation while testing this one so two bridges don't run on the same page. Reload the extension and app tabs after extension rebuilds.
+Load only one BYOA installation while testing to avoid duplicate bridges on the same page. Keep settings exports private; they can contain credentials. Reload the extension and app tabs after extension rebuilds.
 
 The servers bind to loopback and use strict ports. Ports 5183/5184 keep the demos separate from apps using Vite’s default port 5173. Ctrl+C stops both servers.
 
@@ -51,9 +51,9 @@ Apps expose their actions with WebMCP. They pass registered tool names to `agent
 - Margin: `get_selection`, `get_document_outline`, `find_text`, `propose_replacement`, `add_comment`.
 - Boardwalk: `get_board_snapshot`, `get_selected_cards`, `propose_board_changes` (card create/update/move/delete; column create/rename).
 
-See [the SDK contract](byoa-extension/sdk/README.md), [Margin's guide](demos/margin/README.md), and [Boardwalk's guide](demos/boardwalk/README.md).
+To build BYOA into a web app, start with the [web app integration guide](docs/web-app-integration.md). See [the SDK contract](byoa-extension/sdk/README.md) for the client API, and [Margin's guide](demos/margin/README.md) and [Boardwalk's guide](demos/boardwalk/README.md) for worked examples.
 
-This is a local prototype. Only the two demo origins are allowed. Connections are per origin and browser session; page tasks queue, and each request has a two-minute timeout including queue time. Navigation or worker interruption stops work without automatic retry or recovery. The native sidebar still shares a model client and can interrupt a page task. BYOA owns the profile picker and site-approval popup. Hosted-site permissions, independent model clients, and task recovery remain future work.
+This is a prototype. Any HTTPS site, and `localhost`/`127.0.0.1` on any port, can ask to connect; nothing is shared until you approve that exact origin in BYOA's popup. Connections are per origin and browser session; page tasks queue, and each request has a two-minute timeout including queue time. Navigation or worker interruption stops work without automatic retry or recovery. The native sidebar still shares a model client and can interrupt a page task. BYOA owns the profile picker and site-approval popup. Spending budgets, persistent site permissions, independent model clients, and task recovery remain future work.
 
 Provider API billing applies. This does not use a ChatGPT or Claude consumer subscription. Use sample content: the configured provider receives instructions, tool definitions, and tool results. Workspace files and remote-MCP context are excluded from app tasks. Credentials remain in the extension.
 
@@ -70,6 +70,6 @@ The browser test uses a fresh temporary profile and a loopback mock model provid
 
 ## Source and licensing
 
-This project was assembled from the current working copies and starts with a new local Git history. The original repositories and their history remain intact. See [PROVENANCE.md](PROVENANCE.md). The AgentBoard fork retains its original MIT license and copyright notice in [byoa-extension/LICENSE](byoa-extension/LICENSE). Inherited release tooling uses BYOA artifact names; no publishing repository is configured, and upstream AgentBoard is rejected as a release destination.
+BYOA builds on [AgentBoard](https://github.com/igrigorik/agentboard) by [Ilya Grigorik](https://github.com/igrigorik). The original MIT license and copyright notice are preserved in [byoa-extension/LICENSE](byoa-extension/LICENSE). See [attribution details](PROVENANCE.md).
 
 GitHub Actions runs from the root `.github/workflows/ci.yml`, checking all three projects and their browser integration. The upstream WebMCP WPT suite remains an opt-in workflow diagnostic because known conformance gaps remain; requested diagnostic runs still fail on those gaps.

@@ -1,6 +1,6 @@
 # BYOA
 
-BYOA is a modified fork of [AgentBoard](https://github.com/igrigorik/agentboard), not the official upstream product. The original MIT license and copyright notices remain in [LICENSE](LICENSE).
+BYOA is an independent fork of [AgentBoard](https://github.com/igrigorik/agentboard) by [Ilya Grigorik](https://github.com/igrigorik). The original MIT license and copyright notices remain in [LICENSE](LICENSE).
 
 A switchboard for AI in your browser: wire in any model, script WebMCP tools, connect remote MCP servers, bring your commands.
 
@@ -24,7 +24,7 @@ The [upstream AgentBoard Chrome Web Store listing](https://chromewebstore.google
 
 The SDK export `agentboard`, built-in `agentboard_*` tool names, message/port namespaces, storage and database keys, lock names, test environment variables, and backup `exportedBy: 'AgentBoard'` marker are retained for compatibility. They are technical identifiers, not product labels. The private local SDK package is named `@byoa/browser`; apps currently import its source by relative path.
 
-Inherited release scripts now use BYOA artifact names. No BYOA publishing repository is configured, and Git is deliberately disabled in this project. Release scripts require a clean annotated Git tag; GitHub release creation additionally requires a configured repository and rejects the upstream AgentBoard repository. Use the normal build for local development; do not initialize Git to satisfy release checks.
+Release scripts use BYOA artifact names and require a clean annotated Git tag. GitHub release creation additionally requires a publishing repository configured in the extension package metadata and rejects the upstream AgentBoard repository as a destination. Use the normal build for development.
 
 ## Architecture overview
 
@@ -237,4 +237,4 @@ BYOA does not send telemetry to an BYOA-operated service. It stores your setting
 
 ## Experimental app provider demo
 
-The local browser client in [sdk/README.md](sdk/README.md) lets an app request background agent work using its existing WebMCP tools. Margin and Boardwalk use the same interface; the extension contains no per-app tool names or DOM handlers. This is a local prototype with explicit origin restrictions, not a public WebMCP standard or production permission system. See [LOCAL_TESTING.md](LOCAL_TESTING.md#shared-client-and-boardwalk-demo) for setup and checks.
+The local browser client in [sdk/README.md](sdk/README.md) lets an app request background agent work using its existing WebMCP tools. Margin and Boardwalk use the same interface; the extension contains no per-app tool names or DOM handlers. This is a local prototype with explicit origin restrictions, not a public WebMCP standard or production permission system. See [LOCAL_TESTING.md](LOCAL_TESTING.md#connect-and-try-the-demos) for setup and checks.
