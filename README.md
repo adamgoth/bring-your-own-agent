@@ -2,6 +2,10 @@
 
 Configure your agent once in a browser extension. Connect an app, send a request from inside it, and review the results there. The extension runs the agent in the background; its sidebar is optional.
 
+[![Watch the Bring Your Own Agent demo using WebMCP on YouTube](docs/media/byoa-demo-thumbnail.jpg)](https://www.youtube.com/watch?v=2dbfm2v9eKE)
+
+[Watch the demo on YouTube](https://www.youtube.com/watch?v=2dbfm2v9eKE)
+
 This repo contains the modified AgentBoard extension, the shared experimental browser client, and two WebMCP demos:
 
 | Folder                | What it does                                                                                                                                                                                             |
