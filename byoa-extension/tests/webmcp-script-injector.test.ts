@@ -839,9 +839,9 @@ describe('WebMCP Script Injector', () => {
   });
 });
 
-it('supports both demo loopback hosts without allowing arbitrary HTTP sites', () => {
+it('supports loopback hosts on any port without allowing arbitrary HTTP sites', () => {
   for (const host of ['localhost', '127.0.0.1']) {
-    for (const port of [5183, 5184])
+    for (const port of [5183, 5184, 5185, 3000])
       expect(supportsWebMCPInjection(`http://${host}:${port}/`)).toBe(true);
   }
   expect(supportsWebMCPInjection('http://example.com:5183/')).toBe(false);

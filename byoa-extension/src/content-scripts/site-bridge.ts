@@ -1,7 +1,11 @@
-import { DEMO_ORIGINS } from '../background/site-connection';
+import { connectableOrigin } from '../background/site-connection';
 
-if (DEMO_ORIGINS.has(window.location.origin) && window === window.top) {
+// Runs on every eligible top-level page, so it stays dormant (no polling, no storage listener,
+// no messages) until the page itself calls the BYOA client.
+if (connectableOrigin(window.location.href) && window === window.top) {
   let lastGesture = 0;
+  let activated = false;
+  let refreshTimer: ReturnType<typeof setInterval> | undefined;
   const active = new Map<string, { port: chrome.runtime.Port; last?: Record<string, unknown> }>();
   const seen = new Set<string>();
   const emit = (value: object) =>
@@ -52,6 +56,7 @@ if (DEMO_ORIGINS.has(window.location.origin) && window === window.top) {
       data.id.length > 80
     )
       return;
+    activate();
     const { id, method, params = {} } = data;
     if (method === 'cancel') {
       active.get(id)?.port.postMessage({ type: 'cancel' });
@@ -150,24 +155,28 @@ if (DEMO_ORIGINS.has(window.location.origin) && window === window.top) {
         void refresh();
       });
   });
-  const refreshTimer = setInterval(() => {
-    void refresh();
-    for (const task of active.values()) {
-      try {
-        task.port.postMessage({ type: 'heartbeat' });
-      } catch {
-        void refresh();
-      }
-    }
-  }, 15000);
-  window.addEventListener('focus', () => void refresh());
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (
-      (area === 'local' && changes.config) ||
-      (area === 'session' &&
-        Object.keys(changes).some((key) => key.startsWith('agentboard_connection_')))
-    )
+  function activate() {
+    if (activated) return;
+    activated = true;
+    refreshTimer = setInterval(() => {
       void refresh();
-  });
-  void refresh();
+      for (const task of active.values()) {
+        try {
+          task.port.postMessage({ type: 'heartbeat' });
+        } catch {
+          void refresh();
+        }
+      }
+    }, 15000);
+    window.addEventListener('focus', () => void refresh());
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (
+        (area === 'local' && changes.config) ||
+        (area === 'session' &&
+          Object.keys(changes).some((key) => key.startsWith('agentboard_connection_')))
+      )
+        void refresh();
+    });
+    void refresh();
+  }
 }

@@ -2,6 +2,8 @@
 
 This browser-only TypeScript client requests agent work. It does not register tools or extend `document.modelContext`. Apps register their tools through WebMCP, then pass the names of the approved page tools to a task. BYOA resolves the actual WebMCP definitions and execution routes; credentials stay in the extension.
 
+Start with the [web app integration guide](../../docs/web-app-integration.md) for tool registration, connection UI, task handling, reviewable changes, and local testing. This README describes the client contract and prototype limits.
+
 ```ts
 import { agentboard } from '../../../byoa-extension/sdk';
 
@@ -24,9 +26,10 @@ for await (const event of task.events) showProgress(event);
 
 ## Prototype boundaries
 
-- Only top-level demo documents on ports 5183 and 5184 at `localhost` or `127.0.0.1` are allowed. Both use the same bridge; the origin allowlist contains no tool names or app-specific handlers. Approvals remain separate for each exact origin, including the hostname.
+- Any top-level HTTPS page can ask to connect, as can plain-HTTP `localhost` or `127.0.0.1` on any port for local development. Plain HTTP on other hosts, subframes, and other schemes are refused. Being eligible grants nothing: each exact origin (scheme, host, and port) needs its own approval, and tasks check that approval before any model request. The origin rule contains no tool names or app-specific handlers.
+- The page bridge stays dormant until the page sends its first client message (normally `getStatus()`), so ordinary sites see no polling or messages. Once a page calls the client, it can tell that BYOA is installed and whether any profile is ready; it learns nothing else until approved. Call `getStatus()` once at startup rather than waiting for an unsolicited status event.
 - Configure API profiles in BYOA Options and explicitly choose one when connecting. API provider billing applies. This does not authenticate through a ChatGPT or Claude subscription.
-- A trusted app click opens the BYOA-owned approval window. The popup is extension-private and validates the original tab, document, origin, request token, expiry, and selected profile before granting access. Closing or cancelling rejects the request. Pending approvals expire after three minutes; short status polls let the flow survive service-worker restarts. Permissions remain per origin and browser session. Production hosted-site permissions, budgets, and a complete capability-session system remain future work.
+- A trusted app click opens the BYOA-owned approval window. The popup is extension-private and validates the original tab, document, origin, request token, expiry, and selected profile before granting access. Closing or cancelling rejects the request. Pending approvals expire after three minutes; short status polls let the flow survive service-worker restarts. Permissions remain per origin and browser session. Spending budgets, persistent per-site permissions, and a complete capability-session system remain future work.
 - Treat every script in an approved origin as sharing that origin's authority. Page messages are not a security boundary between scripts on the same page. The extension does not return secrets through the interface.
 - Page tasks allow only the requested WebMCP tools with `site` provenance. Local Workspace and remote-MCP tools/context are excluded. Tool definitions are never accepted from page messages.
 - Page tasks queue across apps, with at most one outstanding task per tab. The existing model client still has one active stream; a normal sidebar chat can interrupt a page task. Independent execution clients remain future work.
@@ -34,6 +37,6 @@ for await (const event of task.events) showProgress(event);
 - Keep the page open. Navigation/closing the page disconnects the task. Worker interruption fails closed; there is no automatic retry, task reattachment, or recovery across documents. Review existing changes before sending a fresh request. Tasks time out after two minutes, including queue time.
 - Task history is bounded to ten tasks per tab in extension session storage. Responses and tool activity are bounded too. It clears with the browser session. Prompts/tool results are sent to the configured model endpoint.
 
-The v1 `window.postMessage` transport is an implementation detail of this prototype. It is not a standardized agent-provider API. Both local apps import this source from sibling directories; packaging and provider discovery are future work.
+The v1 `window.postMessage` transport is an implementation detail of this prototype. It is not a standardized agent-provider API. Both local apps import this source from sibling directories. Other apps can copy `sdk/index.ts` for now; npm packaging and provider discovery are future work.
 
 The `agentboard` export and `agentboard:*` transport identifiers remain compatible with the inherited client. These names do not identify this fork as the upstream AgentBoard product.

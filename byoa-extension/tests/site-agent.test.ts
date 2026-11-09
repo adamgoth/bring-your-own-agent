@@ -135,10 +135,33 @@ describe('Site background tasks', () => {
     );
     running.close();
   });
-  it('rejects other origins and ports', () => {
+  it('drops senders that are not eligible to connect', () => {
     const h = harness();
-    for (const url of ['https://example.com/', 'http://localhost:9999/', 'http://127.0.0.1:5185/'])
+    for (const url of ['http://example.com/', 'http://192.168.1.10:5183/', 'file:///tmp/app.html'])
       expect(h.connect(url).port.disconnect).toHaveBeenCalledOnce();
+    expect(h.streamChat).not.toHaveBeenCalled();
+  });
+  it('keeps approvals per exact origin, so another eligible site cannot use one', async () => {
+    const h = harness();
+    // Only http://localhost:5183 holds a grant (see beforeEach).
+    for (const url of [
+      'https://example.com/',
+      'http://localhost:5185/',
+      'http://127.0.0.1:5183/',
+    ]) {
+      const other = h.connect(url);
+      expect(other.port.disconnect).not.toHaveBeenCalled();
+      other.send({ type: 'start', tools: ['get_selection'], text: 'Spend my credits' });
+      await vi.waitFor(() =>
+        expect(other.port.postMessage).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            status: 'error',
+            detail: 'Connect your API agent to this site first.',
+          })
+        )
+      );
+      other.close();
+    }
     expect(h.streamChat).not.toHaveBeenCalled();
   });
   it('rejects duplicate starts and concurrent tasks on one tab, and cancels only its own stream', async () => {

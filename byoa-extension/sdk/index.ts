@@ -59,19 +59,37 @@ window.addEventListener('message', (event) => {
     taskSinks.get(data.id)?.(data.event);
   }
 });
-function call<T>(method: string, params = {}, timeout = 5000): Promise<T> {
+/**
+ * `resend` repeats an idempotent call until answered. The extension's bridge stays silent until
+ * a page first calls it and may finish loading after the app's first call, so status checks are
+ * resent rather than relying on the bridge to announce itself to every site.
+ */
+function call<T>(method: string, params = {}, timeout = 5000, resend = 0): Promise<T> {
   const id = globalThis.crypto.randomUUID();
   return new Promise((resolve, reject) => {
+    let retry: ReturnType<typeof setInterval> | undefined;
     const timer = setTimeout(() => {
+      clearInterval(retry);
       waiting.delete(id);
       reject(new Error('BYOA is unavailable. Enable the extension and reload this page.'));
     }, timeout);
-    waiting.set(id, { resolve: (value) => resolve(value as T), reject, timer });
+    const settle =
+      <V>(done: (value: V) => void) =>
+      (value: V) => {
+        clearInterval(retry);
+        done(value);
+      };
+    waiting.set(id, {
+      resolve: settle((value) => resolve(value as T)),
+      reject: settle(reject),
+      timer,
+    });
     post(id, method, params);
+    if (resend > 0) retry = setInterval(() => post(id, method, params), resend);
   });
 }
 async function update(method: string, params = {}) {
-  const result = await call<Connection>(method, params);
+  const result = await call<Connection>(method, params, 5000, method === 'status' ? 250 : 0);
   connection = result;
   for (const listener of statusListeners) listener(connection);
   return result;

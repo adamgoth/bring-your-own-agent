@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: November 7, 2026
+Last updated: November 9, 2026
 
 BYOA is a browser extension that connects your browser to services and tools you choose. This policy explains what stays on your device, what is sent to BYOA, and what may be sent to third parties.
 
@@ -28,6 +28,8 @@ When you configure or use a provider, server, tool, or script, BYOA or that tool
 
 Depending on the action, shared data may include content you provide, attachments, Local Workspace file contents, URL and title context from current or earlier conversation turns, page content, tool definitions and instructions, tool inputs and results, model settings, and credentials or browser-session data needed to access the selected service.
 
+Websites that integrate BYOA can ask to connect to your agent. Any HTTPS site, and local development servers on `localhost` or `127.0.0.1`, can make this request. When a site calls BYOA's page client, it can tell that BYOA is installed and whether you have a profile ready to use. It cannot see your API keys, endpoints, or other profiles. Until you approve that exact site in BYOA's connection window, it cannot send tasks to your agent. After approval, it can send tasks that use your configured provider (and may incur charges) and can see the approved profile's name. Your requests, plus that site's tool definitions and tool results, are sent to the provider. Approvals last until you disconnect or the browser session ends.
+
 BYOA requests the `<all_urls>` host permission, which Chrome describes as access to your data on all websites. You can restrict or revoke site access at any time from `chrome://extensions`.
 
 The `agentboard_read_page` tool includes reduced-resolution page visuals by default for connection APIs that support media in tool results: one screenshot of the currently visible browser viewport for HTML pages, or full-page images for PDFs. These images can disclose material absent from extracted text, including photographs, signatures, handwriting, annotations, visual redactions, charts, diagrams, layout relationships, and anything else on screen at that moment such as chat widgets, notifications, and form contents as rendered. Screenshots are delivered only while that page's tab is the active tab of its window, so switching tabs during a read yields no image. A tool call can set `includePageImages` to `false` for text-only extraction. Raw PDF bytes are not sent to the model provider, and images are not stored in sidebar history or browser storage, but images delivered to a configured model service are processed under that service's terms and privacy policy.
@@ -48,4 +50,6 @@ Deleting local data does not delete exported backups or data already received by
 
 ## Contact
 
-For privacy or security questions about this modified BYOA fork, contact the person who supplied this local build. The upstream [AgentBoard project](https://github.com/igrigorik/agentboard) is credited for provenance; its issue tracker is not a BYOA support channel.
+For questions about BYOA or this policy, use the [BYOA issue tracker](https://github.com/adamgoth/bring-your-own-agent/issues). Issues are public: do not include API keys, private page content, settings exports, or other sensitive information. To report a security concern, see the repository's [security reporting options](https://github.com/adamgoth/bring-your-own-agent/security).
+
+The upstream [AgentBoard project](https://github.com/igrigorik/agentboard) is credited for provenance; its issue tracker is not a BYOA support channel.

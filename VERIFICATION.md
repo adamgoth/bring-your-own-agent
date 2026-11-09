@@ -1,32 +1,42 @@
-# Verification — November 7, 2026
+# Verification
 
-Run from this repository, after installation from the preserved lockfiles:
+The following checks were completed during development using temporary browser profiles and dummy providers.
 
-- `pnpm run setup`: all three projects installed successfully.
-- `pnpm check`: extension TypeScript and strict lint passed; 72 extension test files / 1,020 tests passed; Margin's five engine tests and Boardwalk's ten board/tool tests passed; both app production builds passed.
-- `pnpm build`: extension and both app production builds passed.
-- `pnpm test:browser` with Chrome for Testing: passed using a disposable browser profile and loopback mock provider. Covered independent tool scopes, manual cards, background tasks, reviewed card creation/deletion/movement and column creation/renaming, cross-app queuing, queued cancellation, per-origin disconnect, optional task transcript focus, and mobile viewport sizing.
-- `npm --prefix demos/margin run test:e2e -- --grep-invert 'native WebMCP'`: five editor/disconnected-agent browser regressions passed. The separate native-browser WebMCP feature test was excluded; app integration used the extension's actual WebMCP bridge.
+## Source checks and builds
 
-No real API credentials or normal browser profile were used by these checks. Live-provider output quality, subscription authentication, production hosted-site permissions, and worker recovery are outside this verification. The prototype limits are documented in the root README and `byoa-extension/sdk/README.md`.
+- Extension TypeScript and strict lint passed.
+- Extension unit tests: 75 files, 1,050 tests passed.
+- Margin unit tests: five passed.
+- Boardwalk unit tests: ten passed.
+- The extension and both demo production builds passed.
+- Release-path tests cover the extension documents in both monorepo and standalone layouts.
 
-Both dev servers were started from this repo using `pnpm dev`: Margin on localhost:5173, Boardwalk on localhost:5174. The original source repositories were retained.
+## Browser checks
 
-## Demo layout and pre-commit fixes
+- Cross-app tests passed on both `localhost` and `127.0.0.1`, using ports 5183 and 5184. Coverage includes connection approval, profile selection, separate tool scopes, reviewed edits, card and column changes, queuing, cancellation, disconnect, transcript viewing, and mobile layout.
+- Sidebar tests cover first-agent setup, provider presets, Save/Edit, live profile changes, draft/history preservation, and configuration-error recovery.
+- The image-consent test verified zero requests before approval of the displayed destination and one request afterward.
+- Seven read-page scenarios and 19 built-MV3 scenarios passed, covering page tools, worker restart, PDFs, local-file isolation, and configuration recovery.
+- Five Margin editor/disconnected-agent browser regressions passed; the native-browser WebMCP feature test was excluded from that run.
 
-Current layout: `byoa-extension/`, `demos/margin/`, and `demos/boardwalk/`. Root setup/dev/build/check commands and app SDK imports use these paths.
+## Running the checks
 
-- Root `pnpm check`: strict extension lint/typechecking; 75 extension test files / 1,047 tests, five Margin tests, ten Boardwalk tests; both demo builds passed.
-- Extension `pnpm run build`: passed; `byoa-extension/dist` is ready to reload.
-- Fresh-profile browser regressions: seven read-page scenarios, 19 built-MV3 scenarios, sidebar setup/provider Save/Edit, cross-app approval/tasks/review/cancellation, and the new image-consent test all passed with dummy providers/data.
-- The image-consent test observed zero requests while rendering model-authored Markdown and one request only after approval of its visible destination.
-- Release-path unit tests cover all three extension documents in a monorepo and standalone layout. No repository was initialized or tagged, and no release was published.
-- Root GitHub Actions workflow formatting was validated locally. The workflow has not run on GitHub; upstream WPT diagnostics are opt-in because documented conformance gaps remain.
+From the repository root:
 
-The two existing demo servers were restarted from their moved folders on the same ports. No real provider keys or normal browser profiles were used.
+```sh
+pnpm setup
+pnpm check
+pnpm build
+pnpm dev:demos
+```
 
-## Dedicated demo ports
+With both demo servers running:
 
-Margin now uses 5183 and Boardwalk uses 5184, avoiding the unrelated app on port 5173. Both `localhost` and `127.0.0.1` are supported, with separate exact-origin BYOA approvals; the former 5173/5174 origins are rejected.
+```sh
+CHROME_FOR_TESTING_BIN='/path/to/Chrome for Testing' pnpm test:browser
+BYOA_DEMO_HOST=127.0.0.1 CHROME_FOR_TESTING_BIN='/path/to/Chrome for Testing' pnpm test:browser
+```
 
-Root checks passed with 1,048 extension tests plus 15 demo tests, strict lint/typechecking, and both demo builds. The extension was rebuilt, and the full cross-app browser suite passed separately on both hostnames with temporary profiles and dummy providers. Only the two BYOA demo servers were restarted; the other app on port 5173 was left running.
+See [extension browser tests](byoa-extension/tests/browser/README.md) for the remaining suites. The root GitHub Actions workflow checks all projects; upstream WPT conformance diagnostics are opt-in because documented gaps remain.
+
+No real API credentials or normal browser profiles were used. Live-provider output quality, subscription authentication, hosted-site permissions, and task recovery are outside this verification. See the [SDK boundaries](byoa-extension/sdk/README.md#prototype-boundaries).

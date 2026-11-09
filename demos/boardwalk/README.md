@@ -44,7 +44,7 @@ Both demos import `byoa-extension/sdk/index.ts`. BYOA's page bridge has no Board
 
 Only those three site tools are available to a Boardwalk task. Workspace files and remote-MCP context are excluded. Margin requests its own five tools through the same interface.
 
-See `../../byoa-extension/sdk/README.md` for the experimental client contract and limits. This prototype allows only the two local demo origins, queues page tasks, and uses session-scoped connection flags. BYOA now owns the connection/profile approval popup. Hosted-site permissions, independent model clients, and task recovery remain future work. Keep the page open; interrupted tasks do not resume or retry automatically.
+See `../../byoa-extension/sdk/README.md` for the experimental client contract and limits. Any HTTPS site or loopback port can ask to connect; each origin needs separate approval. BYOA queues page tasks, uses session-scoped connection flags, and owns the connection/profile approval popup. Spending budgets, persistent site permissions, independent model clients, and task recovery remain future work. Keep the page open; interrupted tasks do not resume or retry automatically.
 
 ## Checks
 

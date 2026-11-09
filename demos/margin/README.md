@@ -31,8 +31,6 @@ Highlight a passage, choose an editing action, enter an instruction, and press *
 
 The indicator confirms that an extension API profile is configured and connected; provider authentication is exercised when you send a request. Without the extension, the editor and manual Developer tools still work. There is no companion process, pairing token, relay port, or local-agent connection UI in this version.
 
-The earlier local-agent/companion prototype is preserved on the local branch `archive/local-agent-2026-11-07` (snapshot `87c1ea3`).
-
 ### Tools
 
 - `get_selection`: stable selection ID, selected text, nearby context, revision, requested action, and instructions.
@@ -62,6 +60,6 @@ npm run test:e2e
 
 Browser tests use an installed Google Chrome with a fresh isolated profile. Unit tests exercise range tracking; browser tests cover selection, suggestions, acceptance/undo, persistence, stale edits, comments, inspector errors, and responsive rendering.
 
-Margin now imports the experimental shared client from `../../byoa-extension/sdk`. Both demos live under `demos/` in the BYOA repository. Boardwalk uses the same client on localhost:5184; connections remain separate by origin. Reloading BYOA and the page is required after rebuilding extension code. See `../../byoa-extension/sdk/README.md` for the current contract and prototype limitations.
+Margin imports the experimental shared client from `../../byoa-extension/sdk`. Both demos live under `demos/` in the BYOA repository. Boardwalk uses the same client on localhost:5184; connections remain separate by origin. Reloading BYOA and the page is required after rebuilding extension code. See `../../byoa-extension/sdk/README.md` for the current contract and prototype limitations.
 
-The app now calls `agentboard.connect()` without building a profile picker. BYOA opens its own window showing the requesting site and all profiles. Select a profile and approve there. Cancel or close preserves any existing connection. Profile lists are no longer exposed to app code.
+The app calls `agentboard.connect()` to open the extension-owned profile picker. BYOA opens its own window showing the requesting site and all profiles. Select a profile and approve there. Cancel or close preserves any existing connection. Profile lists are no longer exposed to app code.

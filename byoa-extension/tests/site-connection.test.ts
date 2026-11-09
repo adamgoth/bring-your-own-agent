@@ -70,25 +70,37 @@ describe('site profile choice', () => {
     expect((await siteConnectionStatus(config(), origin)).connected).toBe(true);
     expect((await siteConnectionStatus(config(), 'http://localhost:5184')).connected).toBe(false);
   });
-  it('restricts messages to top-level demo origins', () => {
+  it('accepts top-level HTTPS sites and loopback on any port', () => {
     for (const url of [
       'http://localhost:5183/',
       'http://localhost:5184/',
-      'http://127.0.0.1:5183/',
-      'http://127.0.0.1:5184/',
+      'http://127.0.0.1:5185/app',
+      'http://localhost:3000/',
+      'http://localhost/',
+      'https://example.com/path?q=1',
+      'https://app.example.com:8443/',
+      'https://localhost:5183/',
     ])
       expect(siteOrigin({ tab: { id: 7 }, frameId: 0, url } as chrome.runtime.MessageSender)).toBe(
         new URL(url).origin
       );
+  });
+  it('rejects subframes, non-tab senders, plain HTTP hosts, and other schemes', () => {
     for (const sender of [
       { tab: { id: 7 }, frameId: 1, url: origin },
+      { tab: { id: 7 }, frameId: 1, url: 'https://example.com/' },
       { frameId: 0, url: origin },
-      { tab: { id: 7 }, frameId: 0, url: 'https://example.com' },
+      { tab: { id: 7 }, frameId: 0 },
       ...[
-        'http://localhost:5173/',
-        'http://localhost:5174/',
-        'http://127.0.0.1:5173/',
-        'http://localhost:5185/',
+        'http://example.com/',
+        'http://example.com:5183/',
+        'http://127.0.0.1.example.com:5183/',
+        'http://localhost.example.com/',
+        'http://192.168.1.10:5183/',
+        'file:///Users/me/app.html',
+        'chrome-extension://abc/page.html',
+        'data:text/html,hi',
+        'not a url',
       ].map((url) => ({ tab: { id: 7 }, frameId: 0, url })),
     ])
       expect(siteOrigin(sender as chrome.runtime.MessageSender)).toBeUndefined();
