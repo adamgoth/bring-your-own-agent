@@ -455,15 +455,18 @@ try {
   );
   await margin.click('.agent-connection-button');
   const selectMargin = async () => {
+    await send('Page.bringToFront', {}, margin.sessionId);
+    // Let ProseMirror settle its focus selection before selecting the passage.
+    await margin.evaluate(`new Promise(resolve => { document.querySelector('.tiptap').focus(); setTimeout(resolve, 100); })`);
     await margin.evaluate(
-      `(()=>{const p=document.querySelector('.tiptap p');p.closest('[contenteditable]').focus();const r=document.createRange();r.selectNodeContents(p);const s=getSelection();s.removeAllRanges();s.addRange(r);document.dispatchEvent(new Event('selectionchange'));})()`
+      `(()=>{const p=document.querySelector('.tiptap p');p.closest('[contenteditable]').focus();const text=document.createTreeWalker(p,NodeFilter.SHOW_TEXT).nextNode();const r=document.createRange();r.selectNodeContents(text);const s=getSelection();s.removeAllRanges();s.addRange(r);document.dispatchEvent(new Event('selectionchange'));})()`
     );
     await waitFor(
       () => margin.evaluate(`!!document.querySelector('.margin-selection-popup')`),
       'Margin popup'
     );
     await margin.evaluate(
-      `[...document.querySelectorAll('.margin-selection-popup button')].find(b=>b.textContent==='Suggest replacement').click()`
+      `[...document.querySelectorAll('.margin-selection-popup button')].find(b=>b.textContent==='Improve this').click()`
     );
     await waitFor(() => margin.evaluate(`!!document.querySelector('.agent-send')`), 'Margin send');
   };
@@ -472,7 +475,7 @@ try {
   await waitFor(
     () =>
       margin.evaluate(
-        `document.querySelector('.margin-selection-popup [role="status"]')?.textContent==='Ready for review.'`
+        `window.__events.at(-1)?.status==='done' && !document.querySelector('.margin-selection-popup') && !!document.querySelector('.suggestion-insertion')`
       ),
     'Margin done',
     30000
