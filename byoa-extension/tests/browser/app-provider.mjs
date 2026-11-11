@@ -54,6 +54,20 @@ function respond(body, res) {
         ],
       };
     }
+  } else if (names.includes('suggest_title')) {
+    assert.deepEqual(names, ['suggest_title']);
+    assert.equal(body.model, 'second-fixture');
+    if (results.length === 0) {
+      name = 'suggest_title';
+      args = { requestId: user.match(/Title request ID: ([a-f0-9-]+)/)?.[1], title: 'Reading Group Invitation' };
+    }
+  } else if (names.includes('propose_document')) {
+    assert.deepEqual(names, ['propose_document']);
+    assert.equal(body.model, 'second-fixture');
+    if (results.length === 0) {
+      name = 'propose_document';
+      args = { requestId: user.match(/Draft request ID: ([a-f0-9-]+)/)?.[1], markdown: '# A first draft\n\nDRAFT_FIXTURE: Welcome to the reading group.' };
+    }
   } else {
     assert.equal(
       body.model,
@@ -455,24 +469,46 @@ try {
   );
   await margin.click('.agent-connection-button');
   const selectMargin = async () => {
+    await send('Page.bringToFront', {}, margin.sessionId);
+    // Let ProseMirror settle its focus selection before selecting the passage.
+    await margin.evaluate(`new Promise(resolve => { document.querySelector('.tiptap').focus(); setTimeout(resolve, 100); })`);
     await margin.evaluate(
-      `(()=>{const p=document.querySelector('.tiptap p');p.closest('[contenteditable]').focus();const r=document.createRange();r.selectNodeContents(p);const s=getSelection();s.removeAllRanges();s.addRange(r);document.dispatchEvent(new Event('selectionchange'));})()`
+      `(()=>{const p=document.querySelector('.tiptap p');p.closest('[contenteditable]').focus();const text=document.createTreeWalker(p,NodeFilter.SHOW_TEXT).nextNode();const r=document.createRange();r.selectNodeContents(text);const s=getSelection();s.removeAllRanges();s.addRange(r);document.dispatchEvent(new Event('selectionchange'));})()`
     );
     await waitFor(
       () => margin.evaluate(`!!document.querySelector('.margin-selection-popup')`),
       'Margin popup'
     );
     await margin.evaluate(
-      `[...document.querySelectorAll('.margin-selection-popup button')].find(b=>b.textContent==='Suggest replacement').click()`
+      `[...document.querySelectorAll('.margin-selection-popup button')].find(b=>b.textContent==='Improve this').click()`
     );
     await waitFor(() => margin.evaluate(`!!document.querySelector('.agent-send')`), 'Margin send');
   };
+  const submitMarginWithKeyboard = async (modifiers) => {
+    await send('Page.bringToFront', {}, margin.sessionId);
+    // Expire previous clicks so this request proves keyboard activation works.
+    await margin.evaluate(`new Promise(resolve => setTimeout(resolve, 1700))`);
+    await margin.evaluate(`(async () => {
+      document.querySelector('.selected-passage').scrollIntoView({block:'center'});
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      document.querySelector('#agent-instruction').focus({preventScroll:true});
+    })()`);
+    await waitFor(() => margin.evaluate(`document.activeElement?.id==='agent-instruction'`), 'keyboard prompt focus');
+    await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, modifiers }, margin.sessionId);
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, modifiers }, margin.sessionId);
+  };
   await selectMargin();
-  await margin.click('.agent-send');
+  await margin.evaluate(`new Promise(resolve => setTimeout(resolve, 1700))`);
+  const beforeSyntheticShortcut = requests.length;
+  await margin.evaluate(`document.querySelector('#agent-instruction').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true, cancelable: true }))`);
+  await waitFor(() => margin.evaluate(`window.__events.at(-1)?.status==='error' && window.__events.at(-1)?.detail.includes('button click or Command/Ctrl+Enter')`), 'synthetic shortcut rejected');
+  assert.equal(requests.length, beforeSyntheticShortcut);
+  await submitMarginWithKeyboard(4);
   await waitFor(
     () =>
       margin.evaluate(
-        `document.querySelector('.margin-selection-popup [role="status"]')?.textContent==='Ready for review.'`
+        `window.__events.at(-1)?.status==='done' && !document.querySelector('.margin-selection-popup') && !!document.querySelector('.suggestion-insertion')`
       ),
     'Margin done',
     30000
@@ -482,7 +518,7 @@ try {
   );
   assert.equal(requests.length, 7);
   console.log(
-    'PASS Margin uses the same SDK and bridge, with its own 5-tool scope and inline suggestion.'
+    'PASS trusted Command+Enter starts a task after click activation expires; synthetic shortcuts are rejected. Margin retains its 5-tool scope.'
   );
   // Hold a board model request, queue a Margin request, cancel only the queued task.
   holdNext = true;
@@ -492,7 +528,7 @@ try {
   await board.click('#send-button');
   await waitFor(() => requests.length === 8, 'held board request');
   await selectMargin();
-  await margin.click('.agent-send');
+  await submitMarginWithKeyboard(2);
   await waitFor(
     () => margin.evaluate(`window.__events.at(-1)?.status==='queued'`),
     'Margin queued'
@@ -500,13 +536,13 @@ try {
     console.log(
       'QUEUE DEBUG',
       await margin.evaluate(
-        `({events:window.__events,popup:document.querySelector('.margin-selection-popup')?.innerText})`
+        `({keys:window.__keys,events:window.__events,popup:document.querySelector('.margin-selection-popup')?.innerText})`
       )
     );
     throw e;
   });
   assert.equal(requests.length, 8);
-  await margin.click('.agent-send + button');
+  await margin.evaluate(`document.querySelector('.agent-send + button').click()`);
   await waitFor(
     () =>
       margin.evaluate(
@@ -552,6 +588,26 @@ try {
     'correct task transcript'
   );
   console.log('PASS optional chat restores the correct task transcript.');
+  await send('Page.bringToFront', {}, margin.sessionId);
+  await margin.evaluate(`[...document.querySelectorAll('.library-actions button')].find(button => button.textContent.includes('New document')).click()`);
+  await waitFor(() => margin.evaluate(`!!document.querySelector('#draft-description')`), 'empty document draft prompt');
+  await margin.evaluate(`(() => {
+    const input = document.querySelector('#draft-description');
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, 'Write an invitation to a reading group.');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await waitFor(() => margin.evaluate(`!document.querySelector('.draft-starter button[type="submit"]').disabled`), 'draft prompt ready');
+  await margin.click('.draft-starter button[type="submit"]');
+  await waitFor(() => margin.evaluate(`document.querySelector('.draft-preview')?.textContent.includes('DRAFT_FIXTURE') && !document.querySelector('.draft-use').disabled`), 'draft preview', 30000);
+  assert.equal(await margin.evaluate(`document.querySelector('.tiptap').textContent`), '');
+  await margin.click('.draft-use');
+  await waitFor(() => margin.evaluate(`document.querySelector('.tiptap').textContent.includes('DRAFT_FIXTURE') && !document.querySelector('.draft-preview')`), 'accepted draft');
+  console.log('PASS empty document → scoped draft tool → separate preview → explicit acceptance.');
+  await margin.click('.suggest-title');
+  await waitFor(() => margin.evaluate(`document.querySelector('.document-title').value==='Reading Group Invitation'`), 'suggested title', 30000);
+  assert.ok(await margin.evaluate(`document.querySelector('.tiptap').textContent.includes('DRAFT_FIXTURE')`));
+  console.log('PASS one-click title suggestion uses its own tool scope and preserves the writing.');
+
   await send(
     'Emulation.setDeviceMetricsOverride',
     { width: 390, height: 844, deviceScaleFactor: 1, mobile: true },
