@@ -1,3 +1,4 @@
+import { ErrorNotice } from './ErrorNotice';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, X } from 'lucide-react';
 import { agentboard, useAgentBoardConnection, useAgentBoardTask } from './agentboard';
@@ -38,8 +39,8 @@ export function AgentConnection() {
         <div className="agent-buttons"><button type="button" onClick={()=>act(agentboard.openSettings())}>Agent settings</button>{connection.connected && <><button type="button" onClick={()=>act(agentboard.openChat(task?.taskId))}>View agent chat</button><button type="button" onClick={()=>act(agentboard.disconnect())}>Disconnect</button></>}</div>
       </>}
       <p className="connection-privacy">Requests send writing to your chosen provider. Your API key stays in BYOA.</p>
-      {error && <p role="alert">{error}</p>}
-      {connection.error && <p role="alert">{connection.error}</p>}
+      {error && <ErrorNotice title="Agent request failed" message={error}/>}
+      {connection.error && <ErrorNotice title="Connection failed" message={connection.error}/>}
     </section>}
   </div>;
 }

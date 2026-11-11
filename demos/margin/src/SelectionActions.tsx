@@ -1,4 +1,6 @@
-import { Send, Sparkles } from 'lucide-react';
+import { ErrorNotice } from './ErrorNotice';
+import { Sparkles } from 'lucide-react';
+import { SubmitShortcut, submitOnShortcut } from './SubmitShortcut';
 import { agentboard, requestAgent, cancelAgent, useAgentBoardConnection, useAgentBoardTask } from './agentboard';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/core';
@@ -57,17 +59,17 @@ function Composer({ workspace, anchorId, onComplete }: { workspace: Workspace; a
       </fieldset>}
       <label className="composer-label" htmlFor="agent-instruction">{actions[action].placeholder} <span>Optional</span></label>
       <textarea id="agent-instruction" ref={input} aria-label="Instruction for agent" placeholder={action === 'rewrite' ? 'For example, keep the technical details…' : actions[action].placeholder} rows={2} maxLength={1000} disabled={task?.busy}
-        value={instruction} onChange={event => setInstruction(event.target.value)} />
+        value={instruction} onChange={event => setInstruction(event.target.value)} onKeyDown={submitOnShortcut} />
       <div className="agent-buttons">
         {connection.connected ? <>
-          <button type="submit" className="agent-send" disabled={task?.busy}><Send size={14} aria-hidden="true" /> {task?.busy ? actions[action].working : actions[action].submit}</button>
+          <button type="submit" className="agent-send" aria-keyshortcuts="Meta+Enter Control+Enter" disabled={task?.busy}>{task?.busy ? actions[action].working : actions[action].submit}{!task?.busy && <SubmitShortcut/>}</button>
           {task?.busy && <button type="button" onClick={cancelAgent}>Cancel</button>}
           {submitted && <button type="button" className="composer-chat" onClick={() => void agentboard.openChat(task?.taskId || undefined).catch(error => setError(error instanceof Error ? error.message : String(error)))}>View agent chat</button>}
         </> : <button type="button" onClick={() => window.dispatchEvent(new Event('margin:connect-agent'))}>Connect agent</button>}
       </div>
     </form>}
-    {error && <p role="alert">{error}</p>}
-    {submitted && task && !task.busy && <p role={task.status === 'error' ? 'alert' : 'status'}>{task.status === 'done' ? 'Finished. No new suggestion was added.' : task.detail}</p>}
+    {error && <ErrorNotice title="Agent request failed" message={error}/>}
+    {submitted && task && !task.busy && !error && (task.status === 'error' ? <ErrorNotice title="Agent request failed" message={task.detail}/> : <p role="status">{task.status === 'done' ? 'Finished. No new suggestion was added.' : task.detail}</p>)}
   </>;
 }
 

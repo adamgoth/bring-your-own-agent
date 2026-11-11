@@ -1,4 +1,5 @@
 import { connectableOrigin } from '../background/site-connection';
+import { isTrustedSubmitShortcut } from './site-gesture';
 
 // Runs on every eligible top-level page, so it stays dormant (no polling, no storage listener,
 // no messages) until the page itself calls the BYOA client.
@@ -40,6 +41,13 @@ if (connectableOrigin(window.location.href) && window === window.top) {
     }
   };
   document.addEventListener(
+    'keydown',
+    (event) => {
+      if (isTrustedSubmitShortcut(event)) lastGesture = Date.now();
+    },
+    true
+  );
+  document.addEventListener(
     'click',
     (event) => {
       if (event.isTrusted) lastGesture = Date.now();
@@ -70,11 +78,17 @@ if (connectableOrigin(window.location.href) && window === window.top) {
           event: {
             taskId: '',
             status: 'error',
-            detail: 'Start agent tasks from a button click.',
+            detail: 'Start agent tasks with a button click or Command/Ctrl+Enter.',
             busy: false,
           },
         });
-      else reply(id, false, undefined, 'Use a button click to connect or open BYOA.');
+      else
+        reply(
+          id,
+          false,
+          undefined,
+          'Use a button click or Command/Ctrl+Enter to connect or open BYOA.'
+        );
       return;
     }
     if (method === 'request') {

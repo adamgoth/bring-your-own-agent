@@ -7,6 +7,8 @@ import { connectTools, createTools } from './tools';
 import { AgentConnection } from './AgentConnection';
 import { SelectionActions } from './SelectionActions';
 import { downloadMarkdown } from './markdown';
+import { DraftStarter } from './DraftStarter';
+import { DocumentTitle } from './DocumentTitle';
 
 export default function WritingApp({ w }: { w: Workspace }) {
   const [content] = useState(() => w.load());
@@ -27,7 +29,7 @@ export default function WritingApp({ w }: { w: Workspace }) {
   const words = editor?.getText().trim().split(/\s+/).filter(Boolean).length ?? 0;
   const sample = (name: string) => {
     const selectionId = active?.id || 'Select a passage first';
-    const values: Record<string, object> = { get_selection: {}, get_document_outline: {}, find_text: { query: 'thoughts' }, propose_replacement: { selectionId, replacement: 'A clearer way to put it.', reason: 'A manual test of the suggestion workflow.' }, add_comment: { selectionId, text: 'Try making the main idea more specific.', kind: 'comment' } };
+    const values: Record<string, object> = { suggest_title: { requestId: 'Request a title suggestion first', title: 'A reading group' }, propose_document: { requestId: 'Start a draft request first', markdown: '# Draft\n\nA first paragraph.' }, get_selection: {}, get_document_outline: {}, find_text: { query: 'thoughts' }, propose_replacement: { selectionId, replacement: 'A clearer way to put it.', reason: 'A manual test of the suggestion workflow.' }, add_comment: { selectionId, text: 'Try making the main idea more specific.', kind: 'comment' } };
     setTool(name); setArgs(JSON.stringify(values[name], null, 2));
   };
   const run = async () => {
@@ -48,7 +50,7 @@ export default function WritingApp({ w }: { w: Workspace }) {
     <main className="workspace">
       <section className="writing-area">
         <div className="document-meta"><span className="saved" role="status"><Check size={13}/>{w.storageMessage}</span></div>
-        <label className="document-title-label">Document title<input className="document-title" aria-label="Document title" value={w.title} maxLength={180} onChange={e => { w.title = e.target.value; w.save(); w.emit(); }}/></label>
+        <DocumentTitle workspace={w}/>
         <div className="paper">
           <div className="formatbar" aria-label="Formatting toolbar">
             <button onMouseDown={e => e.preventDefault()} onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()} aria-pressed={editor?.isActive('heading', { level: 2 })} title="Toggle heading">Heading <ChevronDown size={12}/></button>
@@ -61,7 +63,7 @@ export default function WritingApp({ w }: { w: Workspace }) {
             <button aria-label="Undo" disabled={!editor?.can().undo()} onMouseDown={e => e.preventDefault()} onClick={() => editor?.chain().focus().undo().run()}><Undo2 size={16}/></button>
             <button aria-label="Redo" disabled={!editor?.can().redo()} onMouseDown={e => e.preventDefault()} onClick={() => editor?.chain().focus().redo().run()}><Redo2 size={16}/></button>
           </div>
-          <div className="editor-wrap"><EditorContent editor={editor}/></div>
+          <div className="editor-wrap"><DraftStarter workspace={w}/><EditorContent editor={editor}/></div>
           <div className="paper-footer"><span>{words} words <span>·</span> {Math.max(1, Math.ceil(words / 200))} min read</span></div>
         </div>
         <div className={`selection-bar ${active ? 'has-selection' : ''}`}>

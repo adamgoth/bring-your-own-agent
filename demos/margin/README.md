@@ -19,6 +19,16 @@ Create a draft with **New document**, rename it using **Document title**, and sw
 
 There are no accounts, cloud sync, or server-side document storage. Documents belong to this browser and origin: switching domains, protocols, or ports does not move your drafts. Export important writing before clearing browser data or moving to a hosted URL. Storage failures stay visible and prevent switching away from unsaved writing. Agent tasks keep document switching disabled until they finish.
 
+Use **Suggest title** beside the title to name a document from its contents. Your agent receives up to the first 12,000 characters and can only return a title for that request. **Undo** restores the previous title. Manual title or document edits made while it runs take priority.
+
+Submit agent prompts with **⌘ Enter** on Mac or **Ctrl Enter** on Windows/Linux. Plain Enter adds a new line.
+
+## Draft with your agent
+
+In an empty document, describe what you want to write and choose **Draft with your agent**. The agent receives only the `propose_document` tool for this task. Its Markdown response appears in a separate preview; **Use draft** inserts it, **Dismiss** discards it, and **Try again** requests another version. You can also ignore the prompt and type normally.
+
+Typing or changing the document after the request starts disables acceptance, even if you undo your edits. Changes saved by another tab also prevent acceptance. Pending previews are saved with the document, but stay out of Markdown exports. Accepted drafts can be undone. Cancelled or expired request IDs cannot add previews.
+
 ## Host as a static app
 
 Keep this app in the BYOA repository so its shared SDK import resolves during the build. It deploys independently of the extension and Boardwalk. From the repository root:

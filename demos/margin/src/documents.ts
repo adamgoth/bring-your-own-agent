@@ -1,6 +1,6 @@
 export const documentPrefix = 'margin-document-v1:';
 export const activeDocumentKey = 'margin-active-document';
-export type SavedDocument = { id: string; title: string; updatedAt: number; workspace: { document: unknown; anchors: unknown[]; notes: unknown[]; activeId: string | null; revision: number } };
+export type SavedDocument = { id: string; title: string; updatedAt: number; workspace: { document: unknown; anchors: unknown[]; notes: unknown[]; activeId: string | null; revision: number; draftProposal?: import('./engine').DraftProposal | null } };
 
 export function listDocuments(): SavedDocument[] {
   const documents: SavedDocument[] = [];

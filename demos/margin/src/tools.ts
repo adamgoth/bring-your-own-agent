@@ -12,6 +12,8 @@ const string = (description: string) => ({ type: 'string', description, maxLengt
 const schema = (properties = {}, required: string[] = []) => ({ type: 'object', properties, required, additionalProperties: false });
 export function createTools(w: Workspace) {
   const defs = [
+    { name: 'suggest_title', description: 'Set the document title in response to the user clicking Suggest title. Requires the title request ID supplied by the app. Never changes the document body.', inputSchema: schema({ requestId: string('Title request ID from the prompt.'), title: { type: 'string', description: 'A concise, specific, single-line title. No surrounding quotation marks.', maxLength: 180 } }, ['requestId', 'title']), read: false, run: (a: Args) => w.suggestTitle(str(a, 'requestId'), str(a, 'title')) },
+    { name: 'propose_document', description: 'Return a new document draft as Markdown for a separate preview. Does not modify the editor. Requires the request ID supplied by the app.', inputSchema: schema({ requestId: string('Draft request ID supplied in the prompt.'), markdown: string('Complete draft in Markdown, up to 20,000 characters.') }, ['requestId', 'markdown']), read: false, run: (a: Args) => w.proposeDraft(str(a, 'requestId'), str(a, 'markdown')) },
     { name: 'get_selection', description: 'Read the passage the user highlighted, its surrounding context, and the requested editing action. Returns a selection ID for attaching suggestions.', inputSchema: schema(), read: true, run: () => w.selection() },
     { name: 'get_document_outline', description: 'Read document headings to understand the structure of the writing.', inputSchema: schema(), read: true, run: () => {
       const headings: { level: number; text: string }[] = [];
