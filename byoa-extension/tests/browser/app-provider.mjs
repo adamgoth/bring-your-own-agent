@@ -268,6 +268,8 @@ try {
       `!document.querySelector('input[name="agent-profile"]') && document.querySelector('#agent-indicator').textContent.includes('Not connected')`
     )
   );
+  assert.ok(await firstPrompt.evaluate(`document.querySelector('#sharing').hidden`), 'Sharing hidden without a workspace');
+  assert.equal(await firstPrompt.evaluate(`document.querySelectorAll('#sharing input:checked').length`), 0, 'Sharing defaults off');
   await firstPrompt.click('#approve');
   await waitFor(
     () =>

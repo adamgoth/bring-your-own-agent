@@ -393,7 +393,7 @@ describe('AIClient connection testing', () => {
       { onFinish: vi.fn(), onError },
       'popup-stream',
       undefined,
-      ['get_selection', 'propose_replacement']
+      { tools: ['get_selection', 'propose_replacement'] }
     );
     expect(onError).not.toHaveBeenCalled();
     expect(mocks.resolveMemory).not.toHaveBeenCalled();
@@ -401,6 +401,84 @@ describe('AIClient connection testing', () => {
     expect(Object.keys(request.tools)).toEqual(['get_selection']);
     expect(JSON.stringify(request.messages)).not.toContain('PRIVATE_REMOTE_GUIDANCE');
   });
+
+  it.each(Array.from({ length: 8 }, (_, bits) => bits))(
+    'filters shared workspace and excludes file tools for flags %i',
+    async (bits) => {
+      storeAgent('shared-agent');
+      const memory = mountedMemory('PRIVATE_MEMORY');
+      memory.resolved.workspace = {
+        identity: 'PRIVATE_IDENTITY',
+        soul: 'PRIVATE_SOUL',
+        user: 'PRIVATE_USER',
+        agents: 'PRIVATE_AGENTS',
+        memory: 'PRIVATE_MEMORY',
+      };
+      mocks.resolveMemory.mockResolvedValue(memory.resolved);
+      mocks.streamText.mockReturnValue(finishedTextStream());
+      const onError = vi.fn();
+      const onContext = vi.fn();
+      await AIClient.getInstance().streamChat(
+        'shared-agent',
+        [{ role: 'user', content: 'Request' }],
+        7,
+        { onFinish: vi.fn(), onError },
+        'shared-stream',
+        undefined,
+        {
+          tools: [],
+          share: { persona: !!(bits & 1), user: !!(bits & 2), memory: !!(bits & 4) },
+          onContext,
+        }
+      );
+      expect(onError).not.toHaveBeenCalled();
+      const request = mocks.streamText.mock.calls[0][0];
+      const messages = JSON.stringify(request.messages);
+      for (const [content, enabled] of [
+        ['PRIVATE_IDENTITY', bits & 1],
+        ['PRIVATE_SOUL', bits & 1],
+        ['PRIVATE_USER', bits & 2],
+        ['PRIVATE_MEMORY', bits & 4],
+        ['PRIVATE_AGENTS', false],
+      ] as const) {
+        expect(messages.includes(content)).toBe(!!enabled);
+      }
+      expect(request.tools).toBeUndefined();
+      expect(messages).not.toContain('MOUNTED MEMORY:');
+      expect(messages).not.toContain('LOCAL WORKSPACE:');
+      expect(onContext).toHaveBeenCalledOnce();
+    }
+  );
+
+  it.each(['unavailable', 'unmounted'])(
+    'runs without shared context when workspace is %s',
+    async (state) => {
+      storeAgent('shared-agent');
+      mocks.resolveMemory.mockResolvedValue({ state, error: new Error('private error') });
+      mocks.streamText.mockReturnValue(finishedTextStream());
+      const onContext = vi.fn();
+      const onError = vi.fn();
+      await AIClient.getInstance().streamChat(
+        'shared-agent',
+        [{ role: 'user', content: 'Request' }],
+        7,
+        { onFinish: vi.fn(), onError },
+        'shared-stream',
+        undefined,
+        {
+          tools: [],
+          share: { persona: true, user: false, memory: false },
+          onContext,
+        }
+      );
+      expect(onError).not.toHaveBeenCalled();
+      expect(mocks.streamText).toHaveBeenCalledOnce();
+      expect(onContext).toHaveBeenCalledWith(
+        [],
+        'Running without shared context: workspace unavailable'
+      );
+    }
+  );
 
   it('captures one hidden workspace bootstrap and never refreshes it on ordinary turns', async () => {
     storeAgent('memory-agent');
