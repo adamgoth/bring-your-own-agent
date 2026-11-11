@@ -1,4 +1,5 @@
 import { documentPrefix, type SavedDocument } from './documents';
+import { importMarkdown } from './markdown';
 import type { Editor, JSONContent } from '@tiptap/core';
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey, type Transaction } from '@tiptap/pm/state';
@@ -9,6 +10,7 @@ export type Action = 'rewrite' | 'explain' | 'comment';
 export type Anchor = { id: string; from: number; to: number; text: string; fingerprint: string; stale: boolean; revision: number };
 export type Note = { id: string; anchorId: string; kind: Action; text: string; reason: string; status: 'pending' | 'accepted' | 'dismissed' };
 export type Log = { id: string; name: string; source: 'manual' | 'agent'; args: unknown; result: unknown; ms: number; error: boolean; time: string };
+export type DraftProposal = { markdown: string; revision: number; document: string };
 const key = new PluginKey('margin');
 export const seed = '<h1>A reading group</h1><p>The reading group will meet once a month. We will start with six people and meet at the library on Saturday mornings. Each session will last about an hour.</p><p>Each meeting will focus on one book chosen by the group. Members can suggest a title at the end of a session, then vote on what to read next.</p><h2>Format</h2><p>Everyone brings one question or a passage they want to discuss. There is no presentation to prepare. You can still come if you have not finished the book.</p><h2>Before the first meeting</h2><ul><li>Confirm the room booking.</li><li>Choose a short book for the first session.</li><li>Send the date and reading list to the group.</li></ul>';
 
@@ -34,6 +36,78 @@ export class Workspace {
   action: Action = 'rewrite';
   instruction = '';
   reviewMessage = '';
+  titleRevision = 0;
+  titleError = '';
+  titleUndo: { before: string; after: string } | null = null;
+  private titleRequest: { id: string; title: string; titleRevision: number; revision: number } | null = null;
+  editTitle(title: string) { this.title = title; this.titleRevision++; this.titleUndo = null; this.save(); this.emit(); }
+  beginTitleSuggestion() {
+    if (!this.editor?.getText().trim()) throw new Error('Write something first so your agent has context for a title.');
+    this.titleError = '';
+    this.titleRequest = { id: crypto.randomUUID(), title: this.title, titleRevision: this.titleRevision, revision: this.revision };
+    return this.titleRequest.id;
+  }
+  endTitleSuggestion() { this.titleRequest = null; }
+  suggestTitle(requestId: string, title: string) {
+    try {
+      const request = this.titleRequest;
+      if (!request || request.id !== requestId) throw new Error('This title request has expired.');
+      if (request.titleRevision !== this.titleRevision || request.title !== this.title || request.revision !== this.revision) throw new Error('You edited the title or document. Your changes were kept; request a new suggestion when ready.');
+      title = title.trim();
+      if (!title || title.length > 180 || /[\r\n]/.test(title)) throw new Error('Return a single-line title of at most 180 characters.');
+      if (!this.loaded || localStorage.getItem(documentPrefix + this.documentId) !== this.storedRaw) throw new Error('This document changed in another tab. Reload before suggesting a title.');
+      this.title = title;
+      if (!this.save()) { this.title = request.title; throw new Error(this.storageMessage); }
+      this.titleRevision++;
+      this.titleUndo = { before: request.title, after: title };
+      this.titleError = '';
+      this.titleRequest = null;
+      this.emit();
+      return { status: 'applied', title };
+    } catch (error) { this.titleError = error instanceof Error ? error.message : String(error); this.emit(); throw error; }
+  }
+  undoTitleSuggestion() {
+    const previous = this.titleUndo;
+    if (!previous || this.title !== previous.after) return;
+    if (localStorage.getItem(documentPrefix + this.documentId) !== this.storedRaw) throw new Error('This document changed in another tab. Reload before changing its title.');
+    this.title = previous.before;
+    if (!this.save()) { this.title = previous.after; throw new Error(this.storageMessage); }
+    this.titleRevision++; this.titleUndo = null; this.emit();
+  }
+  draftProposal: DraftProposal | null = null;
+  private draftRequest: { id: string; revision: number; document: string } | null = null;
+  get canUseDraft() {
+    return !!this.editor?.isEmpty && !!this.draftProposal && this.revision === this.draftProposal.revision && JSON.stringify(this.editor.getJSON()) === this.draftProposal.document;
+  }
+  beginDraft() {
+    if (!this.editor?.isEmpty) throw new Error('Start a new, empty document to request a draft.');
+    this.draftRequest = { id: crypto.randomUUID(), revision: this.revision, document: JSON.stringify(this.editor.getJSON()) };
+    this.draftProposal = null;
+    this.save(); this.emit();
+    return this.draftRequest.id;
+  }
+  endDraft() { this.draftRequest = null; }
+  proposeDraft(requestId: string, markdown: string) {
+    const request = this.draftRequest;
+    if (!request || request.id !== requestId) throw new Error('This draft request has expired.');
+    if (!markdown.trim() || markdown.length > 20000) throw new Error('Provide between 1 and 20,000 characters of Markdown.');
+    if (this.draftProposal) throw new Error('A draft is already awaiting review.');
+    this.draftProposal = { markdown, revision: request.revision, document: request.document };
+    this.save(); this.emit();
+    return { status: 'pending', message: 'Draft shown in a separate preview. The user must choose Use draft to insert it.' };
+  }
+  dismissDraft() { this.endDraft(); this.draftProposal = null; this.save(); this.emit(); }
+  acceptDraft() {
+    if (!this.canUseDraft || !this.editor) throw new Error('This document changed. Your writing has been kept.');
+    if (!this.loaded || localStorage.getItem(documentPrefix + this.documentId) !== this.storedRaw) throw new Error('This document changed in another tab. Reload before using a draft.');
+    const proposal = this.draftProposal!;
+    this.draftProposal = null;
+    try {
+      const inserted = this.editor.chain().focus().insertContentAt({ from: 0, to: this.editor.state.doc.content.size }, importMarkdown(proposal.markdown)).run();
+      if (!inserted) throw new Error('Could not insert the draft.');
+      this.endDraft(); this.save(); this.emit();
+    } catch (error) { this.draftProposal = proposal; this.emit(); throw error; }
+  }
   listeners = new Set<() => void>();
   version = 0;
   storageMessage = 'Saved on this browser';
@@ -54,6 +128,7 @@ export class Workspace {
       this.notes = data.notes as Note[];
       this.activeId = data.activeId;
       this.revision = data.revision || 0;
+      this.draftProposal = data.draftProposal ?? null;
       return data.document as JSONContent;
     } catch { this.loaded = false; this.storageMessage = 'Could not restore saved document — export before leaving'; return this.initialContent; }
   }
@@ -61,7 +136,7 @@ export class Workspace {
     if (!this.editor || !this.loaded) return false;
     try {
       const key = documentPrefix + this.documentId;
-      const workspace = { document: this.editor.getJSON(), anchors: [...this.anchors.values()], notes: this.notes, activeId: this.activeId, revision: this.revision };
+      const workspace = { document: this.editor.getJSON(), anchors: [...this.anchors.values()], notes: this.notes, activeId: this.activeId, revision: this.revision, draftProposal: this.draftProposal };
       const previous = this.storedRaw ? JSON.parse(this.storedRaw) as SavedDocument : null;
       // Opening or focusing an unchanged draft must not invalidate another tab.
       if (previous?.title === this.title && JSON.stringify(previous.workspace) === JSON.stringify(workspace)) return true;

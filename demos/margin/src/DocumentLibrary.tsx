@@ -6,6 +6,7 @@ import { activeDocumentKey, documentPrefix, listDocuments } from './documents';
 import { importMarkdown } from './markdown';
 import { isAgentBusy, useAgentBoardTask } from './agentboard';
 import WritingApp from './App';
+import { ErrorNotice } from './ErrorNotice';
 
 function initialWorkspace(): Workspace {
   try {
@@ -29,6 +30,16 @@ function initialWorkspace(): Workspace {
 
 export default function DocumentLibrary() {
   const [workspace, setWorkspace] = useState(initialWorkspace);
+  // React Fast Refresh preserves state objects across module updates, including
+  // instances of the previous Workspace class. Keep the live document, editor,
+  // and subscriptions, but adopt the current methods and any new default fields.
+  if (Object.getPrototypeOf(workspace) !== Workspace.prototype) {
+    const defaults = new Workspace(workspace.documentId, workspace.title);
+    for (const field of Object.keys(defaults) as (keyof Workspace)[]) {
+      if (!Object.hasOwn(workspace, field)) Object.defineProperty(workspace, field, Object.getOwnPropertyDescriptor(defaults, field)!);
+    }
+    Object.setPrototypeOf(workspace, Workspace.prototype);
+  }
   useSyncExternalStore(workspace.subscribe, workspace.snapshot);
   const [error, setError] = useState('');
   const input = useRef<HTMLInputElement>(null);
@@ -66,7 +77,7 @@ export default function DocumentLibrary() {
         <span>{doc.title || 'Untitled document'}</span><small>{new Date(doc.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</small>
       </button>)}</nav>
       <p className="local-notice">Stored in this browser. Export a backup before clearing site data.</p>
-      {(error || storageError) && <p role="alert">{error || storageError}</p>}
+      {(error || storageError) && <ErrorNotice title="Document unavailable" message={error || storageError}/>}
     </aside>
     <WritingApp key={workspace.documentId} w={workspace}/>
   </div>;

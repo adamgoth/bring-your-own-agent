@@ -227,3 +227,24 @@ test('clears the highlight inline without removing writing or review notes', asy
   await page.keyboard.press('Enter');
   await expect(page.locator('.selected-passage')).toHaveCount(0);
 });
+
+test('submits selection prompts with Command or Control Enter and keeps plain Enter as a newline', async ({ page }) => {
+  await mockConnectedAgent(page);
+  await page.goto('/');
+  await selectText(page, 'The reading group will meet once a month.');
+  const popup = page.locator('.margin-selection-popup');
+  await popup.getByRole('button', { name: 'Improve this', exact: true }).click();
+  const input = popup.getByLabel('Instruction for agent');
+  await input.fill('Make it clearer.');
+  await input.press('Enter');
+  await expect(input).toHaveValue('Make it clearer.\n');
+  expect(await page.evaluate(() => (window as any).agentRequests.length)).toBe(0);
+  await expect(popup.locator('.agent-send kbd')).toBeVisible();
+  await input.press('Meta+Enter');
+  await expect.poll(() => page.evaluate(() => (window as any).agentRequests.length)).toBe(1);
+  await expect(popup.getByRole('button', { name: 'Improving…', exact: true })).toBeDisabled();
+  await popup.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(input).toBeEnabled();
+  await input.press('Control+Enter');
+  await expect.poll(() => page.evaluate(() => (window as any).agentRequests.length)).toBe(2);
+});
