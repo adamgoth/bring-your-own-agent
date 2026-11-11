@@ -172,6 +172,7 @@ export type ExtensionMessage =
         | 'CONNECTION_PROMPT_REJECT';
       requestId: string;
       agentId?: string;
+      share?: unknown;
     }
   | { type: 'SITE_VIEW_CHAT'; taskId?: string }
   | {

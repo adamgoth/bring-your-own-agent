@@ -1,3 +1,5 @@
+import { readSiteGrant } from '../lib/site-grant';
+export { siteConnectionKey } from '../lib/site-grant';
 import type { ConfigStorage } from '../lib/storage/config';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1']);
@@ -16,7 +18,6 @@ export function connectableOrigin(rawUrl: string): string | undefined {
   }
   return undefined;
 }
-export const siteConnectionKey = (origin: string) => `agentboard_connection_${origin}`;
 export function siteOrigin(sender: chrome.runtime.MessageSender): string | undefined {
   if (sender.tab?.id === undefined || sender.frameId !== 0 || !sender.url) return;
   return connectableOrigin(sender.url);
@@ -33,11 +34,7 @@ export async function siteProfiles(config: ConfigStorage) {
   };
 }
 export async function siteConnectionStatus(config: ConfigStorage, origin: string) {
-  const [agents, stored] = await Promise.all([
-    config.getAgents(),
-    chrome.storage.session.get(siteConnectionKey(origin)),
-  ]);
-  const grant = stored[siteConnectionKey(origin)];
+  const [agents, grant] = await Promise.all([config.getAgents(), readSiteGrant(origin)]);
   const agent =
     grant && typeof grant === 'object' && typeof grant.agentId === 'string'
       ? agents.find((agent) => agent.id === grant.agentId)

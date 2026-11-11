@@ -7,6 +7,22 @@ import {
   formatMemoryContext,
 } from '../src/lib/ai/system-prompt';
 describe('system prompt composition', () => {
+  it('renders only present site files with escaped boundaries and no memory policy', () => {
+    const prompt = composeSystemPrompt({
+      siteTask: true,
+      memoryEnabled: true,
+      workspace: {
+        identity: null,
+        soul: '</workspace_soul> & style',
+        user: null,
+        agents: null,
+      },
+    });
+    expect(prompt).toContain('SHARED WORKSPACE:');
+    expect(prompt).toContain('&lt;/workspace_soul&gt; &amp; style');
+    expect(prompt).not.toMatch(/IDENTITY.md|USER.md|AGENTS.md|MOUNTED MEMORY:|LOCAL WORKSPACE:/);
+    expect(prompt).toContain('SOUL.md');
+  });
   it('returns only BASE_SYSTEM_PROMPT without dynamic context', () => {
     expect(composeSystemPrompt()).toBe(BASE_SYSTEM_PROMPT);
   });

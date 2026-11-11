@@ -5,7 +5,8 @@ import {
   decideConnectionPrompt,
   closeConnectionPrompt,
 } from './connection-prompt';
-import { siteConnectionKey, siteOrigin, siteConnectionStatus } from './site-connection';
+import { revokeSiteGrant } from '../lib/site-grant';
+import { siteOrigin, siteConnectionStatus } from './site-connection';
 import { createSiteAgentHandler } from './site-agent';
 import { startToolbarIconSync } from './toolbar-icon';
 /**
@@ -345,8 +346,7 @@ chrome.runtime.onMessage.addListener((request: ExtensionMessage, sender, sendRes
           sendResponse({ success: true });
           return;
         }
-        if (request.type === 'SITE_DISCONNECT')
-          await chrome.storage.session.set({ [siteConnectionKey(origin)]: false });
+        if (request.type === 'SITE_DISCONNECT') await revokeSiteGrant(origin);
         if (request.type === 'SITE_CONNECT') {
           sendResponse(await openConnectionPrompt(sender));
           return;
@@ -381,7 +381,8 @@ chrome.runtime.onMessage.addListener((request: ExtensionMessage, sender, sendRes
                 request.agentId,
                 request.type === 'CONNECTION_PROMPT_APPROVE',
                 sender,
-                configStorage
+                configStorage,
+                request.share
               );
       void operation.then(sendResponse, (error) =>
         sendResponse({

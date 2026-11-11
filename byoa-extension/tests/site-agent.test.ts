@@ -70,7 +70,12 @@ describe('Site background tasks', () => {
     expect(args[0]).toBe('configured');
     expect(args[2]).toBe(7);
     expect(args[5]).toBeUndefined();
-    expect(args[6]).toEqual(['get_selection', 'propose_replacement']);
+    expect(args[6]).toEqual(
+      expect.objectContaining({
+        tools: ['get_selection', 'propose_replacement'],
+        share: { persona: false, user: false, memory: false },
+      })
+    );
     const callbacks = args[3] as StreamCallbacks;
     callbacks.onToolCall?.({
       id: 'tool',
@@ -219,17 +224,20 @@ describe('Site background tasks', () => {
     expect(JSON.stringify(q.port.postMessage.mock.calls)).not.toContain('SECRET');
     q.close();
   });
-  it('cancels this site task when the connected profile changes', async () => {
-    const h = harness();
-    const p = h.connect();
-    p.send({ type: 'start', tools: ['get_selection'], text: 'Read my selection' });
-    await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
-    const changed = vi.mocked(chrome.storage.onChanged.addListener).mock.calls.at(-1)![0];
-    changed({ [SITE_CONNECTION_KEY]: { newValue: { agentId: 'different-profile' } } }, 'session');
-    expect(h.cancelStream).toHaveBeenCalledWith(h.streamChat.mock.calls[0][4]);
-    expect(p.port.postMessage).toHaveBeenLastCalledWith(
-      expect.objectContaining({ status: 'cancelled', busy: false })
-    );
-    p.close();
-  });
+  it.each([{ agentId: 'different-profile' }, { agentId: 'configured', share: { persona: true } }])(
+    'cancels this site task when the grant changes: %j',
+    async (grant) => {
+      const h = harness();
+      const p = h.connect();
+      p.send({ type: 'start', tools: ['get_selection'], text: 'Read my selection' });
+      await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
+      const changed = vi.mocked(chrome.storage.onChanged.addListener).mock.calls.at(-1)![0];
+      changed({ [SITE_CONNECTION_KEY]: { newValue: grant } }, 'session');
+      expect(h.cancelStream).toHaveBeenCalledWith(h.streamChat.mock.calls[0][4]);
+      expect(p.port.postMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: 'cancelled', busy: false })
+      );
+      p.close();
+    }
+  );
 });
