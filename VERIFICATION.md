@@ -46,7 +46,7 @@ No real API credentials or normal browser profiles were used. Live-provider outp
 Recovery unit tests cover sender identity (tab/document/origin/private context), bounded ordered replay,
 finish during disconnection, grace expiry, cancellation ownership, summary-only lookup, serialized persistence,
 startup sweep, record pruning, timeout clamp, independent queue/run limits and inactivity progress resets.
-`pnpm check` passed: extension TypeScript, strict lint, 80 test files / 1,124 tests;
+`pnpm check` passed: extension TypeScript, strict lint, 80 test files / 1,129 tests;
 Margin's five and Boardwalk's ten tests and builds passed. `pnpm build` passed from the root.
 
 The root browser integration passed with Chrome for Testing 157.0.8103.38, temporary profiles,
@@ -65,3 +65,10 @@ claim that all Chrome versions or native WebMCP implementations have been verifi
 termination test explicitly reports a skip on versions that refuse to replace an active worker;
 Chrome 157 replaced it and the test passed. Summary isolation, sequence replay bounds, configuration
 validation, all timeout clocks and stalled-preparation cleanup have deterministic unit coverage.
+
+Independent Astra review identified a queued-navigation document-ownership race and timing-dependent
+reload classification. Fixes cancel queued/running tasks as top-document navigation begins, revalidate
+the initiating document after preparation and immediately before tool snapshot/provider execution, and
+classify lost-document completion as `interrupted` while preserving same-document `tools-changed`.
+Regression tests cover navigation during queue/grace, missed navigation notification during preparation,
+asynchronous shared-context preparation before tool capture, and both tool-change completion outcomes.

@@ -892,7 +892,8 @@ const sitePortHandler = createSiteAgentHandler(
   aiClient,
   configStorage,
   waitForCurrentSystemTools,
-  siteTasksReady
+  siteTasksReady,
+  (tabId, documentId) => webmcp.ownsDocument(tabId, documentId)
 );
 
 // Handle long-lived connections for streaming

@@ -14,7 +14,8 @@ export function createSiteAgentHandler(
   client: AIClient,
   config: ConfigStorage,
   prepare: () => Promise<unknown>,
-  ready: Promise<unknown> = Promise.resolve()
+  ready: Promise<unknown>,
+  ownsDocument: (tabId: number, documentId: string) => boolean
 ) {
   const activeTabs = new Set<number>();
   const queue = new SiteTaskQueue();
@@ -23,9 +24,14 @@ export function createSiteAgentHandler(
     documentId: string;
     origin: string;
     incognito: boolean;
+    cancel(): void;
     attach(port: chrome.runtime.Port, afterSeq: number): void;
   };
   const running = new Map<string, RunningTask>();
+  chrome.webNavigation.onBeforeNavigate.addListener((details) => {
+    if (details.frameId !== 0) return;
+    for (const task of running.values()) if (task.tabId === details.tabId) task.cancel();
+  });
   return (port: chrome.runtime.Port) => {
     if (port.name !== 'agentboard-task') return;
     const sender = port.sender;
@@ -38,6 +44,9 @@ export function createSiteAgentHandler(
     let delegated = false;
     let currentPort: chrome.runtime.Port | undefined = port;
     const documentId = sender?.documentId ?? '';
+    const isCurrentDocument = () => !!documentId && ownsDocument(tabId, documentId);
+    const interruption =
+      'The page navigated or its document was replaced. Results so far remain for review.';
     const startedAt = Date.now();
     const usedTools = new Set<string>();
     const controller = new AbortController();
@@ -263,6 +272,7 @@ export function createSiteAgentHandler(
           documentId,
           origin,
           incognito: sender?.tab?.incognito === true,
+          cancel: () => cancel(interruption, 'interrupted'),
           attach: (next, afterSeq) => {
             if (graceTimer) clearTimeout(graceTimer);
             const previous = currentPort;
@@ -356,6 +366,10 @@ export function createSiteAgentHandler(
             await raceWithAbort(touchGrant(origin, sender?.tab?.incognito), controller.signal);
             await raceWithAbort(prepare(), controller.signal);
             if (finished) return;
+            if (!isCurrentDocument()) {
+              cancel(interruption, 'interrupted');
+              return;
+            }
             publish('working', `${agent.name} is working…`, true);
             await client.streamChat(
               agent.id,
@@ -412,6 +426,11 @@ export function createSiteAgentHandler(
                     );
                 },
                 onFinish: (response, metadata) => {
+                  if (finished) return;
+                  if (!isCurrentDocument()) {
+                    cancel(interruption, 'interrupted');
+                    return;
+                  }
                   if (chat) chat.response = response.slice(0, 100000);
                   finish(
                     metadata?.toolsChanged || metadata?.stepsExhausted ? 'error' : 'done',
@@ -430,21 +449,29 @@ export function createSiteAgentHandler(
                 onAbort: () =>
                   finish(
                     'error',
-                    'BYOA stopped this task because the page tools changed. Results so far remain for review.',
-                    'interrupted'
+                    isCurrentDocument()
+                      ? 'The page tools changed. Results so far remain for review.'
+                      : interruption,
+                    isCurrentDocument() ? 'tools-changed' : 'interrupted'
                   ),
-                onError: (error) =>
+                onError: (error) => {
+                  if (!isCurrentDocument()) {
+                    cancel(interruption, 'interrupted');
+                    return;
+                  }
                   finish(
                     'error',
                     error.message.includes('rate limit')
                       ? 'The AI service rate limit was reached. Try again later.'
                       : 'Agent request failed. Check this site’s agent connection in BYOA Options, then retry.'
-                  ),
+                  );
+                },
               },
               streamId,
               undefined,
               {
                 lane: `site:${streamId}`,
+                isCurrentDocument,
                 tools,
                 share: authorizedShare,
                 onContext: (shared, notice) => {
