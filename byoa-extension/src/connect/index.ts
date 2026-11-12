@@ -1,3 +1,4 @@
+import { budgetInputs } from '../lib/budget-inputs';
 import type { SiteShare } from '../lib/site-grant';
 import type { ProfileList } from '../../sdk';
 const shareSection = document.querySelector<HTMLFieldSetElement>('#sharing');
@@ -7,6 +8,12 @@ const shareInputs = Object.fromEntries(
     document.querySelector<HTMLInputElement>(`#share-${key}`),
   ])
 );
+const budgetSection = document.createElement('fieldset');
+budgetSection.append(
+  Object.assign(document.createElement('legend'), { textContent: 'Site spending limits' })
+);
+document.querySelector('#connect-form')?.append(budgetSection);
+let readBudget = budgetInputs(budgetSection);
 let updateSharing = () => {};
 const id = window.location.hash.slice(1);
 const form = document.querySelector<HTMLFormElement>('#connect-form');
@@ -26,6 +33,7 @@ async function send(type: string, agentId?: string) {
     agentId,
     ...(type === 'CONNECTION_PROMPT_APPROVE'
       ? {
+          budget: readBudget(),
           persist: document.querySelector<HTMLSelectElement>('#persist')?.value ?? 'session',
           share: Object.fromEntries(
             Object.entries(shareInputs).map(([key, input]) => [
@@ -54,6 +62,7 @@ function selection() {
 async function load() {
   try {
     const result = (await send('CONNECTION_PROMPT_GET')) as Omit<ProfileList, 'profiles'> & {
+      budget?: import('../lib/usage').SiteBudget;
       origin: string;
       selectedAgentId?: string;
       share?: SiteShare;
@@ -61,6 +70,8 @@ async function load() {
       incognito: boolean;
       profiles: Array<ProfileList['profiles'][number] & { hasWorkspace: boolean }>;
     };
+    budgetSection.querySelectorAll('label').forEach((label) => label.remove());
+    readBudget = budgetInputs(budgetSection, result.budget);
     const duration = document.querySelector<HTMLElement>('#duration');
     if (duration) duration.hidden = result.incognito;
     const persist = document.querySelector<HTMLSelectElement>('#persist');

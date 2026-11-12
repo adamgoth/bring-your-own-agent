@@ -2,7 +2,8 @@ import { normalizeProviderEndpoint, PROVIDER_ENDPOINTS } from './provider-endpoi
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
-import type { JSONValue, LanguageModel } from 'ai';
+import type { JSONValue } from 'ai';
+import type { LanguageModelV2 } from '@ai-sdk/provider';
 import type { AgentConfig } from '../storage/config';
 import { withTextOnlyToolResults } from './tool-result-media';
 
@@ -12,7 +13,7 @@ globalThis.AI_SDK_LOG_WARNINGS = false;
 export type ProviderOptions = Record<string, Record<string, JSONValue>>;
 
 export interface ModelRuntime {
-  model: LanguageModel;
+  model: LanguageModelV2;
   providerOptions?: ProviderOptions;
 }
 

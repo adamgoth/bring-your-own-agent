@@ -72,3 +72,43 @@ the initiating document after preparation and immediately before tool snapshot/p
 classify lost-document completion as `interrupted` while preserving same-document `tools-changed`.
 Regression tests cover navigation during queue/grace, missed navigation notification during preparation,
 asynchronous shared-context preparation before tool capture, and both tool-change completion outcomes.
+
+## Plan 5 validation
+
+Spending coverage includes serialized concurrent site/global accounting, local day rollover and
+35-day pruning, bounded site buckets, restart reads, isolated private-session accounting,
+price math and missing costs, missing usage versus reported zero, cap combinations and malformed
+limits. Task regressions cover zero-provider-call refusal, mid-task stops with cumulative token-only
+usage, explicit missing-usage fallback, and usage-preserving worker interruption/recovery lookup.
+A real AI SDK fixture verifies that awaited per-step accounting stops a second model call and
+reports budget metadata after one step overshoots the cap. Popup tests reject malformed budgets.
+
+`pnpm check` passed: extension types, strict lint, 81 files / 1,160 tests; Margin's five tests,
+Boardwalk's ten tests, and both demo builds. `pnpm build` passed from the root.
+
+The full root browser suite passed with no skips. The browser suite uses Chrome for Testing 157.0.8103.38, fresh temporary profiles, a loopback mock
+provider, and isolated Margin/Boardwalk ports 5283/5284. No real keys or personal profiles are used.
+New assertions verify cumulative counts, omission of dollars, a one-step tiny-cap stop, and a daily
+refusal with zero provider calls. Existing independence, cancellation, proposals, transcripts,
+document recovery and browser-persistence coverage remains enabled.
+
+During development, browser runs exposed harness assumptions about recovery summary keys and button
+ordering after adding usage and spending controls; those assertions/selectors were updated. Two runs
+hit the existing intermittent Boardwalk tool-discovery timeout. Native WebMCP is disabled by the
+harness to exercise the shipped polyfill. Live provider billing and unreported usage after abrupt
+worker termination cannot be verified by this fixture. The bundled OpenAI-compatible adapter drops
+arbitrary OpenRouter cost fields; user-entered prices are required for reliable cost estimates there.
+Costs remain extension-private. Private accounting is deterministic unit coverage rather than a claim
+of automated Chrome incognito end-to-end verification.
+
+Independent Astra review of the initial plan 5 snapshot found two issues: provider-reported usage
+could be lost when cancellation occurred during a pending tool, and queued-task costs could use an
+older profile than the executing client. Accounting now intercepts each provider finish before the
+SDK waits for tools, with a guard per transport invocation and no duplicate step-summary accounting.
+The client supplies a detached snapshot of its executing profile to pricing. Regression fixtures
+cover pending-tool cancellation (12 tokens recorded exactly once), execution-profile pricing, and
+incomplete usage when cancellation precedes any provider usage report. Startup sweeps similarly mark
+working tasks' potentially unreported usage incomplete while keeping public summaries token-only.
+
+After the review fixes, root `pnpm check` and `pnpm build` passed again, as did the full Chrome
+integration with no skips. Astra follow-up review of `a64e985` found no actionable findings, confirmed both initial findings resolved, and passed four focused suites / 102 tests. The reviewer did not rerun browser integration.

@@ -1,3 +1,5 @@
+import { publicUsage, emptyUsage } from '../lib/usage';
+import { recordUsage } from './site-budgets';
 import { siteChatPrefix, type SiteChat } from '../lib/site-chat';
 import type { TaskEvent } from '../lib/task-event';
 
@@ -41,7 +43,18 @@ export function sweepInterruptedTasks() {
     for (const [key, value] of Object.entries(stored)) {
       if (!/^agentboard_chat_\d+_/.test(key) || !['queued', 'working'].includes(value?.status))
         continue;
+      const usage =
+        value.status === 'working'
+          ? { ...(value.usage ?? emptyUsage()), usageKnown: false, costUsd: undefined }
+          : value.usage;
+      if (value.status === 'working')
+        await recordUsage(
+          value.origin,
+          { ...emptyUsage(), usageKnown: false },
+          value.incognito === true
+        );
       const lastEvent: TaskEvent = {
+        ...(usage ? { usage: publicUsage(usage) } : {}),
         taskId: value.id,
         status: 'error',
         busy: false,
@@ -51,6 +64,7 @@ export function sweepInterruptedTasks() {
       };
       updates[key] = {
         ...value,
+        ...(usage ? { usage } : {}),
         seq: lastEvent.seq ?? 1,
         lastEvent,
         status: lastEvent.status,
@@ -84,6 +98,7 @@ export function lookupSiteTasks(
         return event
           ? [
               {
+                ...(event.usage ? { usage: publicUsage(event.usage) } : {}),
                 taskId: event.taskId,
                 status: event.status,
                 detail: event.detail,
