@@ -122,14 +122,44 @@ export async function checkBudget(
 ): Promise<string | undefined> {
   const totals = await todayUsage(origin, incognito);
   if (totals.capacityReached) return `Daily accounting capacity reached. Resets ${resetTime()}.`;
-  if (task.totalTokens >= (budget.perTaskTokens ?? settings.perTaskTokens))
-    return 'Per-task token budget reached.';
-  for (const [name, cap, used] of [
-    ['Site daily token', budget.perDayTokens, totals.site.tokens],
-    ['All-sites daily token', settings.perDayTokens, totals.global.tokens],
-    ['Site daily dollar', budget.perDayUsd, totals.site.usd],
-    ['All-sites daily dollar', settings.perDayUsd, totals.global.usd],
-  ] as const)
-    if (cap !== undefined && used >= cap) return `${name} budget reached. Resets ${resetTime()}.`;
+  const siteSettings = 'BYOA settings → Connected sites → this site';
+  const globalSettings = 'BYOA settings → Settings → App spending limits';
+  const taskCap = budget.perTaskTokens ?? settings.perTaskTokens;
+  if (task.totalTokens >= taskCap)
+    return `Per-task token budget reached (${taskCap.toLocaleString()} tokens). Update “Per-task tokens” in ${budget.perTaskTokens !== undefined ? siteSettings : globalSettings}.`;
+  for (const [name, cap, used, field, location, dollars] of [
+    [
+      'Site daily token',
+      budget.perDayTokens,
+      totals.site.tokens,
+      'Daily tokens',
+      siteSettings,
+      false,
+    ],
+    [
+      'All-sites daily token',
+      settings.perDayTokens,
+      totals.global.tokens,
+      'Daily tokens',
+      globalSettings,
+      false,
+    ],
+    ['Site daily dollar', budget.perDayUsd, totals.site.usd, 'Daily dollars', siteSettings, true],
+    [
+      'All-sites daily dollar',
+      settings.perDayUsd,
+      totals.global.usd,
+      'Daily dollars',
+      globalSettings,
+      true,
+    ],
+  ] as const) {
+    if (cap !== undefined && used >= cap) {
+      const limit = dollars
+        ? `$${cap.toLocaleString(undefined, { maximumFractionDigits: 6 })}`
+        : `${cap.toLocaleString()} tokens`;
+      return `${name} budget reached (${limit}). Resets ${resetTime()}. Update “${field}” in ${location}.`;
+    }
+  }
   return undefined;
 }

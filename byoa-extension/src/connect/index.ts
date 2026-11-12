@@ -19,6 +19,8 @@ const id = window.location.hash.slice(1);
 const form = document.querySelector<HTMLFormElement>('#connect-form');
 const list = document.querySelector<HTMLFieldSetElement>('#profiles');
 const approve = document.querySelector<HTMLButtonElement>('#approve');
+const setupAgent = document.querySelector<HTMLButtonElement>('#setup-agent');
+let hasProfiles = false;
 const errorBox = document.querySelector<HTMLElement>('#error');
 function error(message: string) {
   if (errorBox) {
@@ -72,8 +74,18 @@ async function load() {
     };
     budgetSection.querySelectorAll('label').forEach((label) => label.remove());
     readBudget = budgetInputs(budgetSection, result.budget);
+    hasProfiles = result.profiles.length > 0;
+    const needsSetup = !result.profiles.some((profile) => profile.ready);
+    budgetSection.hidden = needsSetup;
+    if (setupAgent) {
+      setupAgent.hidden = !needsSetup;
+      setupAgent.textContent = hasProfiles ? 'Finish agent setup' : 'Set up your first agent';
+    }
+    if (approve) approve.hidden = needsSetup;
+    const settings = document.querySelector<HTMLElement>('#settings');
+    if (settings) settings.hidden = needsSetup;
     const duration = document.querySelector<HTMLElement>('#duration');
-    if (duration) duration.hidden = result.incognito;
+    if (duration) duration.hidden = result.incognito || needsSetup;
     const persist = document.querySelector<HTMLSelectElement>('#persist');
     if (persist) persist.value = result.incognito ? 'session' : result.persist;
     const origin = document.querySelector('#origin');
@@ -81,6 +93,9 @@ async function load() {
     const title = document.querySelector('#title');
     if (title) title.textContent = `Connect your agent to ${siteName(result.origin)}?`;
     if (!list) return;
+    const legend = list.querySelector('legend');
+    if (legend)
+      legend.textContent = hasProfiles ? 'Choose a profile' : 'Set up an agent to get started';
     list.querySelectorAll('label,p').forEach((element) => element.remove());
     const selected =
       result.selectedAgentId ||
@@ -106,7 +121,8 @@ async function load() {
     }
     if (!result.profiles.length) {
       const text = document.createElement('p');
-      text.textContent = 'No profiles yet. Add an API profile in BYOA settings, then return here.';
+      text.textContent =
+        'Choose your provider, add your API key, and select a model. Then return to this window to connect your agent.';
       list.append(text);
     }
     updateSharing = () => {
@@ -148,6 +164,14 @@ document.querySelector('#cancel')?.addEventListener('click', () => {
   void send('CONNECTION_PROMPT_REJECT')
     .then(() => window.close())
     .catch(() => window.close());
+});
+setupAgent?.addEventListener('click', () => {
+  const open = hasProfiles
+    ? chrome.runtime.openOptionsPage()
+    : chrome.tabs.create({ url: chrome.runtime.getURL('src/options/index.html#create-agent') });
+  void open.catch(() =>
+    error('Could not open settings. Open BYOA settings from the extension menu.')
+  );
 });
 document.querySelector('#settings')?.addEventListener('click', () => {
   void chrome.runtime.openOptionsPage();

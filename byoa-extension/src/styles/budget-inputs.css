@@ -1,0 +1,45 @@
+fieldset.budget-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  max-height: none;
+  margin: 16px 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+}
+
+.budget-fields label.budget-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--byoa-ink);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: default;
+}
+
+.budget-field input[type='number'] {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--byoa-line-strong);
+  border-radius: 8px;
+  background: var(--byoa-surface);
+  color: var(--byoa-ink);
+  font: 400 14px/20px var(--byoa-font-body);
+}
+
+.budget-field input[type='number']:focus {
+  outline: none;
+  border-color: var(--byoa-ink);
+  box-shadow: 0 0 0 3px var(--byoa-focus-ring);
+}

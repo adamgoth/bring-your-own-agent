@@ -1,4 +1,5 @@
 @import '../styles/tokens.css';
+@import '../styles/budget-inputs.css';
 
 * {
   box-sizing: border-box;
@@ -297,4 +298,21 @@ input:focus-visible {
 }
 #sharing small {
   display: block;
+}
+
+#setup-agent {
+  height: auto;
+  min-height: 44px;
+  padding: 10px 12px;
+}
+
+#persist {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--byoa-line-strong);
+  border-radius: 8px;
+  background: var(--byoa-surface);
+  color: var(--byoa-ink);
+  font: inherit;
 }
