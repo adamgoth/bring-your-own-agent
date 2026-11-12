@@ -291,6 +291,14 @@ textarea {
   gap: 6px 12px;
 }
 
+/* A persisted turn groups existing message components without changing their spacing. */
+.chat-session-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px 12px;
+  flex-shrink: 0;
+}
+
 /* Messages */
 .message {
   display: flex;
