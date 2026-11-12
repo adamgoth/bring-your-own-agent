@@ -1,3 +1,4 @@
+import { setupLocalVoice } from './local-voice';
 import { setupSiteChat } from './site-chat';
 /**
  * Sidebar main entry point
@@ -31,6 +32,8 @@ let connectionRetries = 0;
 const MAX_RETRIES = 3;
 let agentSelectionSequence = 0;
 let agentLoadSequence = 0;
+let voice: ReturnType<typeof setupLocalVoice>;
+let voiceSendPending = false;
 let chatSession: ReturnType<typeof connectChatSession> | undefined;
 const configStorage = ConfigStorage.getInstance();
 
@@ -217,6 +220,10 @@ function scrollToBottomIfNeeded(): void {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
+  voice = setupLocalVoice({
+    changed: updateSendButton,
+    canStart: () => !isLoading && !voiceSendPending,
+  });
   // Remote MCP discovery is lazy; nudge it now so a cold browser session overlaps
   // discovery with the user typing rather than with their first message.
   chrome.runtime.sendMessage({ type: 'WEBMCP_WARM_TOOLS' }).catch(() => {
@@ -372,7 +379,9 @@ function setupMessageListener() {
 
       // Handle text selected from context menu
       if (request.text) {
+        voice?.cancel();
         messageInput.value = `Please help me with this text:\n\n"${request.text}"`;
+        messageInput.dispatchEvent(new Event('input', { bubbles: true }));
         messageInput.focus();
       }
     } else if (request.type === 'PING') {
@@ -416,6 +425,8 @@ const STOP_ICON =
 
 function updateSendButton() {
   if (isLoading) {
+    const mic = document.querySelector<HTMLButtonElement>('#voice-button');
+    if (mic) mic.disabled = true;
     sendButton.innerHTML = STOP_ICON;
     sendButton.title = 'Stop generation (Esc)';
     sendButton.setAttribute('aria-label', 'Stop generation');
@@ -426,7 +437,14 @@ function updateSendButton() {
     sendButton.title = 'Send message';
     sendButton.setAttribute('aria-label', 'Send message');
     sendButton.classList.remove('stop-mode');
-    sendButton.disabled = !currentAgent || messageInput.value.trim() === '';
+    sendButton.disabled =
+      voiceSendPending || !currentAgent || (!voice?.isActive && messageInput.value.trim() === '');
+    if (voiceSendPending) {
+      sendButton.title = 'Finishing dictation…';
+      sendButton.setAttribute('aria-label', 'Finishing dictation');
+    }
+    const mic = document.querySelector<HTMLButtonElement>('#voice-button');
+    if (mic) mic.disabled = voiceSendPending;
   }
 }
 
@@ -542,6 +560,19 @@ function setupEventListeners() {
 }
 
 async function handleSendMessage() {
+  if (voiceSendPending) return;
+  if (voice?.isActive) {
+    voiceSendPending = true;
+    updateSendButton();
+    let complete = false;
+    try {
+      complete = await voice.finishForSend();
+    } finally {
+      voiceSendPending = false;
+      updateSendButton();
+    }
+    if (!complete) return;
+  }
   const text = messageInput.value.trim();
 
   // Require either text or attachments and a fully resolved agent selection.
@@ -725,6 +756,10 @@ function cancelCurrentStream() {
 // Cancel current stream on Escape OR clear attachments
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    if (voice?.isActive) {
+      voice.cancel();
+      return;
+    }
     // Priority 1: Cancel active or preparing stream
     if (isLoading) {
       cancelCurrentStream();

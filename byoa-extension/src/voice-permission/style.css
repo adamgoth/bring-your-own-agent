@@ -1,0 +1,58 @@
+@import '../styles/tokens.css';
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  padding: 32px 20px;
+  background: var(--byoa-paper);
+  color: var(--byoa-ink);
+  font: 15px/1.6 var(--byoa-font-body);
+}
+main {
+  max-width: 620px;
+  margin: 32px auto;
+  padding: 32px;
+  border: 1px solid var(--byoa-line);
+  border-radius: 20px;
+  background: var(--byoa-surface);
+}
+h1 {
+  font: 800 28px/1.2 var(--byoa-font-display);
+}
+h2 {
+  font-size: 18px;
+}
+.brand {
+  color: var(--byoa-ink-muted);
+  font-weight: 600;
+}
+button {
+  padding: 12px 18px;
+  border: 1px solid var(--byoa-ink);
+  border-radius: 10px;
+  background: var(--byoa-ink);
+  color: var(--byoa-ink-inverse);
+  font: 600 14px var(--byoa-font-body);
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button:focus-visible {
+  outline: 2px solid var(--byoa-focus);
+  outline-offset: 3px;
+}
+.secondary {
+  background: var(--byoa-surface);
+  color: var(--byoa-ink);
+}
+#permission-status {
+  padding: 12px;
+  background: var(--byoa-surface-sunk);
+  border-radius: 8px;
+}
+[hidden] {
+  display: none !important;
+}

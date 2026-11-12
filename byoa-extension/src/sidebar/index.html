@@ -47,10 +47,33 @@
       </div>
     </main>
 
+    <details id="local-voice" class="local-voice">
+      <summary>Voice settings</summary>
+      <p>Dictate on this device. Click the mic to finish and review, or Send to finish and submit. No cloud transcription.</p>
+      <label for="voice-language">Speech language</label>
+      <select id="voice-language"><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option><option value="sv-SE">Swedish</option></select>
+      <div id="voice-permission-help" class="voice-permission-help" hidden>
+        <p>Allow microphone access for BYOA in Chrome. On Mac, Google Chrome also needs access under System Settings → Privacy &amp; Security → Microphone.</p>
+        <button id="voice-permission" type="button">Set up microphone access</button>
+      </div>
+      <p id="voice-status" role="status">Checking offline speech…</p>
+      <div class="voice-actions">
+        <button id="voice-check" type="button">Check availability</button>
+        <button id="voice-install" type="button" hidden>Download offline speech</button>
+        <button id="voice-record" type="button" disabled aria-pressed="false">Start talking</button>
+
+      </div>
+    </details>
     <footer class="input-container" hidden>
       <div id="attachment-indicator" class="attachment-indicator" style="display: none;"></div>
+      <div id="voice-recording" class="voice-recording" hidden>
+        <span id="voice-recording-status" role="status">Listening locally</span>
+        <canvas id="voice-waveform" width="240" height="32" aria-label="Live microphone waveform" role="img"></canvas>
+        <button id="voice-cancel" type="button" aria-label="Discard dictation" title="Discard dictation">×</button>
+      </div>
       <textarea id="message-input" placeholder="Type a message or paste an image (Cmd/Ctrl+V)..." rows="3"></textarea>
       <button id="attach-button" type="button" title="Attach images (multi-select)" aria-label="Attach images" class="toolbar-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11.5 12.6 19.4a5 5 0 0 1-7.1-7.1l8.3-8.3a3.4 3.4 0 0 1 4.8 4.8l-8.3 8.3a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6" /></svg></button>
+      <button id="voice-button" class="toolbar-button" type="button" title="Dictate a message locally" aria-label="Dictate a message locally" aria-controls="local-voice" aria-expanded="false" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
       <button id="send-button" type="button" title="Send message" aria-label="Send message"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" /></svg></button>
     </footer>
   </div>
