@@ -38,6 +38,8 @@ jobs:
         run: pnpm run check
       - name: Build extension and demos
         run: pnpm run build
+      - name: Pack SDK and verify installed consumer and SSR import
+        run: pnpm run check:sdk
       - name: Build release extension
         if: matrix.node-version == '24.x'
         run: pnpm --dir byoa-extension run build:release

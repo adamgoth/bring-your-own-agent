@@ -3,7 +3,7 @@ import {
   type AgentTask,
   type Connection,
   type TaskEvent,
-} from "../../../byoa-extension/sdk";
+} from "@byoagent/browser";
 import {
   BoardStore,
   restore,

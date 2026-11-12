@@ -36,7 +36,7 @@ Use sample content: your configured model provider receives your instruction, to
 
 ## Shared integration
 
-Both demos import `byoa-extension/sdk/index.ts`. BYOA's page bridge has no Boardwalk-specific DOM selectors, tool schemas, or prompt logic. The app owns its interface, data validation, revision checks, and review workflow. WebMCP owns the tool registry and execution:
+Both demos import `@byoagent/browser` through aliases to the package build output. Run root `pnpm build` before starting a demo directly. BYOA's page bridge has no Boardwalk-specific DOM selectors, tool schemas, or prompt logic. The app owns its interface, data validation, revision checks, and review workflow. WebMCP owns the tool registry and execution:
 
 - `get_board_snapshot`: cards, columns, and current revision.
 - `get_selected_cards`: selected cards and revision.
@@ -44,7 +44,7 @@ Both demos import `byoa-extension/sdk/index.ts`. BYOA's page bridge has no Board
 
 Only those three site tools are available to a Boardwalk task. Workspace files and remote-MCP context are excluded. Margin requests its own five tools through the same interface.
 
-See `../../byoa-extension/sdk/README.md` for the experimental client contract and limits. Any HTTPS site or loopback port can ask to connect; each origin needs separate approval. BYOA queues page tasks, uses session-scoped connection flags, and owns the connection/profile approval popup. Spending budgets, persistent site permissions, independent model clients, and task recovery remain future work. Keep the page open; interrupted tasks do not resume or retry automatically.
+See `../../byoa-extension/sdk/README.md` for the experimental client contract and limits. Any HTTPS site or loopback port can ask to connect; each origin needs separate approval. BYOA queues page tasks independently of sidebar chats, owns the connection/profile approval popup, supports persistent site approvals and person-controlled spending budgets, and retains summary-only task recovery. Keep the page open; interrupted tasks do not resume or retry automatically.
 
 ## Checks
 

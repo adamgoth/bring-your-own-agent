@@ -1,9 +1,28 @@
 {
-  "name": "@byoa/browser",
+  "name": "@byoagent/browser",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
-  "exports": "./index.ts",
-  "types": "./index.ts",
-  "license": "MIT"
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "license": "MIT",
+  "description": "Browser client for request-only Agent Provider discovery and tasks",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "../node_modules/.bin/tsc -p tsconfig.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adamgoth/bring-your-own-agent.git",
+    "directory": "byoa-extension/sdk"
+  }
 }
