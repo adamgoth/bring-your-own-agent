@@ -31,7 +31,11 @@ Typing or changing the document after the request starts disables acceptance, ev
 
 ## Host as a static app
 
-Keep this app in the BYOA repository so its shared SDK import resolves during the build. It deploys independently of the extension and Boardwalk. From the repository root:
+Keep this app in the BYOA repository so its shared SDK import resolves during the build. It deploys independently of the extension and Boardwalk.
+
+Margin's build first compiles the shared SDK with Margin's installed TypeScript compiler. A clean checkout only needs Margin's dependencies; installing or building the extension is not required.
+
+From the repository root:
 
 ```sh
 npm ci --prefix demos/margin
@@ -99,6 +103,6 @@ npm run test:e2e
 
 Browser tests use an installed Google Chrome with a fresh isolated profile. Unit tests exercise range tracking; browser tests cover selection, suggestions, acceptance/undo, persistence, stale edits, comments, inspector errors, and responsive rendering.
 
-Margin imports the experimental shared client from `../../byoa-extension/sdk`. Both demos live under `demos/` in the BYOA repository. Boardwalk uses the same client on localhost:5184; connections remain separate by origin. Reloading BYOA and the page is required after rebuilding extension code. See `../../byoa-extension/sdk/README.md` for the current contract and prototype limitations.
+Margin imports `@byoagent/browser`, resolving its locally built ESM and declarations through aliases. Run root `pnpm build` before starting a demo directly. Both demos live under `demos/` in the BYOA repository. Boardwalk uses the same client on localhost:5184; connections remain separate by origin. Reloading BYOA and the page is required after rebuilding extension code. See `../../byoa-extension/sdk/README.md` for the current contract and prototype limitations.
 
 The app calls `agentboard.connect()` to open the extension-owned profile picker. BYOA opens its own window showing the requesting site and all profiles. Select a profile and approve there. Cancel or close preserves any existing connection. Profile lists are no longer exposed to app code.

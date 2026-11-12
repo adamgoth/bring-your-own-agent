@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — SDK packaging and provider discovery
+
+- Build ESM and declarations for `@byoagent/browser`, with lazy `byoa`, `createClient`, provider selection and SSR-safe imports. Keep `agentboard` as a deprecated alias.
+- Add neutral request-only provider discovery and MAIN-world provider, preserving isolated-world/worker authority checks and the full recovery/token-only usage contract.
+- Keep v1 `agentboard:*` transport compatibility; eventual removal is planned with no scheduled date.
+- Build demos from package output and verify npm pack installation, consumer types and SSR import in CI. No registry publication or store submission.
+
 ## Unreleased — task recovery
 
 - Same-document task-port reattachment with a ten-second grace period and 50-event replay buffer.

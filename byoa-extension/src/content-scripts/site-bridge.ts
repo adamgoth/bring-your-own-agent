@@ -18,8 +18,8 @@ if (connectableOrigin(window.location.href) && window === window.top) {
       { source: 'agentboard:extension', version: 1, ...value },
       window.location.origin
     );
-  const reply = (id: string, ok: boolean, value?: unknown, error?: string) =>
-    emit({ kind: 'response', id, ok, value, error });
+  const reply = (id: string, ok: boolean, value?: unknown, error?: string, code?: number) =>
+    emit({ kind: 'response', id, ok, value, error, code });
   const refresh = async () => {
     try {
       emit({
@@ -107,7 +107,8 @@ if (connectableOrigin(window.location.href) && window === window.top) {
           id,
           false,
           undefined,
-          'Use a button click or Command/Ctrl+Enter to connect or open BYOA.'
+          'Use a button click or Command/Ctrl+Enter to connect or open BYOA.',
+          4100
         );
       return;
     }
@@ -235,14 +236,20 @@ if (connectableOrigin(window.location.href) && window === window.top) {
       chat: 'SITE_VIEW_CHAT',
     };
     if (!methods[method]) {
-      reply(id, false, undefined, 'Unknown BYOA method.');
+      reply(id, false, undefined, 'Unknown BYOA method.', 4200);
       return;
     }
     void chrome.runtime
       .sendMessage({ type: methods[method], taskId: params.taskId, requestId: params.requestId })
       .then((result) => {
         if (result?.success === false) {
-          reply(id, false, undefined, result.error || 'Open BYOA from the toolbar.');
+          reply(
+            id,
+            false,
+            undefined,
+            result.error || 'Open BYOA from the toolbar.',
+            method === 'connectionResult' ? 4001 : 4100
+          );
           return;
         }
         reply(id, true, result);
@@ -251,7 +258,7 @@ if (connectableOrigin(window.location.href) && window === window.top) {
           emit({ kind: 'status', value: result.connection });
       })
       .catch(() => {
-        reply(id, false, undefined, 'Reload BYOA and the page.');
+        reply(id, false, undefined, 'Reload BYOA and the page.', 4900);
         void refresh();
       });
   });

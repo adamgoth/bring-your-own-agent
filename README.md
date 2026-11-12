@@ -50,10 +50,12 @@ Also try: “Create a column called Next week, move two high-priority cards into
 
 ## Shared contract
 
-Apps expose their actions with WebMCP. They pass registered tool names to `agentboard.request()` through the shared client; they never supply executable tool definitions to the provider interface. No app-specific extension handler is needed.
+Apps expose their actions with WebMCP. They pass registered tool names to `byoa.request()` through the shared client; they never supply executable tool definitions to the provider interface. No app-specific extension handler is needed.
 
 - Margin: `get_selection`, `get_document_outline`, `find_text`, `propose_replacement`, `add_comment`.
 - Boardwalk: `get_board_snapshot`, `get_selected_cards`, `propose_board_changes` (card create/update/move/delete; column create/rename).
+
+The SDK is packaged locally as `@byoagent/browser` (no npm publication in this change). Run `pnpm pack:sdk` and install the printed tarball. Import `{ byoa }` from `@byoagent/browser`; the deprecated `agentboard` alias still works. See the [neutral provider spec](docs/provider-spec.md) for discovery, provider selection, security and use without the SDK.
 
 To build BYOA into a web app, start with the [web app integration guide](docs/web-app-integration.md). See [the SDK contract](byoa-extension/sdk/README.md) for the client API, and [Margin's guide](demos/margin/README.md) and [Boardwalk's guide](demos/boardwalk/README.md) for worked examples.
 
@@ -67,6 +69,7 @@ Manage approvals in **Options → Connected sites**: review shared files, change
 
 ```sh
 pnpm check       # Extension types/lint/tests; both demo unit tests and builds
+pnpm check:sdk   # Pack/install consumer types and SSR import
 pnpm build       # Build the extension and both demos
 # Keep pnpm dev running in a separate terminal, then:
 CHROME_FOR_TESTING_BIN='/path/to/Chrome for Testing' pnpm test:browser
