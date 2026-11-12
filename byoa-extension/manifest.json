@@ -49,7 +49,7 @@
     },
     {
       "matches": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
-      "js": ["src/content-scripts/webmcp-polyfill.js"],
+      "js": ["src/content-scripts/webmcp-polyfill.js", "src/content-scripts/agent-provider.ts"],
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": false

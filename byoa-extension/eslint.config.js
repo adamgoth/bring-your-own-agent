@@ -16,6 +16,7 @@ export default [
     ignores: [
       'node_modules/**',
       'dist/**',
+      'sdk/dist/**',
       'build/**',
       'release/**',
       'coverage/**',

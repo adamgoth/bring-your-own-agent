@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { agentboard, type AgentTask, type Connection, type TaskEvent } from '../../../byoa-extension/sdk';
+import { agentboard, type AgentTask, type Connection, type TaskEvent } from '@byoagent/browser';
 export { agentboard };
 let activeTask: AgentTask | undefined;
 let taskController: AbortController | undefined;

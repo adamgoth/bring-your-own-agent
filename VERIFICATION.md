@@ -112,3 +112,17 @@ working tasks' potentially unreported usage incomplete while keeping public summ
 
 After the review fixes, root `pnpm check` and `pnpm build` passed again, as did the full Chrome
 integration with no skips. Astra follow-up review of `a64e985` found no actionable findings, confirmed both initial findings resolved, and passed four focused suites / 102 tests. The reviewer did not rerun browser integration.
+
+
+## Plan 6 — SDK packaging and provider discovery (2026-11-12)
+
+Based on merged main `a30c2f0` (PR #6, including pending-tool usage accounting and detached execution-profile pricing). Implementation uses an isolated checkout; no unrelated working-tree changes are included.
+
+- `pnpm check`: extension types, strict lint, 83 files / 1,171 tests; Margin 5 tests; Boardwalk 10 tests and demo builds passed.
+- `pnpm build`: extension and both demo production builds passed.
+- `pnpm check:sdk`: ESM/declarations build, npm pack, install into a fresh scratch consumer, strict NodeNext TypeScript import, and SSR import with a throwing window getter passed. No runtime dependencies, registry publication or store submission.
+- Protocol tests cover zero/one/two providers, late registration/repeated request races, duplicates/concurrent collectors, discovery cancellation and listener cleanup, raw method routing and numeric errors, connect polling expiry/cancellation, early task events, empty-ID preflight failures, abort during acknowledgement, recovery summaries and provider-listener disposal.
+- Root README browser integration passed on both localhost and 127.0.0.1 using isolated ports 5383/5384, Chrome for Testing 157.0.8103.38, temporary profiles and a synthetic loopback provider. Added silent-page observation, discovery-only silence, raw-provider operation without the SDK, numeric errors and v1 transport compatibility. Existing trusted versus synthetic gestures, app/sidebar independence, per-origin revocation, tool scopes/proposals, same-document reattachment, reload summary-only lookup/explicit retry, token-only usage/budget refusal/overshoot, worker termination interruption and persistent-grant browser restart all passed. Both runs exercised real worker termination with no skip.
+- Prices, costs, credentials and real private context were not used or transmitted. Worker/model client/grant/accounting implementation and the additive TaskEvent contract were not changed.
+
+The first browser runs caught fixture issues (favicon handling, an extra raw-provider request affecting old wire-count assertions) and a new SDK empty-task-ID buffering bug, which was fixed with a regression test. Those failed runs are not counted as passes. The inherited Boardwalk catalog-discovery timeout remains a possible browser flake; record any occurrence explicitly rather than suppressing it.
