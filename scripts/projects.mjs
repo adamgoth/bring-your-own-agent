@@ -50,6 +50,7 @@ function run(project, args) {
 }
 const action = process.argv[2];
 try {
+  if (["dev", "check", "build", "test"].includes(action)) await run({dir:"byoa-extension/sdk", manager:"pnpm"}, ["run", "build"]);
   if (action === "dev") {
     console.log(
       "Margin: http://localhost:5183/\nBoardwalk: http://localhost:5184/\nPress Ctrl+C to stop both demo servers.",

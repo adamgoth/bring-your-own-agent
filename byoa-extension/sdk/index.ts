@@ -1,218 +1,221 @@
-/** Experimental page client. Tool definitions and execution remain owned by WebMCP. */
-export type Connection = {
-  available: boolean;
-  configured: boolean;
-  connected: boolean;
-  agentId?: string;
-  agentName?: string;
-  error?: string;
-};
-export type Profile = { id: string; name: string; ready: boolean };
-export type ProfileList = { profiles: Profile[]; defaultAgentId?: string };
-import type { TaskEvent } from './task-event';
-export type { TaskEvent, TaskCode, TaskUsage } from './task-event';
-export type TaskSummary = TaskEvent & { retryable: boolean };
-const retryable = (event: TaskEvent) => event.code === 'timeout' || event.code === 'interrupted';
-export type AgentTask = {
-  id: string;
-  readonly retryable: boolean;
-  events: AsyncIterable<TaskEvent>;
-  cancel(): void;
-  openChat(): Promise<void>;
-};
+/** Page client for the request-only Agent Provider protocol. Safe to import during SSR. */
+import type { AgentTask, Connection, TaskEvent, TaskSummary } from './types.js';
+import {
+  discoverProviders,
+  ProviderError,
+  type AgentProvider,
+  type ProviderDetail,
+} from './provider.js';
+export * from './types.js';
+export * from './provider.js';
 const disconnected: Connection = { available: false, configured: false, connected: false };
-const waiting = new Map<
-  string,
-  {
-    resolve(value: unknown): void;
-    reject(error: Error): void;
-    timer: ReturnType<typeof setTimeout>;
-  }
->();
-const taskSinks = new Map<string, (event: TaskEvent) => void>();
-const statusListeners = new Set<(connection: Connection) => void>();
-const taskListeners = new Set<(event: TaskEvent) => void>();
-let connection = disconnected;
-let latestTask: TaskEvent | null = null;
-function post(id: string, method: string, params = {}) {
-  window.postMessage(
-    { source: 'agentboard:page', version: 1, id, method, params },
-    window.location.origin
-  );
-}
-window.addEventListener('message', (event) => {
-  if (event.source !== window || event.origin !== window.location.origin) return;
-  const data = event.data;
-  if (data?.source !== 'agentboard:extension' || data.version !== 1) return;
-  if (data.kind === 'response') {
-    const request = waiting.get(data.id);
-    if (!request) return;
-    clearTimeout(request.timer);
-    waiting.delete(data.id);
-    if (data.ok) request.resolve(data.value);
-    else request.reject(new Error(data.error || 'BYOA request failed.'));
-  } else if (data.kind === 'status') {
-    connection = data.value;
-    for (const listener of statusListeners) listener(connection);
-  } else if (data.kind === 'task') {
-    taskSinks.get(data.id)?.(data.event);
-  }
-});
-/**
- * `resend` repeats an idempotent call until answered. The extension's bridge stays silent until
- * a page first calls it and may finish loading after the app's first call, so status checks are
- * resent rather than relying on the bridge to announce itself to every site.
- */
-function call<T>(method: string, params = {}, timeout = 5000, resend = 0): Promise<T> {
-  const id = globalThis.crypto.randomUUID();
-  return new Promise((resolve, reject) => {
-    let retry: ReturnType<typeof setInterval> | undefined;
-    const timer = setTimeout(() => {
-      clearInterval(retry);
-      waiting.delete(id);
-      reject(new Error('BYOA is unavailable. Enable the extension and reload this page.'));
-    }, timeout);
-    const settle =
-      <V>(done: (value: V) => void) =>
-      (value: V) => {
-        clearInterval(retry);
-        done(value);
-      };
-    waiting.set(id, {
-      resolve: settle((value) => resolve(value as T)),
-      reject: settle(reject),
-      timer,
-    });
-    post(id, method, params);
-    if (resend > 0) retry = setInterval(() => post(id, method, params), resend);
-  });
-}
-async function update(method: string, params = {}) {
-  const result = await call<Connection>(method, params, 5000, method === 'status' ? 250 : 0);
-  connection = result;
-  for (const listener of statusListeners) listener(connection);
-  return result;
-}
-export const agentboard = {
-  async getTask(taskId: string): Promise<TaskSummary | null> {
-    const event = await call<TaskEvent | null>('task', { taskId });
-    return event ? { ...event, retryable: retryable(event) } : null;
-  },
-  async listTasks(): Promise<TaskSummary[]> {
-    return (await call<TaskEvent[]>('tasks')).map((event) => ({
-      ...event,
-      retryable: retryable(event),
-    }));
-  },
-  async getStatus(): Promise<Connection> {
-    try {
-      return await update('status');
-    } catch {
-      return disconnected;
-    }
-  },
-  async connect(): Promise<Connection> {
-    const { requestId } = await call<{ requestId: string }>('connect');
-    const deadline = Date.now() + 185000;
-    while (Date.now() < deadline) {
-      const result = await call<{ pending: boolean; connection?: Connection }>('connectionResult', {
-        requestId,
-      });
-      if (!result.pending && result.connection) {
-        connection = result.connection;
-        for (const listener of statusListeners) listener(connection);
-        return connection;
+const retryable = (event: TaskEvent) => event.code === 'timeout' || event.code === 'interrupted';
+
+export function createClient(provider?: AgentProvider) {
+  let selected = provider;
+  let selecting: Promise<AgentProvider> | undefined;
+  let connection = disconnected;
+  let latestTask: TaskEvent | null = null;
+  let attached = false;
+  const statuses = new Set<(value: Connection) => void>();
+  const taskListeners = new Set<(value: TaskEvent | null) => void>();
+  const sinks = new Set<(value: TaskEvent) => void>();
+  const status = (value: unknown) => {
+    connection = value as Connection;
+    for (const listener of statuses) {
+      try {
+        listener(connection);
+      } catch {
+        /* Isolate subscribers. */
       }
-      await new Promise((resolve) => setTimeout(resolve, 500));
     }
-    throw new Error('Connection request expired. Connect again.');
-  },
-  disconnect: () => update('disconnect'),
-  openSettings: () => call<void>('settings'),
-  openChat: (taskId?: string) => call<void>('chat', { taskId }),
-  subscribe(listener: (value: Connection) => void) {
-    statusListeners.add(listener);
-    listener(connection);
-    return () => {
-      statusListeners.delete(listener);
-    };
-  },
-  subscribeTasks(listener: (value: TaskEvent | null) => void) {
-    taskListeners.add(listener);
-    listener(latestTask);
-    return () => {
-      taskListeners.delete(listener);
-    };
-  },
-  request({
-    prompt,
-    tools,
-    signal,
-    timeoutMs,
-  }: {
-    prompt: string;
-    tools: readonly string[];
-    signal?: AbortSignal;
-    timeoutMs?: number;
-  }): Promise<AgentTask> {
-    if (signal?.aborted) return Promise.reject(signal.reason || new Error('Cancelled.'));
-    const requestId = globalThis.crypto.randomUUID();
-    const buffer: TaskEvent[] = [];
-    let wake: (() => void) | undefined;
-    let terminal = false;
-    let acknowledged = false;
-    let lastEvent: TaskEvent | undefined;
-    const abort = () => post(requestId, 'cancel');
-    const events: AsyncIterable<TaskEvent> = {
-      async *[Symbol.asyncIterator]() {
-        while (true) {
-          if (buffer.length) {
-            const next = buffer.shift();
-            if (next) yield next;
-          } else if (terminal) return;
-          else
-            await new Promise<void>((resolve) => {
-              wake = resolve;
-            });
+  };
+  const task = (value: unknown) => {
+    const event = value as TaskEvent;
+    latestTask = event;
+    for (const listener of taskListeners) {
+      try {
+        listener(event);
+      } catch {
+        /* Isolate subscribers. */
+      }
+    }
+    for (const sink of sinks) sink(event);
+  };
+  const attach = (p: AgentProvider) => {
+    if (!attached) {
+      p.on('connectionChanged', status);
+      p.on('task', task);
+      attached = true;
+    }
+    return p;
+  };
+  const getProvider = (): Promise<AgentProvider> => {
+    if (selected) return Promise.resolve(attach(selected));
+    if (!selecting)
+      selecting = discoverProviders()
+        .then((found) => {
+          if (!found.length)
+            throw new ProviderError(
+              4900,
+              'No agent provider found. Enable the extension and reload.'
+            );
+          selected = found[0].provider;
+          return attach(selected);
+        })
+        .finally(() => {
+          selecting = undefined;
+        });
+    return selecting;
+  };
+  const call = async <T>(method: string, params?: unknown): Promise<T> =>
+    (await getProvider()).request({ method, params }) as Promise<T>;
+  const client = {
+    providers: (options?: Parameters<typeof discoverProviders>[0]): Promise<ProviderDetail[]> =>
+      discoverProviders(options),
+    async getStatus(): Promise<Connection> {
+      try {
+        const result = await call<Connection>('agent_status');
+        status(result);
+        return result;
+      } catch {
+        return disconnected;
+      }
+    },
+    async connect(): Promise<Connection> {
+      const result = await call<Connection>('agent_connect');
+      status(result);
+      return result;
+    },
+    async disconnect(): Promise<Connection> {
+      const result = await call<Connection>('agent_disconnect');
+      status(result);
+      return result;
+    },
+    openSettings: () => call<void>('agent_openSettings'),
+    openChat: (taskId?: string) => call<void>('agent_openChat', { taskId }),
+    async getTask(taskId: string): Promise<TaskSummary | null> {
+      const event = await call<TaskEvent | null>('agent_getTask', { taskId });
+      return event ? { ...event, retryable: retryable(event) } : null;
+    },
+    async listTasks(): Promise<TaskSummary[]> {
+      return (await call<TaskEvent[]>('agent_listTasks')).map((event) => ({
+        ...event,
+        retryable: retryable(event),
+      }));
+    },
+    subscribe(listener: (value: Connection) => void) {
+      statuses.add(listener);
+      listener(connection);
+      return () => {
+        statuses.delete(listener);
+      };
+    },
+    subscribeTasks(listener: (value: TaskEvent | null) => void) {
+      taskListeners.add(listener);
+      listener(latestTask);
+      return () => {
+        taskListeners.delete(listener);
+      };
+    },
+    /** Release provider listeners. Active tasks must be cancelled before disposal. */
+    dispose() {
+      if (selected && attached) {
+        selected.removeListener('connectionChanged', status);
+        selected.removeListener('task', task);
+        attached = false;
+      }
+      statuses.clear();
+      taskListeners.clear();
+    },
+    async request({
+      prompt,
+      tools,
+      signal,
+      timeoutMs,
+    }: {
+      prompt: string;
+      tools: readonly string[];
+      signal?: AbortSignal;
+      timeoutMs?: number;
+    }): Promise<AgentTask> {
+      if (signal?.aborted) throw signal.reason || new ProviderError(4001, 'Cancelled.');
+      const p = await getProvider();
+      if (signal?.aborted) throw signal.reason || new ProviderError(4001, 'Cancelled.');
+      let id: string | undefined;
+      let terminal = false;
+      let last: TaskEvent | undefined;
+      let wake: (() => void) | undefined;
+      const early: TaskEvent[] = [];
+      const buffer: TaskEvent[] = [];
+      const abort = () => {
+        if (id)
+          void p.request({ method: 'agent_cancelTask', params: { taskId: id } }).catch(() => {});
+      };
+      const cleanup = () => {
+        sinks.delete(receive);
+        signal?.removeEventListener('abort', abort);
+      };
+      const receive = (event: TaskEvent) => {
+        if (id === undefined) {
+          early.push(event);
+          return;
         }
-      },
-    };
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        if (!acknowledged) {
-          taskSinks.delete(requestId);
-          signal?.removeEventListener('abort', abort);
-          reject(new Error('BYOA did not start the task. Reload the extension and page.'));
-        }
-      }, 5000);
-      taskSinks.set(requestId, (event) => {
-        lastEvent = event;
-        latestTask = event;
-        for (const listener of taskListeners) listener(event);
+        if (
+          event.taskId !== id ||
+          terminal ||
+          (event.seq !== undefined && last?.seq !== undefined && event.seq <= last.seq)
+        )
+          return;
+        last = event;
         buffer.push(event);
-        wake?.();
-        wake = undefined;
-        if (!acknowledged) {
-          acknowledged = true;
-          clearTimeout(timer);
-          resolve({
-            id: event.taskId,
-            get retryable() {
-              return !!lastEvent && retryable(lastEvent);
-            },
-            events,
-            cancel: abort,
-            openChat: () => agentboard.openChat(event.taskId),
-          });
-        }
         if (!event.busy) {
           terminal = true;
-          taskSinks.delete(requestId);
-          signal?.removeEventListener('abort', abort);
+          cleanup();
         }
-      });
+        wake?.();
+        wake = undefined;
+      };
+      sinks.add(receive);
       signal?.addEventListener('abort', abort, { once: true });
-      post(requestId, 'request', { prompt, tools, timeoutMs });
-    });
-  },
-};
+      try {
+        const result = (await p.request({
+          method: 'agent_requestTask',
+          params: { prompt, tools, timeoutMs },
+        })) as { taskId: string };
+        id = result.taskId;
+        for (const event of early) receive(event);
+        if (signal?.aborted) abort();
+      } catch (error) {
+        cleanup();
+        throw error;
+      }
+      return {
+        id,
+        get retryable() {
+          return !!last && retryable(last);
+        },
+        cancel: abort,
+        openChat: () => client.openChat(id),
+        events: {
+          async *[Symbol.asyncIterator]() {
+            while (true) {
+              if (buffer.length) {
+                const next = buffer.shift();
+                if (next) yield next;
+              } else if (terminal) return;
+              else
+                await new Promise<void>((resolve) => {
+                  wake = resolve;
+                });
+            }
+          },
+        },
+      };
+    },
+  };
+  return client;
+}
+export const byoa = createClient();
+/** @deprecated Use byoa instead. */
+export const agentboard = byoa;

@@ -20,7 +20,8 @@ describe('SDK task recovery contract', () => {
   });
   afterEach(() => vi.restoreAllMocks());
   it('forwards a shorter timeout, derives retryability from the terminal event, and never retries itself', async () => {
-    const { agentboard } = await import('../sdk');
+    const { createTransport } = await import('../sdk/transport');
+    const agentboard = createTransport(window);
     const pending = agentboard.request({ prompt: 'Fixture', tools: ['read'], timeoutMs: 5000 });
     const request = posted.mock.calls[0][0] as { id: string; params: object };
     expect(request.params).toMatchObject({ timeoutMs: 5000 });
@@ -44,7 +45,8 @@ describe('SDK task recovery contract', () => {
     expect(task).not.toHaveProperty('retry');
   });
   it('supports read-only task and list lookups, unknown IDs, and code-derived retryability', async () => {
-    const { agentboard } = await import('../sdk');
+    const { createTransport } = await import('../sdk/transport');
+    const agentboard = createTransport(window);
     const answer = (value: unknown) => {
       const request = posted.mock.calls.at(-1)![0] as { id: string };
       send({ kind: 'response', id: request.id, ok: true, value });

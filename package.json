@@ -14,6 +14,8 @@
     "test": "node scripts/projects.mjs test",
     "check": "node scripts/projects.mjs check",
     "test:browser": "pnpm --dir byoa-extension run test:browser:apps:built",
-    "dev:demos": "node scripts/projects.mjs dev"
+    "dev:demos": "node scripts/projects.mjs dev",
+    "check:sdk": "node scripts/sdk-package.mjs",
+    "pack:sdk": "node scripts/sdk-package.mjs --keep"
   }
 }

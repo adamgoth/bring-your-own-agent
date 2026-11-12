@@ -129,6 +129,12 @@ function respond(body, res) {
   res.end('data: [DONE]\n\n');
 }
 const provider = http.createServer(async (req, res) => {
+  if (req.method === 'GET' && req.url === '/protocol-fixture') {
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end(`<script>window.__observed=[];addEventListener('message',e=>{if(e.data?.source==='agentboard:extension')__observed.push(e.data)});addEventListener('agent:announceProvider',e=>{__observed.push({announcement:true});window.__rawProvider=e.detail.provider;window.__providerInfo=e.detail.info});</script><title>Protocol fixture</title>`);
+    return;
+  }
+  if (req.method !== 'POST') { res.writeHead(204); res.end(); return; }
   let raw = '';
   for await (const chunk of req) raw += chunk;
   const body = JSON.parse(raw);
@@ -230,6 +236,20 @@ try {
   await ext.evaluate(
     `chrome.storage.local.get('config').then(({config})=>chrome.storage.local.set({config:{...config,schemaVersion:2,agents:[{id:'fixture',name:'Demo deepseek',provider:'openai',apiProtocol:'openai-chat-completions',model:'fixture',endpoint:${JSON.stringify(endpoint)},temperature:0.7,maxSteps:8,isDefault:true}],defaultAgentId:'fixture'}}))`
   );
+  const rawPage = await page(`http://127.0.0.1:${provider.address().port}/protocol-fixture`);
+  await rawPage.evaluate(`new Promise(resolve=>setTimeout(resolve,300))`);
+  assert.deepEqual(await rawPage.evaluate(`window.__observed`), [], 'No-request page receives no provider announcements or messages');
+  await rawPage.evaluate(`window.dispatchEvent(new Event('agent:requestProvider'))`);
+  await waitFor(() => rawPage.evaluate(`!!window.__rawProvider`), 'raw provider discovery');
+  assert.equal(await rawPage.evaluate(`window.__observed.filter(e=>e.announcement).length`), 1);
+  assert.equal(await rawPage.evaluate(`window.__observed.filter(e=>!e.announcement).length`), 0, 'Discovery alone sends no transport messages');
+  const rawStatus = await rawPage.evaluate(`window.__rawProvider.request({method:'agent_status'})`);
+  assert.equal(rawStatus.available, true); assert.equal(rawStatus.connected, false);
+  assert.equal(await rawPage.evaluate(`window.__rawProvider.request({method:'unknown'}).catch(e=>e.code)`), 4200);
+  assert.equal(await rawPage.evaluate(`window.__rawProvider.request({method:'agent_openSettings'}).catch(e=>e.code)`), 4100);
+  await rawPage.evaluate(`window.postMessage({source:'agentboard:page',version:1,id:'v1-synthetic',method:'status'},location.origin)`);
+  await waitFor(() => rawPage.evaluate(`window.__observed.some(e=>e.kind==='response'&&e.id==='v1-synthetic'&&e.ok&&e.value.available)`), 'v1 pasted client compatibility');
+  console.log('PASS silent page, request-only raw discovery, raw errors and v1 compatibility.');
   let board = await page(`${boardOrigin}/`);
   await board.evaluate(`window.__events=[];window.addEventListener('message',e=>{if(e.data?.kind==='task')window.__events.push(e.data.event)})`);
   await waitFor(
@@ -302,6 +322,15 @@ try {
   await waitFor(() => ext.evaluate(`document.querySelector('[data-origin="${boardOrigin}"]')?.textContent.includes('For 30 days')`), 'connected sites duration');
   tabId = await ext.evaluate(`chrome.tabs.query({url:${JSON.stringify(boardOrigin + '/*')}}).then(t=>t.find(tab=>tab.url.includes('?integration=active'))?.id)`);
   console.log('PASS 30-day approval survives a real browser restart and appears in Connected sites.');
+  await board.evaluate(`window.addEventListener('agent:announceProvider',e=>window.__rawProvider=e.detail.provider);window.dispatchEvent(new Event('agent:requestProvider'));window.__rawEvents=[];window.__rawProvider.on('task',e=>window.__rawEvents.push(e));const b=document.createElement('button');b.id='raw-task';b.textContent='Raw task';b.style='position:fixed;top:100px;left:500px;z-index:99999';b.onclick=()=>window.__rawProvider.request({method:'agent_requestTask',params:{prompt:'Recovery fixture raw provider',tools:['get_board_snapshot','get_selected_cards','propose_board_changes']}}).then(v=>window.__rawTask=v).catch(e=>window.__rawError={message:e.message,code:e.code});document.body.append(b);`);
+  await board.click('#raw-task');
+  try { await waitFor(() => board.evaluate(`!!window.__rawTask&&window.__rawEvents.some(e=>e.taskId===window.__rawTask.taskId&&!e.busy)`), 'raw provider task without SDK'); } catch(error) { console.error('Raw task fixture:', await board.evaluate(`({task:window.__rawTask,events:window.__rawEvents,error:window.__rawError})`)); throw error; }
+  assert.equal(await board.evaluate(`window.__rawEvents.at(-1).usage.totalTokens`), 100);
+  assert.equal(await board.evaluate(`JSON.stringify(window.__rawEvents).includes('inputPerMillion')`), false);
+  await board.evaluate(`document.querySelector('#raw-task').remove()`);
+  console.log('PASS raw provider task without SDK, terminal progress and token-only usage.');
+  requests.length = 0; // Keep the existing demo wire-count assertions scoped to demo requests.
+
   await board.click('#agent-indicator');
   await send(
     'Emulation.setDeviceMetricsOverride',

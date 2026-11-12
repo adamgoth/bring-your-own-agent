@@ -2,7 +2,7 @@
 
 BYOA lets a user connect their configured agent to your app and request work from your interface. Your app exposes capabilities through WebMCP tools; BYOA runs the agent and routes tool calls back to the page. Results appear through your app's own state and UI.
 
-This guide describes the experimental implementation in this repository. **Top-level HTTPS pages, and plain-HTTP `localhost` or `127.0.0.1` on any port, can ask to connect.** Plain HTTP on other hosts and pages inside iframes cannot. Each exact origin needs the person's approval in BYOA's popup. The client is not on npm yet; copy `byoa-extension/sdk/index.ts` and its sibling `task-event.ts` into your app together for now.
+This guide describes the experimental implementation in this repository. **Top-level HTTPS pages, and plain-HTTP `localhost` or `127.0.0.1` on any port, can ask to connect.** Plain HTTP on other hosts and pages inside iframes cannot. Each exact origin needs the person's approval in BYOA's popup. Use the locally packaged `@byoagent/browser` SDK; registry publication is a separate step.
 
 ## Who owns what
 
@@ -54,23 +54,23 @@ For tools that accept arguments, describe them with an `inputSchema` and validat
 
 ## 2. Connect the user's agent
 
-The demos import the browser-only TypeScript client directly from this repository. From a module in `demos/<app>/src/`, use:
+Build and pack the SDK from this repository with `pnpm pack:sdk`, then install the printed tarball using `npm install /path/to/byoagent-browser-0.1.0.tgz`. Once separately published, use `npm install @byoagent/browser`.
 
 ```ts
-import { agentboard } from '../../../byoa-extension/sdk';
+import { byoa } from '@byoagent/browser';
 ```
 
-Adjust that relative path for your source layout. The SDK is not currently a published installable package. Its `agentboard` export retains the inherited compatibility name.
+The demos resolve the package's built ESM/declarations through aliases, with independent lockfiles. `byoa` discovers providers lazily; `agentboard` is a deprecated compatibility alias. Use `discoverProviders()` or `byoa.providers()` and `createClient(chosen.provider)` to present a provider picker. Imports are SSR-safe; call browser methods only in the browser. The [provider specification](provider-spec.md) includes a without-SDK example and security model.
 
 Use `getStatus()` on startup and `subscribe()` to keep connection UI current. The following snippets use app-provided rendering functions and button references:
 
 ```ts
-const unsubscribe = agentboard.subscribe(renderConnection);
-void agentboard.getStatus().then(renderConnection);
+const unsubscribe = byoa.subscribe(renderConnection);
+void byoa.getStatus().then(renderConnection);
 
 connectButton.addEventListener('click', async () => {
   try {
-    await agentboard.connect();
+    await byoa.connect();
   } catch (error) {
     showError(error);
   }
@@ -78,7 +78,7 @@ connectButton.addEventListener('click', async () => {
 
 disconnectButton.addEventListener('click', async () => {
   try {
-    await agentboard.disconnect();
+    await byoa.disconnect();
   } catch (error) {
     showError(error);
   }
@@ -109,10 +109,10 @@ sendButton.addEventListener('click', async () => {
 
   sending = true;
   try {
-    const connection = await agentboard.getStatus();
+    const connection = await byoa.getStatus();
     if (!connection.connected) throw new Error('Connect an agent first.');
 
-    activeTask = await agentboard.request({
+    activeTask = await byoa.request({
       prompt: `Read the selected cards and summarize them.\n\nUser request: ${prompt}`,
       tools: ['get_selected_cards'],
     });
