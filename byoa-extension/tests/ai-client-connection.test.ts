@@ -194,6 +194,168 @@ describe('AIClient connection testing', () => {
     mocks.streamText.mockReturnValue({ textStream: successfulTextStream() });
   });
 
+  it('awaits accounting before another SDK step and stops with cumulative budget metadata', async () => {
+    storeAgent('budget-sdk-agent');
+    vi.mocked(getToolRegistry).mockReturnValue(
+      toolRegistry(
+        {
+          get_selection: {
+            description: 'Fixture',
+            inputSchema: jsonSchema({ type: 'object', properties: {} }),
+            execute: async () => 'fixture',
+          },
+        },
+        remoteSession(),
+        undefined,
+        new Map([['get_selection', 'site']])
+      ) as never
+    );
+    let calls = 0;
+    const model = {
+      specificationVersion: 'v2' as const,
+      provider: 'test',
+      modelId: 'test',
+      supportedUrls: {},
+      doGenerate: vi.fn(),
+      doStream: async () => {
+        calls++;
+        return {
+          stream: simulateReadableStream({
+            chunks: [
+              { type: 'stream-start', warnings: [] },
+              {
+                type: 'tool-call',
+                toolCallId: `call-${calls}`,
+                toolName: 'get_selection',
+                input: '{}',
+              },
+              {
+                type: 'finish',
+                finishReason: 'tool-calls',
+                usage: { inputTokens: 8, outputTokens: 4, totalTokens: 12 },
+              },
+            ] as LanguageModelV2StreamPart[],
+            initialDelayInMs: null,
+            chunkDelayInMs: null,
+          }),
+        };
+      },
+    };
+    mocks.openAIProvider.responses.mockReturnValueOnce(model as never);
+    const actual = await vi.importActual<typeof import('ai')>('ai');
+    mocks.streamText.mockImplementationOnce((options) => actual.streamText(options));
+    let tokens = 0;
+    const onFinish = vi.fn();
+    const onError = vi.fn();
+    await AIClient.getInstance().streamChat(
+      'budget-sdk-agent',
+      [{ role: 'user', content: 'Fixture' }],
+      7,
+      {
+        onFinish,
+        onError,
+        onUsage: async (usage) => {
+          await Promise.resolve();
+          tokens += usage.totalTokens;
+        },
+      },
+      'budget-sdk-stream',
+      undefined,
+      {
+        tools: ['get_selection'],
+        beforeStep: async () => tokens < 10,
+        isCurrentDocument: () => true,
+      }
+    );
+    expect(onError).not.toHaveBeenCalled();
+    expect(calls).toBe(1);
+    expect(onFinish).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        budgetExhausted: true,
+        usage: expect.objectContaining({ totalTokens: 12, usageKnown: true }),
+      })
+    );
+  });
+
+  it('accounts provider finish exactly once before cancelling a pending page tool', async () => {
+    storeAgent('cancel-usage-agent');
+    let resolveTool: (value: string) => void = () => {};
+    const execute = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveTool = resolve;
+        })
+    );
+    vi.mocked(getToolRegistry).mockReturnValue(
+      toolRegistry(
+        {
+          get_selection: {
+            description: 'Fixture',
+            inputSchema: jsonSchema({ type: 'object', properties: {} }),
+            execute,
+          },
+        },
+        remoteSession(),
+        undefined,
+        new Map([['get_selection', 'site']])
+      ) as never
+    );
+    const model = {
+      specificationVersion: 'v2' as const,
+      provider: 'test',
+      modelId: 'test',
+      supportedUrls: {},
+      doGenerate: vi.fn(),
+      doStream: async () => ({
+        stream: simulateReadableStream({
+          chunks: [
+            { type: 'stream-start', warnings: [] },
+            { type: 'tool-call', toolCallId: 'pending', toolName: 'get_selection', input: '{}' },
+            {
+              type: 'finish',
+              finishReason: 'tool-calls',
+              usage: { inputTokens: 8, outputTokens: 4, totalTokens: 12 },
+            },
+          ] as LanguageModelV2StreamPart[],
+          initialDelayInMs: null,
+          chunkDelayInMs: null,
+        }),
+      }),
+    };
+    mocks.openAIProvider.responses.mockReturnValueOnce(model as never);
+    const actual = await vi.importActual<typeof import('ai')>('ai');
+    mocks.streamText.mockImplementationOnce((options) => actual.streamText(options));
+    const onUsage = vi.fn();
+    const onFinish = vi.fn();
+    const onProfile = vi.fn();
+    const client = AIClient.getInstance();
+    const run = client.streamChat(
+      'cancel-usage-agent',
+      [{ role: 'user', content: 'Fixture' }],
+      7,
+      { onUsage, onFinish, onError: vi.fn() },
+      'cancel-usage-stream',
+      undefined,
+      { tools: ['get_selection'], onProfile }
+    );
+    await vi.waitFor(() =>
+      expect(onUsage).toHaveBeenCalledWith(
+        expect.objectContaining({ totalTokens: 12, usageKnown: true })
+      )
+    );
+    expect(execute).toHaveBeenCalledOnce();
+    expect(onProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'cancel-usage-agent', model: 'secret-model' })
+    );
+    client.cancelStream('cancel-usage-stream');
+    await run;
+    resolveTool('fixture');
+    await Promise.resolve();
+    expect(onUsage).toHaveBeenCalledOnce();
+    expect(onFinish).not.toHaveBeenCalled();
+  });
+
   it('uses the explicitly selected Responses API', async () => {
     const result = await AIClient.getInstance().testConnectionWithDetails({
       apiProtocol: 'openai-responses',

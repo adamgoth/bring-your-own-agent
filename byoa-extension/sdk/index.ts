@@ -10,7 +10,7 @@ export type Connection = {
 export type Profile = { id: string; name: string; ready: boolean };
 export type ProfileList = { profiles: Profile[]; defaultAgentId?: string };
 import type { TaskEvent } from './task-event';
-export type { TaskEvent, TaskCode } from './task-event';
+export type { TaskEvent, TaskCode, TaskUsage } from './task-event';
 export type TaskSummary = TaskEvent & { retryable: boolean };
 const retryable = (event: TaskEvent) => event.code === 'timeout' || event.code === 'interrupted';
 export type AgentTask = {

@@ -157,6 +157,7 @@ export async function getConnectionPrompt(
       hasWorkspace: mounted.some((binding) => binding.agentId === profile.id),
     })),
     incognito: tab.incognito === true,
+    budget: grant?.budget,
     persist: grant?.persist ?? 'session',
     selectedAgentId: connection.agentId,
     share: grant?.agentId === connection.agentId ? grant?.share : undefined,
@@ -169,7 +170,8 @@ export function decideConnectionPrompt(
   sender: chrome.runtime.MessageSender,
   config: ConfigStorage,
   share?: unknown,
-  persist?: unknown
+  persist?: unknown,
+  budget?: unknown
 ) {
   return serialize(async () => {
     const prompt = await read(id);
@@ -188,7 +190,8 @@ export function decideConnectionPrompt(
         agent.id,
         binding ? share : undefined,
         tab.incognito ? 'session' : duration,
-        tab.incognito === true
+        tab.incognito === true,
+        budget
       );
     }
     prompt.state = approve ? 'approved' : 'cancelled';

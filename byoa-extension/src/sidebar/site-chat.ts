@@ -30,6 +30,11 @@ export function setupSiteChat(tabId: number | null, container: HTMLElement) {
           label.className = 'site-chat-label';
           label.textContent = `${chat.agentName ?? 'BYOA'} · ${chat.status}`;
           article.append(label);
+          if (chat.usage) {
+            const usage = document.createElement('p');
+            usage.textContent = `${chat.usage.totalTokens} tokens${chat.usage.usageKnown ? '' : ' (incomplete; falling back to step limit)'} · ${chat.usage.costUsd === undefined ? 'Cost unknown' : `$${chat.usage.costUsd.toFixed(6)}`}`;
+            article.append(usage);
+          }
           const shared = document.createElement('p');
           shared.textContent = chat.shared?.length
             ? `Shared with this task: ${chat.shared.join(', ')}`

@@ -12,10 +12,12 @@ export interface SiteActivity {
   status?: string;
   tools?: string[];
   durationMs?: number;
+  usage?: import('./usage').TaskUsage;
 }
 // Explicit allowlist: never retain caller-supplied prompts, arguments, results or errors.
 function clean(value: SiteActivity): SiteActivity {
   return {
+    ...(value.usage ? { usage: value.usage } : {}),
     at: value.at,
     origin: value.origin,
     kind: value.kind,

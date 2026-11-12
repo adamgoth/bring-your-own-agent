@@ -71,6 +71,29 @@ afterEach(() => {
   vi.useRealTimers();
 });
 describe('extension-owned profile approval', () => {
+  it.each([
+    { perTaskTokens: 0 },
+    { perDayTokens: -1 },
+    { perDayUsd: '1' },
+    { perTaskTokens: Infinity },
+  ])('rejects malformed popup budgets %j', async (budget) => {
+    const { requestId } = await openConnectionPrompt(sender);
+    await expect(
+      decideConnectionPrompt(
+        requestId,
+        'one',
+        true,
+        popup(requestId),
+        config,
+        undefined,
+        'session',
+        budget
+      )
+    ).rejects.toThrow();
+    expect(await connectionPromptResult(requestId, sender, config)).toMatchObject({
+      pending: true,
+    });
+  });
   it('validates duration and calculates expiry in the extension', async () => {
     const { requestId } = await openConnectionPrompt(sender);
     await expect(

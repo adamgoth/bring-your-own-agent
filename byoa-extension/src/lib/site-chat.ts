@@ -1,4 +1,5 @@
 export interface SiteChat {
+  usage?: import('./usage').TaskUsage;
   origin: string;
   shared?: string[];
   notice?: string;
