@@ -722,6 +722,85 @@ describe('AIClient connection testing', () => {
     expect(request.tools).toBeUndefined();
   });
 
+  it.each([
+    [true, false],
+    [false, true],
+    [true, true],
+  ])('isolates stream lanes (%s, %s)', async (siteFirst, siteSecond) => {
+    storeAgent('lane-agent');
+    const client = AIClient.getInstance();
+    const streams = [deferredAsyncTextStream(), deferredAsyncTextStream()];
+    const signals: AbortSignal[] = [];
+    mocks.streamText.mockImplementation((options: { abortSignal: AbortSignal }) => {
+      const stream = streams[signals.length];
+      signals.push(options.abortSignal);
+      return { textStream: stream.stream, fullStream: undefined };
+    });
+    const aborts = [vi.fn(), vi.fn()];
+    const run = (index: number, site: boolean) =>
+      client.streamChat(
+        'lane-agent',
+        [],
+        undefined,
+        { onFinish: vi.fn(), onError: vi.fn(), onAbort: aborts[index] },
+        `lane-${index}`,
+        undefined,
+        site ? { tools: [] } : undefined
+      );
+    const first = run(0, siteFirst);
+    await vi.waitFor(() => expect(signals).toHaveLength(1));
+    const second = run(1, siteSecond);
+    await vi.waitFor(() => expect(signals).toHaveLength(2));
+    expect(signals.map((signal) => signal.aborted)).toEqual([false, false]);
+    expect(aborts[0]).not.toHaveBeenCalled();
+    expect(client.cancelStream('lane-0')).toBe(true);
+    expect(signals[1].aborted).toBe(false);
+    expect(client.cancelStream('lane-1')).toBe(true);
+    await Promise.all([first, second]);
+    expect(client.cancelStream('lane-0')).toBe(false);
+    expect(client.cancelStream('lane-1')).toBe(false);
+    expect((client as unknown as { activeStreams: Map<string, unknown> }).activeStreams.size).toBe(
+      0
+    );
+    expect(
+      (client as unknown as { latestAcceptedStreamSequence: Map<string, unknown> })
+        .latestAcceptedStreamSequence.size
+    ).toBe(0);
+  });
+
+  it.each(['finish', 'error'])('cleans site lane state after %s', async (outcome) => {
+    storeAgent('cleanup-agent');
+    const active = deferredAsyncTextStream();
+    mocks.streamText.mockReturnValue({ textStream: active.stream, fullStream: undefined });
+    const onError = vi.fn();
+    const client = AIClient.getInstance();
+    const request = client.streamChat(
+      'cleanup-agent',
+      [],
+      undefined,
+      { onFinish: vi.fn(), onError },
+      'cleanup-site',
+      undefined,
+      { tools: [] }
+    );
+    await vi.waitFor(() => expect(mocks.streamText).toHaveBeenCalledOnce());
+    if (outcome === 'error') active.reject(new Error('provider failure'));
+    else active.resolve({ done: true, value: undefined });
+    await request;
+    expect(onError).toHaveBeenCalledTimes(outcome === 'error' ? 1 : 0);
+    expect(client.cancelStream('cleanup-site')).toBe(false);
+    expect((client as unknown as { activeStreams: Map<string, unknown> }).activeStreams.size).toBe(
+      0
+    );
+    expect(
+      (client as unknown as { pendingStreams: Map<string, unknown> }).pendingStreams.size
+    ).toBe(0);
+    expect(
+      (client as unknown as { latestAcceptedStreamSequence: Map<string, unknown> })
+        .latestAcceptedStreamSequence.size
+    ).toBe(0);
+  });
+
   it('revokes live memory tools without cancelling retained grounding or generation', async () => {
     storeAgent('revoked-memory-agent');
     const mount = mountedMemory('# Memory');
