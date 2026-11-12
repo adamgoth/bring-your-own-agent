@@ -91,6 +91,7 @@ export async function initializeConnectedSites() {
       select.value = grant.persist;
       select.disabled = grant.incognito === true;
       const change = document.createElement('button');
+      change.className = 'button button-secondary';
       change.textContent = 'Change duration';
       change.dataset.action = 'change-duration';
       change.onclick = () =>
@@ -105,6 +106,7 @@ export async function initializeConnectedSites() {
           )
         );
       const disconnect = document.createElement('button');
+      disconnect.className = 'button button-secondary';
       disconnect.textContent = 'Disconnect';
       disconnect.dataset.action = 'disconnect';
       disconnect.onclick = () => void act(() => revokeSiteGrant(origin, grant.incognito === true));
@@ -120,6 +122,7 @@ export async function initializeConnectedSites() {
       const spending = document.createElement('fieldset');
       const readBudget = budgetInputs(spending, grant.budget);
       const save = document.createElement('button');
+      save.className = 'button button-secondary';
       save.textContent = 'Save spending limits';
       save.dataset.action = 'save-budget';
       save.onclick = () =>
