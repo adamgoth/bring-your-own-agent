@@ -111,4 +111,4 @@ incomplete usage when cancellation precedes any provider usage report. Startup s
 working tasks' potentially unreported usage incomplete while keeping public summaries token-only.
 
 After the review fixes, root `pnpm check` and `pnpm build` passed again, as did the full Chrome
-integration with no skips. Astra follow-up review is requested against the fix commit.
+integration with no skips. Astra follow-up review of `a64e985` found no actionable findings, confirmed both initial findings resolved, and passed four focused suites / 102 tests. The reviewer did not rerun browser integration.
