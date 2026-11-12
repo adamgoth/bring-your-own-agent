@@ -70,7 +70,7 @@ trusted entry-point validation.
   data were used. Voice is not implemented.
 
 The original checkout's unrelated changes are preserved. Implementation is on
-`codex/shared-session-foundation` in `/Users/wowza/workspaces/byoa-shared-session`.
+`codex/shared-session-foundation` in `/Users/wowza/workspaces/bring-your-own-agent`.
 
 ## Hosted Margin compatibility follow-up
 
