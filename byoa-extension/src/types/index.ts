@@ -175,6 +175,8 @@ export type ExtensionMessage =
       share?: unknown;
       persist?: unknown;
     }
+  | { type: 'SITE_TASK'; taskId: string }
+  | { type: 'SITE_TASKS' }
   | { type: 'SITE_VIEW_CHAT'; taskId?: string }
   | {
       type: 'SITE_CONNECTION_STATUS' | 'SITE_CONNECT' | 'SITE_DISCONNECT' | 'SITE_OPEN_SETTINGS';

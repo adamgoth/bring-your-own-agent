@@ -8,7 +8,10 @@ if (connectableOrigin(window.location.href) && window === window.top) {
   let lastGesture = 0;
   let activated = false;
   let refreshTimer: ReturnType<typeof setInterval> | undefined;
-  const active = new Map<string, { port: chrome.runtime.Port; last?: Record<string, unknown> }>();
+  const active = new Map<
+    string,
+    { port: chrome.runtime.Port; last?: Record<string, unknown>; cancelled?: boolean }
+  >();
   const seen = new Set<string>();
   const emit = (value: object) =>
     window.postMessage(
@@ -23,22 +26,27 @@ if (connectableOrigin(window.location.href) && window === window.top) {
         kind: 'status',
         value: await chrome.runtime.sendMessage({ type: 'SITE_CONNECTION_STATUS' }),
       });
+      // Chrome can retain a stale port across worker termination without onDisconnect.
+      // Reconcile acknowledged tasks against durable state on the existing heartbeat cadence.
+      for (const [id, task] of active) {
+        if (typeof task.last?.taskId !== 'string') continue;
+        try {
+          const event = await chrome.runtime.sendMessage({
+            type: 'SITE_TASK',
+            taskId: task.last.taskId,
+          });
+          if (active.get(id) !== task || !event?.taskId || event.busy) continue;
+          task.last = event;
+          active.delete(id);
+          emit({ kind: 'task', id, event });
+          task.port.disconnect();
+        } catch {
+          /* Port recovery handles transient failures. */
+        }
+      }
     } catch {
       clearInterval(refreshTimer);
       emit({ kind: 'status', value: { available: false, configured: false, connected: false } });
-      for (const [id, task] of active) {
-        emit({
-          kind: 'task',
-          id,
-          event: {
-            taskId: task.last?.taskId || '',
-            status: 'error',
-            detail: 'BYOA disconnected. Review results before retrying.',
-            busy: false,
-          },
-        });
-      }
-      active.clear();
     }
   };
   document.addEventListener(
@@ -68,10 +76,21 @@ if (connectableOrigin(window.location.href) && window === window.top) {
     activate();
     const { id, method, params = {} } = data;
     if (method === 'cancel') {
-      active.get(id)?.port.postMessage({ type: 'cancel' });
+      const task = active.get(id);
+      if (task) {
+        task.cancelled = true;
+        try {
+          task.port.postMessage({ type: 'cancel' });
+        } catch {
+          /* Send on attach. */
+        }
+      }
       return;
     }
-    if (!['status', 'connectionResult'].includes(method) && Date.now() - lastGesture > 1500) {
+    if (
+      !['status', 'connectionResult', 'task', 'tasks'].includes(method) &&
+      Date.now() - lastGesture > 1500
+    ) {
       if (method === 'request')
         emit({
           kind: 'task',
@@ -99,50 +118,116 @@ if (connectableOrigin(window.location.href) && window === window.top) {
         const oldest = seen.values().next().value;
         if (oldest) seen.delete(oldest);
       }
-      try {
-        const port = chrome.runtime.connect({ name: 'agentboard-task' });
-        const task: { port: chrome.runtime.Port; last?: Record<string, unknown> } = { port };
-        active.set(id, task);
-        port.onMessage.addListener((message) => {
-          if (active.get(id) !== task) return;
-          task.last = message;
-          emit({ kind: 'task', id, event: message });
-          if (!message.busy) {
-            active.delete(id);
-            port.disconnect();
-          }
-        });
-        port.onDisconnect.addListener(() => {
-          if (active.get(id) !== task) return;
+      const task: {
+        port: chrome.runtime.Port;
+        last?: Record<string, unknown>;
+        cancelled?: boolean;
+      } = {
+        port: undefined as unknown as chrome.runtime.Port,
+      };
+      const deliver = (message: Record<string, unknown>) => {
+        if (active.get(id) !== task) return;
+        if (
+          typeof message.seq === 'number' &&
+          typeof task.last?.seq === 'number' &&
+          message.seq <= task.last.seq
+        )
+          return;
+        task.last = message;
+        emit({ kind: 'task', id, event: message });
+        if (!message.busy) {
           active.delete(id);
-          emit({
-            kind: 'task',
-            id,
-            event: {
-              taskId: task.last?.taskId || '',
-              status: 'error',
-              detail: 'Task connection interrupted. Review results before retrying.',
-              busy: false,
-            },
+          task.port?.disconnect();
+        }
+      };
+      const interrupted = () =>
+        deliver({
+          taskId: task.last?.taskId || '',
+          status: 'error',
+          code: 'interrupted',
+          detail: 'Task connection interrupted. Review results before retrying.',
+          busy: false,
+        });
+      const recover = async () => {
+        const deadline = Date.now() + 10000;
+        while (active.get(id) === task) {
+          try {
+            const event = await chrome.runtime.sendMessage({
+              type: 'SITE_TASK',
+              taskId: task.last?.taskId,
+            });
+            if (event?.taskId && !event.busy) {
+              deliver(event);
+              return;
+            }
+            // A live record must not be presented as terminal while its grace timer still runs.
+            if (event?.busy && Date.now() < deadline) {
+              await new Promise((resolve) => setTimeout(resolve, 500));
+              continue;
+            }
+          } catch {
+            /* Extension unavailable. */
+          }
+          interrupted();
+          return;
+        }
+      };
+      const open = (attempt: number) => {
+        if (active.get(id) !== task) return;
+        let acknowledged = attempt === 0;
+        let attachTimer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const port = chrome.runtime.connect({ name: 'agentboard-task' });
+          task.port = port;
+          port.onMessage.addListener((message) => {
+            if (active.get(id) !== task || task.port !== port) return;
+            if (message.type === 'not-running') {
+              clearTimeout(attachTimer);
+              port.disconnect();
+              return;
+            }
+            acknowledged = true;
+            clearTimeout(attachTimer);
+            if (message.type !== 'attached') deliver(message);
+            if (task.cancelled && active.get(id) === task) port.postMessage({ type: 'cancel' });
           });
-        });
-        port.postMessage({ type: 'start', text: params.prompt, tools: params.tools });
-      } catch {
-        emit({
-          kind: 'task',
-          id,
-          event: {
-            taskId: '',
-            status: 'error',
-            detail: 'Reload BYOA and the page.',
-            busy: false,
-          },
-        });
-      }
+          port.onDisconnect.addListener(() => {
+            clearTimeout(attachTimer);
+            if (active.get(id) !== task || task.port !== port) return;
+            const nextAttempt = acknowledged ? 1 : attempt + 1;
+            if (!task.last?.taskId || nextAttempt > 3) {
+              void recover();
+              return;
+            }
+            setTimeout(() => open(nextAttempt), nextAttempt * 200);
+          });
+          if (attempt === 0)
+            port.postMessage({
+              type: 'start',
+              text: params.prompt,
+              tools: params.tools,
+              timeoutMs: params.timeoutMs,
+            });
+          else {
+            port.postMessage({
+              type: 'attach',
+              taskId: task.last?.taskId,
+              afterSeq: task.last?.seq ?? 0,
+            });
+            attachTimer = setTimeout(() => port.disconnect(), 1500);
+          }
+        } catch {
+          void recover();
+        }
+      };
+      active.set(id, task);
+      open(0);
       return;
     }
     const methods: Record<string, string> = {
       status: 'SITE_CONNECTION_STATUS',
+      task: 'SITE_TASK',
+      tasks: 'SITE_TASKS',
       connectionResult: 'SITE_CONNECTION_RESULT',
       connect: 'SITE_CONNECT',
       disconnect: 'SITE_DISCONNECT',

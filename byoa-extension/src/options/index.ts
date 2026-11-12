@@ -161,6 +161,16 @@ function setupEventListeners() {
 
   // Log level selection
   document.getElementById('log-level')?.addEventListener('change', updateLogLevel);
+  document.getElementById('site-task-timeout')?.addEventListener('change', async (event) => {
+    const input = event.target as HTMLInputElement;
+    if (!input.reportValidity()) return;
+    try {
+      await configStorage.set({ siteTaskTimeoutMinutes: Number(input.value) });
+      showStatus('App task run limit saved', 'success');
+    } catch {
+      showStatus('Choose a run limit from 1 to 10 minutes', 'error');
+    }
+  });
 
   const agentForm = document.getElementById('agent-form');
   if (agentForm instanceof HTMLFormElement) initializeAgentEditor(agentForm);
@@ -380,6 +390,9 @@ async function duplicateAgent() {
 async function loadLogLevel() {
   try {
     const config = await configStorage.get();
+    (document.getElementById('site-task-timeout') as HTMLInputElement).value = String(
+      config.siteTaskTimeoutMinutes ?? 2
+    );
     const logLevelSelect = document.getElementById('log-level') as HTMLSelectElement;
     if (logLevelSelect && config.logLevel) {
       logLevelSelect.value = config.logLevel;

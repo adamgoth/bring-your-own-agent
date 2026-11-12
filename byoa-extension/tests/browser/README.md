@@ -52,3 +52,11 @@ Local Workspace application logic is covered by source-level tests. Native picke
 14. Verify **Restore folder access** renews that same handle under a user gesture and allows the chat to retry successfully.
 15. Disconnect Local Workspace and confirm the next request has no workspace content or file tools, then confirm every original file remains on disk.
 16. Reconnect explicitly through the native picker, verify mounted behavior returns, disconnect again, and confirm every user file remains on disk.
+
+## App task recovery
+
+The root `pnpm test:browser` harness includes task-port reattachment, Margin reload lookup,
+and active-worker termination. It uses the shipped WebMCP polyfill with native WebMCP disabled.
+`BYOA_MARGIN_PORT` and `BYOA_BOARD_PORT` optionally select isolated demo servers (defaults 5183/5184).
+Chrome versions that refuse to replace an active worker report that specific scenario as skipped;
+the startup sweep remains covered by unit tests. No automatic model retry is performed.
