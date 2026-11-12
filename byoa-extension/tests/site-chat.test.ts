@@ -64,4 +64,46 @@ describe('Site chat history in the sidebar', () => {
     );
     expect(document.querySelectorAll('#site-agent-chat')).toHaveLength(1);
   });
+  it('preserves follow-up focus, draft and selection across streaming history updates', async () => {
+    const working = { ...chat, conversationId: 'conversation', status: 'working' };
+    sessionGet.mockResolvedValue({ agentboard_chat_7_one: working });
+    setupSiteChat(7, document.getElementById('messages')!);
+    await vi.waitFor(() =>
+      expect(document.querySelector('#site-agent-chat form')?.hasAttribute('hidden')).toBe(false)
+    );
+    const draft = document.querySelector<HTMLTextAreaElement>('#site-agent-chat form textarea')!;
+    draft.value = 'Make the heading shorter';
+    draft.focus();
+    draft.setSelectionRange(5, 16, 'backward');
+    const blur = vi.fn();
+    draft.addEventListener('blur', blur);
+    const changed = vi.mocked(chrome.storage.onChanged.addListener).mock.calls.at(-1)![0];
+    for (const response of ['First streamed chunk', 'Second streamed chunk', 'Final response']) {
+      const update = {
+        ...working,
+        response,
+        status: response === 'Final response' ? 'done' : 'working',
+      };
+      sessionGet.mockResolvedValue({ agentboard_chat_7_one: update });
+      changed({ agentboard_chat_7_one: { newValue: update } }, 'session');
+      await vi.waitFor(() =>
+        expect(document.querySelector('#site-agent-chat .message-assistant')?.textContent).toBe(
+          response
+        )
+      );
+      expect(document.activeElement).toBe(draft);
+      expect(draft.value).toBe('Make the heading shorter');
+      expect([draft.selectionStart, draft.selectionEnd, draft.selectionDirection]).toEqual([
+        5,
+        16,
+        'backward',
+      ]);
+    }
+    expect(blur).not.toHaveBeenCalled();
+    expect(document.querySelectorAll('#site-agent-chat form')).toHaveLength(1);
+    expect(
+      document.querySelector<HTMLButtonElement>('#site-agent-chat form button[type="submit"]')!
+        .disabled
+    ).toBe(false);
+  });
 });

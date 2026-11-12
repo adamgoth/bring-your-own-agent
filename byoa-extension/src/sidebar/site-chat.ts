@@ -9,6 +9,8 @@ export function setupSiteChat(tabId: number | null, container: HTMLElement) {
   const section = document.createElement('section');
   section.id = 'site-agent-chat';
   section.setAttribute('aria-label', 'App agent chat');
+  const history = document.createElement('div');
+  section.append(history);
   let pending = Promise.resolve();
   let conversationId: string | undefined;
   const form = document.createElement('form');
@@ -25,6 +27,8 @@ export function setupSiteChat(tabId: number | null, container: HTMLElement) {
   const notice = document.createElement('p');
   notice.setAttribute('role', 'status');
   form.append(draft, send, cancel, notice);
+  form.hidden = true;
+  section.append(form);
   let submitting = false;
   form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -59,10 +63,10 @@ export function setupSiteChat(tabId: number | null, container: HTMLElement) {
           .map(([, value]) => value as SiteChat)
           .sort((a, b) => a.createdAt - b.createdAt);
         if (!chats.length) return;
-        section.replaceChildren();
+        history.replaceChildren();
         const heading = document.createElement('h3');
         heading.textContent = 'App agent chat';
-        section.append(heading);
+        history.append(heading);
         for (const chat of chats) {
           const article = document.createElement('article');
           article.dataset.taskId = chat.id;
@@ -113,14 +117,14 @@ export function setupSiteChat(tabId: number | null, container: HTMLElement) {
           status.className = 'site-chat-label';
           status.textContent = chat.detail;
           article.append(status);
-          section.append(article);
+          history.append(article);
         }
         const latest = chats.filter((chat) => chat.conversationId).at(-1);
         conversationId = latest?.conversationId;
+        form.hidden = !conversationId;
         if (conversationId) {
           send.disabled = submitting || latest?.status === 'queued' || latest?.status === 'working';
           cancel.hidden = latest?.status !== 'queued' && latest?.status !== 'working';
-          section.append(form);
         }
         if (!section.isConnected) container.prepend(section);
         if (focus) {
