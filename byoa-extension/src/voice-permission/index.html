@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Microphone access · BYOA</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <p class="brand">BYOA · Local voice</p>
+      <h1>Allow your microphone</h1>
+      <p>Chrome needs your permission before BYOA can transcribe your voice on this device.</p>
+      <p>
+        This step briefly opens the microphone to request access, then immediately releases it.
+        Nothing is recorded, saved, or uploaded.
+      </p>
+      <button id="allow-microphone" type="button">Allow microphone</button>
+      <p id="permission-status" role="status">
+        Choose Allow microphone, then approve Chrome’s prompt.
+      </p>
+      <section id="permission-help" hidden>
+        <h2>If access is blocked</h2>
+        <ol>
+          <li>
+            In Chrome’s microphone settings, allow microphone access for BYOA. Check that the
+            correct microphone is selected.
+          </li>
+          <li>
+            On Mac, open <strong>System Settings → Privacy &amp; Security → Microphone</strong> and
+            enable <strong>Google Chrome</strong>. Restart Chrome if asked.
+          </li>
+          <li>Return here and try Allow microphone again.</li>
+        </ol>
+        <button id="microphone-settings" class="secondary" type="button">
+          Open Chrome microphone settings
+        </button>
+      </section>
+      <p>
+        Once access is allowed, return to your original tab and use the mic button in the BYOA
+        sidebar. You can review the transcript before sending it.
+      </p>
+    </main>
+    <script type="module" src="./index.ts"></script>
+  </body>
+</html>
