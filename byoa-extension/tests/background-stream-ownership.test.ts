@@ -160,6 +160,7 @@ beforeAll(async () => {
   mocks.toolRegistry.loadRemoteTools.mockReturnValue(remoteToolsReady);
   mocks.tabManager.getAllRegistries.mockReturnValue(new Map());
 
+  Object.assign(chrome, { webNavigation: { onBeforeNavigate: { addListener: vi.fn() } } });
   Object.assign(chrome.runtime, {
     onInstalled: { addListener: vi.fn() },
     onConnect: {

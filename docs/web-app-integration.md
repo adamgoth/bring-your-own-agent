@@ -2,7 +2,7 @@
 
 BYOA lets a user connect their configured agent to your app and request work from your interface. Your app exposes capabilities through WebMCP tools; BYOA runs the agent and routes tool calls back to the page. Results appear through your app's own state and UI.
 
-This guide describes the experimental implementation in this repository. **Top-level HTTPS pages, and plain-HTTP `localhost` or `127.0.0.1` on any port, can ask to connect.** Plain HTTP on other hosts and pages inside iframes cannot. Each exact origin needs the person's approval in BYOA's popup. The client is not on npm yet; copy `byoa-extension/sdk/index.ts` into your app for now.
+This guide describes the experimental implementation in this repository. **Top-level HTTPS pages, and plain-HTTP `localhost` or `127.0.0.1` on any port, can ask to connect.** Plain HTTP on other hosts and pages inside iframes cannot. Each exact origin needs the person's approval in BYOA's popup. The client is not on npm yet; copy `byoa-extension/sdk/index.ts` and its sibling `task-event.ts` into your app together for now.
 
 ## Who owns what
 
@@ -141,7 +141,7 @@ viewChatButton.addEventListener('click', async () => {
 
 This read-only example produces a summary in the task transcript. For results to appear in your app, expose tools that create app-owned output, such as a suggestion or pending proposal, and include their names in the request. `request()` does not return a generated answer or structured proposal; it returns a task handle.
 
-Task events contain `taskId`, `status`, `detail`, and `busy`. Render `queued`, `working`, `done`, `cancelled`, and `error` states. A terminal event has `busy: false`; inspect its status because the iterator also ends after cancellation or failure. A `done` event does not guarantee that the agent created a proposal.
+Task events contain `taskId`, `status`, `detail`, `busy`, monotonic `seq`, and optional `code`. `timeout` and `interrupted` are retryable; the SDK exposes `task.retryable`. Render `queued`, `working`, `done`, `cancelled`, and `error` states. A terminal event has `busy: false`; inspect its status because the iterator also ends after cancellation or failure. A `done` event does not guarantee that the agent created a proposal.
 
 Consume `task.events` once. `subscribeTasks()` is available for shared progress UI. You can also pass an `AbortSignal` to `request()`. Open chat or settings only from explicit user actions. Each request starts without prior conversational history; **View chat** opens a transcript, not a resumable conversation.
 
@@ -182,13 +182,13 @@ The test uses a temporary browser profile and a loopback mock provider. See the 
 
 ## Current operating limits
 
-Site tasks run independently of sidebar chats, with at most 3 running globally, 2 per profile, and 1 outstanding task per tab. Excess tasks wait in eligible FIFO order. The two-minute task timeout includes queue time. Keep the page open: navigation, closing the page, or worker interruption stops work without automatic retry or recovery.
+Site tasks run independently of sidebar chats, with at most 3 running globally, 2 per profile, and 1 outstanding task per tab. Excess tasks wait in eligible FIFO order. Queue wait is limited to five minutes and does not consume run time. Run time is two minutes by default (Options: 1–10 minutes); an app’s optional `timeoutMs` can shorten it. Inactivity is 60 seconds without a stream chunk, tool call or result; a tool waiting on a person would hit this limit. Same-document port drops get ten seconds to reattach with bounded replay. Navigation stops the run; a worker restart marks unfinished tasks `interrupted`. Neither resumes a provider stream or retries automatically. Store the active task ID in `sessionStorage` and call `getTask(id)` on reload (poll if still busy), or `listTasks()` for up to ten recent summaries on this tab and exact origin. No gesture is needed for these summary-only lookups; prompts, responses and tool activity stay extension-private. Show existing proposals and a Retry button for retryable terminal events; its trusted click calls `request()` again with validated current context. See Margin’s recovery banner for an example.
 
 App tasks receive only the requested site-provenance WebMCP tools; Workspace sharing is off by default. In BYOA’s popup, you can share read-only snapshots of Persona (IDENTITY.md and SOUL.md), About you (USER.md), or Memory (MEMORY.md) for that exact origin and chosen connection duration. Shared content can reach destinations used by the site’s tools. AGENTS.md, journals, file tools, and remote-MCP context remain excluded. The page API exposes no sharing state. Every script on an approved origin shares that origin's authority. The page transport does not isolate scripts from one another.
 
 Credentials stay in the extension, but prompts, tool definitions, and tool results go to the configured model endpoint. API billing applies; this does not use a consumer ChatGPT or Claude subscription. Use sample content for development.
 
-See the [SDK contract](../byoa-extension/sdk/README.md) for the full prototype boundaries and client behavior. Spending budgets, persistent site permissions, SDK distribution and provider discovery, and task recovery still need implementation before this becomes a general hosted-app integration.
+See the [SDK contract](../byoa-extension/sdk/README.md) for the full prototype boundaries and client behavior. Spending budgets, SDK distribution and provider discovery still need implementation before this becomes a general hosted-app integration.
 
 
 ### Connection duration and activity

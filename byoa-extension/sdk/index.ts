@@ -9,14 +9,13 @@ export type Connection = {
 };
 export type Profile = { id: string; name: string; ready: boolean };
 export type ProfileList = { profiles: Profile[]; defaultAgentId?: string };
-export type TaskEvent = {
-  taskId: string;
-  status: 'queued' | 'working' | 'done' | 'cancelled' | 'error';
-  detail: string;
-  busy: boolean;
-};
+import type { TaskEvent } from './task-event';
+export type { TaskEvent, TaskCode } from './task-event';
+export type TaskSummary = TaskEvent & { retryable: boolean };
+const retryable = (event: TaskEvent) => event.code === 'timeout' || event.code === 'interrupted';
 export type AgentTask = {
   id: string;
+  readonly retryable: boolean;
   events: AsyncIterable<TaskEvent>;
   cancel(): void;
   openChat(): Promise<void>;
@@ -95,6 +94,16 @@ async function update(method: string, params = {}) {
   return result;
 }
 export const agentboard = {
+  async getTask(taskId: string): Promise<TaskSummary | null> {
+    const event = await call<TaskEvent | null>('task', { taskId });
+    return event ? { ...event, retryable: retryable(event) } : null;
+  },
+  async listTasks(): Promise<TaskSummary[]> {
+    return (await call<TaskEvent[]>('tasks')).map((event) => ({
+      ...event,
+      retryable: retryable(event),
+    }));
+  },
   async getStatus(): Promise<Connection> {
     try {
       return await update('status');
@@ -139,10 +148,12 @@ export const agentboard = {
     prompt,
     tools,
     signal,
+    timeoutMs,
   }: {
     prompt: string;
     tools: readonly string[];
     signal?: AbortSignal;
+    timeoutMs?: number;
   }): Promise<AgentTask> {
     if (signal?.aborted) return Promise.reject(signal.reason || new Error('Cancelled.'));
     const requestId = globalThis.crypto.randomUUID();
@@ -150,6 +161,7 @@ export const agentboard = {
     let wake: (() => void) | undefined;
     let terminal = false;
     let acknowledged = false;
+    let lastEvent: TaskEvent | undefined;
     const abort = () => post(requestId, 'cancel');
     const events: AsyncIterable<TaskEvent> = {
       async *[Symbol.asyncIterator]() {
@@ -174,6 +186,7 @@ export const agentboard = {
         }
       }, 5000);
       taskSinks.set(requestId, (event) => {
+        lastEvent = event;
         latestTask = event;
         for (const listener of taskListeners) listener(event);
         buffer.push(event);
@@ -184,6 +197,9 @@ export const agentboard = {
           clearTimeout(timer);
           resolve({
             id: event.taskId,
+            get retryable() {
+              return !!lastEvent && retryable(lastEvent);
+            },
             events,
             cancel: abort,
             openChat: () => agentboard.openChat(event.taskId),
@@ -196,7 +212,7 @@ export const agentboard = {
         }
       });
       signal?.addEventListener('abort', abort, { once: true });
-      post(requestId, 'request', { prompt, tools });
+      post(requestId, 'request', { prompt, tools, timeoutMs });
     });
   },
 };

@@ -137,6 +137,12 @@
           <h2>Settings</h2>
 
           <div class="form-group">
+            <label for="site-task-timeout">App task run limit (minutes)</label>
+            <input id="site-task-timeout" type="number" min="1" max="10" step="1" value="2" />
+            <p>
+              1–10 minutes, starting after queue wait. Apps can request a shorter limit. Inactive
+              tasks stop after 60 seconds.
+            </p>
             <label for="log-level">Log Level</label>
             <select id="log-level">
               <option value="trace">TRACE - All application events</option>

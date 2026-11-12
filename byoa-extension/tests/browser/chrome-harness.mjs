@@ -37,6 +37,7 @@ export class CdpPipe {
     this.process = process;
     this.nextId = 1;
     this.pending = new Map();
+    this.contexts = new Map();
     this.buffer = Buffer.alloc(0);
     this.closedError = null;
 
@@ -66,7 +67,12 @@ export class CdpPipe {
       if (!payload) continue;
 
       const message = JSON.parse(payload);
-      if (!message.id) continue;
+      if (!message.id) {
+        if (message.method === 'Runtime.executionContextCreated') this.contexts.set(`${message.sessionId}:${message.params.context.id}`, { ...message.params.context, sessionId: message.sessionId });
+        if (message.method === 'Runtime.executionContextDestroyed') this.contexts.delete(`${message.sessionId}:${message.params.executionContextId}`);
+        if (message.method === 'Runtime.executionContextsCleared') for (const [key, context] of this.contexts) if (context.sessionId === message.sessionId) this.contexts.delete(key);
+        continue;
+      }
       const pending = this.pending.get(message.id);
       if (!pending) continue;
       this.pending.delete(message.id);
