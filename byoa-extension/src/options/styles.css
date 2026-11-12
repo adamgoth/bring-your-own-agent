@@ -1,5 +1,6 @@
 /* BYOA settings: styled through the BYOA design tokens (see ../styles/tokens.css) */
 @import '../styles/tokens.css';
+@import '../styles/budget-inputs.css';
 
 * {
   margin: 0;

@@ -1,3 +1,5 @@
+import { createChatSessionService } from './chat-session';
+import { CHAT_SESSION_PORT } from '../lib/chat-session';
 import {
   openConnectionPrompt,
   connectionPromptResult,
@@ -214,6 +216,7 @@ function sendContextSelection(tabId: number, text: string | undefined): void {
 
 /** Invalidate only ephemeral sidebar bootstrap state; file contents never enter this message. */
 function broadcastWorkspaceInvalidation(agentId?: string): void {
+  chatSessions.invalidateWorkspace(agentId);
   const message: ExtensionMessage =
     agentId === undefined
       ? { type: 'WORKSPACE_BINDINGS_INVALIDATED' }
@@ -889,6 +892,24 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   }
 });
 
+const chatSessions = createChatSessionService(
+  aiClient,
+  configStorage,
+  async (tabId) => {
+    await Promise.all([ensureRemoteTools(), waitForCurrentSystemTools()]);
+    await ensureWebMCPReady(tabId);
+    // A restored session may be the first view after a worker restart. Wait for
+    // page registration rather than capturing an empty or not-yet-ready catalog.
+    if (!webmcp.getToolRegistry(tabId)) {
+      await webmcp.requestToolsAndWait(tabId).catch(() => undefined);
+    }
+  },
+  (tabId) => getToolRegistry().getSiteToolHints(tabId)
+);
+chrome.tabs.onRemoved.addListener((tabId) => {
+  void chatSessions.removeTab(tabId);
+});
+
 const sitePortHandler = createSiteAgentHandler(
   aiClient,
   configStorage,
@@ -899,6 +920,10 @@ const sitePortHandler = createSiteAgentHandler(
 
 // Handle long-lived connections for streaming
 chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === CHAT_SESSION_PORT) {
+    chatSessions.connect(port);
+    return;
+  }
   if (port.name === 'agentboard-task') {
     sitePortHandler(port);
     return;
@@ -1215,6 +1240,7 @@ const ensureRemoteTools = (): Promise<void> =>
 // Listen for config changes from Options page
 configStorage.onChange(
   async (newConfig: StorageConfig) => {
+    chatSessions.reconcileAgents(new Set(newConfig.agents.map(({ id }) => id)));
     webmcp.setRelayLogLevel(newConfig.logLevel);
     log.debug('[Background] Configuration updated');
 
@@ -1242,6 +1268,7 @@ configStorage.onChange(
     }
   },
   (error) => {
+    chatSessions.reconcileAgents(new Set());
     getToolRegistry().revokeRemoteTools();
     memoryManager.revokeAll();
     broadcastWorkspaceInvalidation();

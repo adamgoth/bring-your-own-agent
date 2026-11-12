@@ -44,7 +44,7 @@ Local Workspace application logic is covered by source-level tests. Native picke
 6. Add unique values to `IDENTITY.md`, `SOUL.md`, `USER.md`, `AGENTS.md`, and `MEMORY.md`; start a chat and confirm one request contains every value in its fixed role.
 7. Edit those files externally and confirm another turn in the same chat retains the original bootstrap.
 8. Clear the chat and confirm the next request contains the freshest files.
-9. Close and reopen the side panel and confirm the next request contains the freshest files rather than the prior in-memory bootstrap.
+9. Close and reopen the side panel and confirm the conversation and its worker-local bootstrap remain intact. Restart the worker and confirm the next turn reacquires the workspace bootstrap while retaining conversation history.
 10. Switch between agents connected to different roots and confirm history is retained while each agent receives only its newly captured workspace bootstrap.
 11. Have the endpoint request a visible write to `memory/YYYY-MM-DD.md`, then confirm the expected bytes appear in the real folder and standing files remain unchanged.
 12. Restart the service worker and then the browser.
@@ -60,3 +60,7 @@ and active-worker termination. It uses the shipped WebMCP polyfill with native W
 `BYOA_MARGIN_PORT` and `BYOA_BOARD_PORT` optionally select isolated demo servers (defaults 5183/5184).
 Chrome versions that refuse to replace an active worker report that specific scenario as skipped;
 the startup sweep remains covered by unit tests. No automatic model retry is performed.
+
+## Shared sidebar sessions
+
+`pnpm run test:browser:chat:built` uses a temporary Chrome profile and synthetic loopback provider. It checks tool execution with the sidebar closed, replay without another request, follow-up tool history, agent switching during a response, explicit Stop/Clear, actual worker interruption without retry, and cleanup on tab closure. Set `CHROME_FOR_TESTING_BIN` to an extension-capable Chromium binary.

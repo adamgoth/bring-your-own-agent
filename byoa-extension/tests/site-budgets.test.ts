@@ -100,6 +100,47 @@ describe('spending ledger', () => {
       await checkBudget('https://a.test', { ...site, perTaskTokens: 10 }, global, usage)
     ).toContain('Per-task');
   });
+  it.each([
+    [
+      { perDayTokens: 100 },
+      { perTaskTokens: 1000 },
+      '100 tokens',
+      'Daily tokens',
+      'Connected sites',
+    ],
+    [{ perDayUsd: 0.25 }, { perTaskTokens: 1000 }, '$0.25', 'Daily dollars', 'Connected sites'],
+    [
+      {},
+      { perTaskTokens: 1000, perDayTokens: 100 },
+      '100 tokens',
+      'Daily tokens',
+      'App spending limits',
+    ],
+    [{}, { perTaskTokens: 1000, perDayUsd: 0.25 }, '$0.25', 'Daily dollars', 'App spending limits'],
+  ])(
+    'explains the daily limit and where to change it',
+    async (site, global, limit, field, location) => {
+      await recordUsage('https://a.test', usage);
+      const message = await checkBudget('https://a.test', site, global, emptyUsage());
+      expect(message).toContain(`(${limit})`);
+      expect(message).toContain(`Update “${field}”`);
+      expect(message).toContain(location);
+      expect(message).toContain('Resets');
+    }
+  );
+  it('points to the source of the effective per-task limit', async () => {
+    const siteMessage = await checkBudget(
+      'https://a.test',
+      { perTaskTokens: 50 },
+      { perTaskTokens: 100 },
+      usage
+    );
+    expect(siteMessage).toContain('(50 tokens)');
+    expect(siteMessage).toContain('Connected sites');
+    const globalMessage = await checkBudget('https://a.test', {}, { perTaskTokens: 100 }, usage);
+    expect(globalMessage).toContain('(100 tokens)');
+    expect(globalMessage).toContain('App spending limits');
+  });
   it('preserves unknown usage and unknown prices without pretending they are zero', async () => {
     const unknown = normalizeUsage({});
     expect(unknown.usageKnown).toBe(false);

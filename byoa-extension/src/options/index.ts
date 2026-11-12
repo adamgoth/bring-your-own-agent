@@ -66,6 +66,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       validateSpending((await configStorage.get()).spending)
     );
     const saveSpending = document.createElement('button');
+    saveSpending.className = 'button button-secondary';
     saveSpending.textContent = 'Save app spending limits';
     saveSpending.onclick = async () => {
       try {

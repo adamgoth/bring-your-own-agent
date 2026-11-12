@@ -1,5 +1,6 @@
 import { validateBudget, type SiteBudget } from './usage';
 export function budgetInputs(parent: HTMLElement, value: SiteBudget = {}) {
+  parent.classList.add('budget-fields');
   const inputs = new Map<string, HTMLInputElement>();
   for (const [key, label] of [
     ['perTaskTokens', 'Per-task tokens'],
@@ -7,6 +8,7 @@ export function budgetInputs(parent: HTMLElement, value: SiteBudget = {}) {
     ['perDayUsd', 'Daily dollars (requires known cost)'],
   ] as const) {
     const row = document.createElement('label');
+    row.className = 'budget-field';
     row.textContent = label;
     const input = document.createElement('input');
     input.type = 'number';

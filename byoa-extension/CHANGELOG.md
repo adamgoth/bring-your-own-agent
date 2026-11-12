@@ -16,6 +16,8 @@
 
 ## Unreleased
 
+- Keep sidebar conversations in browser-session storage and continue active responses when the sidebar closes. Reopening restores messages and tool activity without rerunning work; Stop and Clear remain explicit actions. Agent switching retains the same history.
+
 - Isolate sidebar and site model streams. Run up to three site tasks concurrently, with two per profile and one per tab; report provider rate limits clearly.
 - Choose session-only, 30-day, or until-disconnect site approvals; incognito stays session-only.
 - Manage Connected sites in Options, including duration, shared files, last use and revocation that cancels running tasks.
