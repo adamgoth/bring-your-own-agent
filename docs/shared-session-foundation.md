@@ -70,7 +70,7 @@ trusted entry-point validation.
   data were used. Voice is not implemented.
 
 The original checkout's unrelated changes are preserved. Implementation is on
-`codex/shared-session-foundation` in a separate worktree.
+`codex/shared-session-foundation` in the main checkout.
 
 ## Hosted Margin compatibility follow-up
 
