@@ -5,6 +5,12 @@ import {
   setupLocalVoice,
   type LocalRecognition,
 } from '../src/sidebar/local-voice';
+vi.mock('../src/lib/voice-lease', () => ({
+  claimVoiceLease: (granted: () => void) => {
+    granted();
+    return () => {};
+  },
+}));
 vi.mock('../src/sidebar/voice-meter', () => ({ startVoiceMeter: vi.fn(() => vi.fn()) }));
 let active: FakeRecognition;
 class FakeRecognition {
@@ -196,4 +202,19 @@ it('cancels a pending Send and preserves the typed draft even if abort throws', 
   expect(document.activeElement).toBe(composer);
   active.onend?.();
   expect(composer.value).toBe('Keep this draft');
+});
+
+it('preserves an external composer edit and suppresses a pending voice Send', async () => {
+  const voice = setupLocalVoice();
+  await vi.waitFor(() => expect(button('voice-record').disabled).toBe(false));
+  button('voice-button').click();
+  active.stop.mockImplementation(() => {});
+  active.onresult?.({ results: [[{ transcript: 'Old dictation' }]] });
+  const finishing = voice?.finishForSend();
+  const composer = document.getElementById('message-input') as HTMLTextAreaElement;
+  composer.value = 'Use the chosen action';
+  composer.dispatchEvent(new Event('input'));
+  active.onend?.();
+  expect(await finishing).toBe(false);
+  expect(composer.value).toBe('Use the chosen action');
 });

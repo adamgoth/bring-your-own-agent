@@ -93,3 +93,9 @@ Reattachment replays bounded progress, not a provider stream. A restart loses th
 Tools that wait on a person would currently trip inactivity; design review as a proposal returned promptly to the app.
 
 Task events include optional cumulative `usage` (input/output/total tokens and `usageKnown`). Show incomplete usage when `usageKnown` is false. `error` with `code: 'budget'` means a person-controlled cap stopped execution; retain proposals for review. Daily caps reset at local midnight. Each running task may overshoot by one provider step. Prices and dollars are extension-private; apps cannot set budgets. Recovery summaries preserve usage and sequence numbers.
+
+
+Connected apps can opt in to extension-owned floating dictation with
+`byoa.configureVoice({ enabled: true, tools: ['registered_page_tool'], instructions: 'Optional bounded app guidance' })`.
+Register tools first; call `configureVoice({ enabled: false })` on disposal. Voice grants no extra tools or sharing.
+See [the integration guide](../../docs/web-app-integration.md#optional-floating-site-voice) for conversation boundaries and local setup.

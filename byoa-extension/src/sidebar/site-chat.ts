@@ -10,6 +10,46 @@ export function setupSiteChat(tabId: number | null, container: HTMLElement) {
   section.id = 'site-agent-chat';
   section.setAttribute('aria-label', 'App agent chat');
   let pending = Promise.resolve();
+  let conversationId: string | undefined;
+  const form = document.createElement('form');
+  const draft = document.createElement('textarea');
+  draft.setAttribute('aria-label', 'Continue this site conversation');
+  draft.placeholder = 'Continue this site conversation…';
+  draft.maxLength = 30000;
+  const send = document.createElement('button');
+  send.type = 'submit';
+  send.textContent = 'Send to this site';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.textContent = 'Cancel site task';
+  const notice = document.createElement('p');
+  notice.setAttribute('role', 'status');
+  form.append(draft, send, cancel, notice);
+  let submitting = false;
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (submitting || !draft.value.trim() || !conversationId) return;
+    submitting = true;
+    send.disabled = true;
+    void chrome.runtime
+      .sendMessage({ type: 'SITE_VOICE_CONTINUE', tabId, conversationId, text: draft.value })
+      .then((result) => {
+        if (result?.success) {
+          draft.value = '';
+          notice.textContent = 'Working with this site’s approved tools…';
+        } else notice.textContent = result?.error || 'Could not continue this conversation.';
+      })
+      .catch(() => {
+        notice.textContent = 'Reload BYOA to continue.';
+      })
+      .finally(() => {
+        submitting = false;
+        send.disabled = false;
+      });
+  });
+  cancel.addEventListener('click', () => {
+    void chrome.runtime.sendMessage({ type: 'SITE_VOICE_CANCEL', tabId, conversationId });
+  });
   const refresh = (focus = false) => {
     pending = pending
       .then(async () => {
@@ -74,6 +114,13 @@ export function setupSiteChat(tabId: number | null, container: HTMLElement) {
           status.textContent = chat.detail;
           article.append(status);
           section.append(article);
+        }
+        const latest = chats.filter((chat) => chat.conversationId).at(-1);
+        conversationId = latest?.conversationId;
+        if (conversationId) {
+          send.disabled = submitting || latest?.status === 'queued' || latest?.status === 'working';
+          cancel.hidden = latest?.status !== 'queued' && latest?.status !== 'working';
+          section.append(form);
         }
         if (!section.isConnected) container.prepend(section);
         if (focus) {

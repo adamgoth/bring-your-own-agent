@@ -61,6 +61,7 @@ export interface StorageConfig {
   builtinScripts?: BuiltinScript[]; // Built-in tool state (only stores user overrides)
   logLevel?: LogLevel;
   siteTaskTimeoutMinutes?: number;
+  voiceMode?: boolean;
 }
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'silent';
@@ -160,6 +161,7 @@ export const DEFAULT_CONFIG: StorageConfig = {
   defaultAgentId: undefined,
   mcpConfig: undefined,
   siteTaskTimeoutMinutes: 2,
+  voiceMode: false,
   logLevel: 'warn', // Default: balance between feedback and noise
 };
 
@@ -448,6 +450,7 @@ export function validateStorageConfigV2(value: unknown): StorageConfig {
     agents,
     siteTaskTimeoutMinutes,
     spending: validateSpending(source.spending),
+    voiceMode: source.voiceMode === true,
     ...(source.defaultAgentId !== undefined && { defaultAgentId: source.defaultAgentId }),
     ...(mcpConfig !== undefined && { mcpConfig }),
     ...(userScripts !== undefined && { userScripts }),

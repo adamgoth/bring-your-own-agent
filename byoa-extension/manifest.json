@@ -8,6 +8,7 @@
     "tabs",
     "activeTab",
     "sidePanel",
+    "offscreen",
     "contextMenus",
     "scripting",
     "webNavigation"
@@ -56,6 +57,10 @@
     }
   ],
   "web_accessible_resources": [
+    {
+      "resources": ["src/site-voice/index.html"],
+      "matches": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"]
+    },
     {
       "resources": ["src/lib/webmcp/tools/read_page/pdf/worker-host.html"],
       "matches": ["https://*/*", "http://localhost/*", "file:///*"]

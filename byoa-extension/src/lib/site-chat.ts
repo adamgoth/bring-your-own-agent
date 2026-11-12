@@ -1,4 +1,6 @@
 export interface SiteChat {
+  conversationId?: string;
+  agentId?: string;
   usage?: import('./usage').TaskUsage;
   origin: string;
   shared?: string[];

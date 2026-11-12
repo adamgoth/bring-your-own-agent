@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { sampleVoiceVolume } from '../src/lib/voice-volume';
 import { startVoiceMeter } from '../src/sidebar/voice-meter';
 afterEach(() => vi.restoreAllMocks());
 it('draws microphone samples and releases the microphone, frame and audio context', async () => {
@@ -121,6 +122,7 @@ it('fits rounded, evenly spaced bars to the available width', async () => {
 });
 
 it('rises gently with speech and keeps quiet history as dots', async () => {
+  vi.useFakeTimers();
   fakeMicrophone(176);
   const frames: Array<(now: number) => void> = [];
   vi.stubGlobal(
@@ -131,11 +133,16 @@ it('rises gently with speech and keeps quiet history as dots', async () => {
   const stop = startVoiceMeter(canvas, vi.fn());
   await vi.waitFor(() => expect(bars.length).toBe(20));
   const heights = () => bars.map(([, top, bottom]) => bottom - top);
+  await vi.advanceTimersByTimeAsync(42);
+  frames.at(-1)!(42);
   const first = heights().at(-1)!;
   // A single frame of loud audio only partly raises the newest bar.
   expect(first).toBeGreaterThan(0.5);
   expect(first).toBeLessThan(10);
-  for (let now = 50; now <= 1000; now += 50) frames.at(-1)!(now);
+  for (let now = 92; now <= 1000; now += 50) {
+    await vi.advanceTimersByTimeAsync(50);
+    frames.at(-1)!(now);
+  }
   const later = heights();
   expect(later.at(-1)!).toBeGreaterThan(first);
   expect(later.at(-1)!).toBeLessThanOrEqual(32 - 3 - 4 + 0.01);
@@ -145,6 +152,7 @@ it('rises gently with speech and keeps quiet history as dots', async () => {
   recent.slice(1).forEach((height, i) => expect(height).toBeGreaterThanOrEqual(recent[i] - 0.01));
   stop();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 it('releases a microphone that arrives after cancellation', async () => {
   let resolve!: (stream: unknown) => void;
@@ -166,7 +174,7 @@ it('releases a microphone that arrives after cancellation', async () => {
         }),
     },
   });
-  const stop = startVoiceMeter(document.createElement('canvas'), vi.fn());
+  const stop = sampleVoiceVolume(vi.fn(), vi.fn());
   stop();
   resolve({ getTracks: () => [track] });
   await vi.waitFor(() => expect(track.stop).toHaveBeenCalledOnce());

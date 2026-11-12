@@ -159,13 +159,20 @@ try {
       throw error;
     }
   );
+  async function startDictation() {
+    await evaluate(
+      `window.__recognition=undefined;document.querySelector('#voice-button').click()`
+    );
+    await waitFor(() => evaluate(`!!window.__recognition`), 'capture lease and recognizer ready');
+  }
   // A context-menu selection supersedes dictation, including an in-flight Send.
   const { sessionId: workerSession } = await cdp.send('Target.attachToTarget', {
     targetId: worker.targetId,
     flatten: true,
   });
+  await startDictation();
   await evaluate(
-    `document.querySelector('#voice-button').click();window.__recognition.onresult({results:[[{transcript:'Superseded dictation'}]]});document.querySelector('#send-button').click()`
+    `window.__recognition.onresult({results:[[{transcript:'Superseded dictation'}]]});document.querySelector('#send-button').click()`
   );
   await cdp.send(
     'Runtime.evaluate',
@@ -193,8 +200,10 @@ try {
   console.log(
     'PASS context-menu selection survives dictation cancellation and late results without sending.'
   );
+  await evaluate(`document.querySelector('#message-input').value='Typed draft'`);
+  await startDictation();
   await evaluate(
-    `document.querySelector('#message-input').value='Typed draft';document.querySelector('#voice-button').click();window.__recognition.onresult({results:[[{transcript:'Synthetic transcript'}]]});`
+    `window.__recognition.onresult({results:[[{transcript:'Synthetic transcript'}]]});`
   );
   await waitFor(
     () =>
@@ -245,9 +254,8 @@ try {
     await evaluate(`document.querySelector('#message-input').classList.contains('is-recording')`),
     false
   );
-  await evaluate(
-    `document.querySelector('#voice-button').click();document.querySelector('#send-button').click()`
-  );
+  await startDictation();
+  await evaluate(`document.querySelector('#send-button').click()`);
   assert.equal(await evaluate(`document.querySelector('#send-button').disabled`), true);
   assert.equal(
     await evaluate(`document.querySelector('#message-input').value`),
