@@ -28,6 +28,14 @@
           <p role="status">Loading your profiles…</p>
         </fieldset>
 
+        <fieldset id="duration">
+          <legend>Stay connected</legend>
+          <select id="persist" aria-label="Connection duration">
+            <option value="session">Until I close the browser</option>
+            <option value="days30">For 30 days</option>
+            <option value="forever">Until I disconnect</option>
+          </select>
+        </fieldset>
         <fieldset id="sharing" hidden>
           <legend>Share with this site (optional)</legend>
           <label
@@ -76,7 +84,7 @@
 
         <p class="note">
           Results come from your agent, not from BYOA. API usage may be billed by your provider.
-          Disconnect from the app anytime.
+          Disconnect from the app or BYOA settings anytime.
         </p>
 
         <p id="error" role="alert" hidden></p>

@@ -18,6 +18,18 @@
         <h1 class="page-title">Settings</h1>
       </div>
       <main>
+        <section class="settings-section" id="connected-sites">
+          <h2>Connected sites</h2>
+          <p>Sites connect when you approve a request in BYOA’s connection window.</p>
+          <button id="disconnect-all" type="button">Disconnect all</button>
+          <button id="clear-site-activity" type="button">Clear activity</button>
+          <p id="site-permissions-error" role="alert" hidden></p>
+          <div id="connected-sites-list"></div>
+          <details>
+            <summary>Recent activity (all sites)</summary>
+            <div id="site-activity-all"></div>
+          </details>
+        </section>
         <section class="agents-section">
           <div class="agents-header">
             <h2>AI Agents</h2>

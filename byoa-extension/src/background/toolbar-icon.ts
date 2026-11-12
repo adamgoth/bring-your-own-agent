@@ -1,7 +1,7 @@
 // Toolbar icon status: the Dock symbol's dot is grey while the current tab's site has no
 // agent connected and orange once it does. The tooltip says the same in words, so the
 // state never depends on color alone.
-import { siteConnectionKey, readSiteGrant } from '../lib/site-grant';
+import { onGrantChanged, readSiteGrant } from '../lib/site-grant';
 
 const ICONS = {
   connected: { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' },
@@ -18,11 +18,15 @@ function originOf(url?: string): string | undefined {
   }
 }
 
-export async function refreshToolbarIcon(tabId: number, url?: string): Promise<void> {
+export async function refreshToolbarIcon(
+  tabId: number,
+  url?: string,
+  incognito = false
+): Promise<void> {
   const origin = originOf(url);
   let connected = false;
   if (origin) {
-    connected = !!(await readSiteGrant(origin));
+    connected = !!(await readSiteGrant(origin, incognito));
   }
   try {
     await chrome.action.setIcon({ tabId, path: connected ? ICONS.connected : ICONS.idle });
@@ -38,20 +42,18 @@ export async function refreshToolbarIcon(tabId: number, url?: string): Promise<v
 async function refreshAllTabs(): Promise<void> {
   const tabs = await chrome.tabs.query({});
   await Promise.all(
-    tabs.map((tab) => (tab.id === undefined ? undefined : refreshToolbarIcon(tab.id, tab.url)))
+    tabs.map((tab) =>
+      tab.id === undefined ? undefined : refreshToolbarIcon(tab.id, tab.url, tab.incognito)
+    )
   );
 }
 
 export function startToolbarIconSync(): void {
   if (!chrome.action?.setIcon) return;
   chrome.tabs.onUpdated?.addListener((tabId, change, tab) => {
-    if (change.url || change.status === 'complete') void refreshToolbarIcon(tabId, tab.url);
+    if (change.url || change.status === 'complete')
+      void refreshToolbarIcon(tabId, tab.url, tab.incognito);
   });
-  chrome.storage.onChanged?.addListener((changes, area) => {
-    if (area !== 'session') return;
-    if (Object.keys(changes).some((key) => key.startsWith(siteConnectionKey('')))) {
-      void refreshAllTabs();
-    }
-  });
+  onGrantChanged(() => void refreshAllTabs());
   void refreshAllTabs();
 }

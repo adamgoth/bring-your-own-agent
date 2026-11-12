@@ -173,6 +173,7 @@ export type ExtensionMessage =
       requestId: string;
       agentId?: string;
       share?: unknown;
+      persist?: unknown;
     }
   | { type: 'SITE_VIEW_CHAT'; taskId?: string }
   | {

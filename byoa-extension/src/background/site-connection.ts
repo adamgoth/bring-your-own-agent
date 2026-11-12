@@ -1,5 +1,4 @@
 import { readSiteGrant } from '../lib/site-grant';
-export { siteConnectionKey } from '../lib/site-grant';
 import type { ConfigStorage } from '../lib/storage/config';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1']);
@@ -33,14 +32,19 @@ export async function siteProfiles(config: ConfigStorage) {
     defaultAgentId: defaultAgent?.id,
   };
 }
-export async function siteConnectionStatus(config: ConfigStorage, origin: string) {
-  const [agents, grant] = await Promise.all([config.getAgents(), readSiteGrant(origin)]);
+export async function siteConnectionStatus(
+  config: ConfigStorage,
+  origin: string,
+  incognito = false
+) {
+  const [agents, grant] = await Promise.all([config.getAgents(), readSiteGrant(origin, incognito)]);
   const agent =
     grant && typeof grant === 'object' && typeof grant.agentId === 'string'
       ? agents.find((agent) => agent.id === grant.agentId)
       : undefined;
   const configured = agents.some((agent) => !!(agent.apiKey || agent.endpoint));
-  const connected = !!agent && !!(agent.apiKey || agent.endpoint);
+  const connected =
+    !!agent && !!(agent.apiKey || agent.endpoint) && (!incognito || grant?.persist === 'session');
   return {
     available: true,
     configured,

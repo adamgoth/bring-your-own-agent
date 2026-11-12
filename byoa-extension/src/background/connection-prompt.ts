@@ -1,5 +1,5 @@
 import { IndexedDBMemoryBindingRepository } from '../lib/memory/bindings';
-import { readSiteGrant, writeSiteGrant } from '../lib/site-grant';
+import { readSiteGrant, writeSiteGrant, validatePersistence } from '../lib/site-grant';
 const bindings = new IndexedDBMemoryBindingRepository();
 import type { ConfigStorage } from '../lib/storage/config';
 import { siteConnectionStatus, siteOrigin, siteProfiles } from './site-connection';
@@ -43,6 +43,7 @@ async function current(prompt: Prompt) {
     frame?.documentId !== prompt.documentId
   )
     throw new Error('The requesting page changed. Connect again from the app.');
+  return tab;
 }
 function popupSender(prompt: Prompt, sender: chrome.runtime.MessageSender) {
   if (
@@ -124,8 +125,11 @@ export async function connectionPromptResult(
   if (prompt.state === 'pending') return { pending: true };
   await chrome.storage.session.remove(prefix + prompt.id);
   if (prompt.state !== 'approved') throw new Error('Connection cancelled.');
-  await current(prompt);
-  return { pending: false, connection: await siteConnectionStatus(config, prompt.origin) };
+  const tab = await current(prompt);
+  return {
+    pending: false,
+    connection: await siteConnectionStatus(config, prompt.origin, tab.incognito),
+  };
 }
 export async function getConnectionPrompt(
   id: unknown,
@@ -136,14 +140,14 @@ export async function getConnectionPrompt(
   popupSender(prompt, sender);
   if (prompt.state !== 'pending' || prompt.expires < Date.now())
     throw new Error('This connection request has ended.');
-  await current(prompt);
+  const tab = await current(prompt);
   const [profiles, connection] = await Promise.all([
     siteProfiles(config),
-    siteConnectionStatus(config, prompt.origin),
+    siteConnectionStatus(config, prompt.origin, tab.incognito),
   ]);
   const [mounted, grant] = await Promise.all([
     bindings.list().catch(() => []),
-    readSiteGrant(prompt.origin),
+    readSiteGrant(prompt.origin, tab.incognito),
   ]);
   return {
     origin: prompt.origin,
@@ -152,6 +156,8 @@ export async function getConnectionPrompt(
       ...profile,
       hasWorkspace: mounted.some((binding) => binding.agentId === profile.id),
     })),
+    incognito: tab.incognito === true,
+    persist: grant?.persist ?? 'session',
     selectedAgentId: connection.agentId,
     share: grant?.agentId === connection.agentId ? grant?.share : undefined,
   };
@@ -162,7 +168,8 @@ export function decideConnectionPrompt(
   approve: boolean,
   sender: chrome.runtime.MessageSender,
   config: ConfigStorage,
-  share?: unknown
+  share?: unknown,
+  persist?: unknown
 ) {
   return serialize(async () => {
     const prompt = await read(id);
@@ -170,12 +177,19 @@ export function decideConnectionPrompt(
     if (prompt.state !== 'pending' || prompt.expires < Date.now())
       throw new Error('This connection request has ended.');
     if (approve) {
-      await current(prompt);
+      const tab = await current(prompt);
+      const duration = validatePersistence(persist);
       const agent = typeof agentId === 'string' ? await config.getAgent(agentId) : null;
       if (!agent || !(agent.apiKey || agent.endpoint))
         throw new Error('Choose a profile that is ready to connect.');
       const binding = await bindings.get(agent.id).catch(() => undefined);
-      await writeSiteGrant(prompt.origin, agent.id, binding ? share : undefined);
+      await writeSiteGrant(
+        prompt.origin,
+        agent.id,
+        binding ? share : undefined,
+        tab.incognito ? 'session' : duration,
+        tab.incognito === true
+      );
     }
     prompt.state = approve ? 'approved' : 'cancelled';
     await save(prompt);

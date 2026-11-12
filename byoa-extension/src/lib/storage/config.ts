@@ -1,3 +1,4 @@
+import { revokeGrantsForAgent } from '../site-grant';
 /**
  * Configuration storage abstraction
  * Agent-centric configuration for AI assistants
@@ -588,6 +589,7 @@ export class ConfigStorage {
   }
 
   async deleteAgent(id: string): Promise<void> {
+    await revokeGrantsForAgent(id);
     await this.update((config) => {
       const index = config.agents.findIndex((agent) => agent.id === id);
       if (index === -1) throw new Error(`Agent ${id} not found`);
