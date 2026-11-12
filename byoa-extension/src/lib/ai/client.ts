@@ -237,7 +237,7 @@ export interface StreamFinishMetadata {
   stepsExhausted: boolean;
 }
 
-export type StreamAbortReason = 'replaced' | 'remote-tools-changed';
+export type StreamAbortReason = 'replaced' | 'remote-tools-changed' | 'document-changed';
 
 export interface StreamCallbacks {
   onProgress?: () => void;
@@ -323,6 +323,7 @@ export class AIClient {
     workspaceContext?: ConversationWorkspaceContext,
     siteTask?: {
       lane?: string;
+      isCurrentDocument?: () => boolean;
       tools: readonly string[];
       share?: SiteShare;
       onContext?: (shared: string[], notice?: string) => void;
@@ -435,6 +436,12 @@ export class AIClient {
 
       const runtime = createModelRuntime(agent);
       const toolRegistry = getToolRegistry();
+      // Recheck after every asynchronous preparation phase, immediately before binding tools.
+      // A tab ID is not authority to acquire a replacement document's same-named tools.
+      if (siteTask?.isCurrentDocument && !siteTask.isCurrentDocument()) {
+        notifyAbort('document-changed');
+        return;
+      }
       const toolSnapshot = toolRegistry.captureToolSnapshot(tabId);
       const memoryEnabled = !siteTask && memory.state === 'available';
       const memoryTools =
@@ -561,6 +568,10 @@ export class AIClient {
           }),
         };
 
+        if (siteTask?.isCurrentDocument && !siteTask.isCurrentDocument()) {
+          notifyAbort('document-changed');
+          return;
+        }
         const streamResult = streamText(streamParams as Parameters<typeof streamText>[0]);
 
         // Handle the stream with tool support

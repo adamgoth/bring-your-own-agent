@@ -14,6 +14,16 @@ function harness() {
     .fn()
     .mockResolvedValue({ id: 'configured', name: 'API test', apiKey: 'fixture-only-key' });
   const prepare = vi.fn().mockResolvedValue(undefined);
+  const ownsDocument = vi.fn().mockReturnValue(true);
+  const navigations: Array<(details: { tabId: number; frameId: number }) => void> = [];
+  Object.assign(chrome, {
+    webNavigation: {
+      onBeforeNavigate: {
+        addListener: (fn: (details: { tabId: number; frameId: number }) => void) =>
+          navigations.push(fn),
+      },
+    },
+  });
   const listener = createSiteAgentHandler(
     { streamChat, cancelStream } as unknown as AIClient,
     {
@@ -24,7 +34,9 @@ function harness() {
         return agent ? [agent] : [];
       }),
     } as unknown as ConfigStorage,
-    prepare
+    prepare,
+    Promise.resolve(),
+    ownsDocument
   );
   const connect = (
     url = 'http://localhost:5183/',
@@ -54,7 +66,15 @@ function harness() {
     cleanups.push(() => receive({ type: 'cancel' }));
     return { port, send: (msg: object) => receive(msg), close: () => disconnect() };
   };
-  return { streamChat, cancelStream, getAgent, prepare, connect };
+  return {
+    streamChat,
+    cancelStream,
+    getAgent,
+    prepare,
+    connect,
+    ownsDocument,
+    navigate: (tabId: number, frameId = 0) => navigations.forEach((fn) => fn({ tabId, frameId })),
+  };
 }
 
 describe('Site background tasks', () => {
@@ -498,4 +518,80 @@ describe('Site background tasks', () => {
     second.send({ type: 'cancel' });
     third.send({ type: 'cancel' });
   });
+  it('interrupts a queued task on top-document navigation during the port grace window', async () => {
+    const h = harness();
+    const releases: Array<() => void> = [];
+    h.streamChat.mockImplementation(() => new Promise<void>((resolve) => releases.push(resolve)));
+    const start = (tab: number) => {
+      const p = h.connect(undefined, tab);
+      p.send({ type: 'start', tools: ['get_selection'], text: 'Private original context' });
+      return p;
+    };
+    const first = start(1);
+    const second = start(2);
+    const queued = start(3);
+    await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledTimes(2));
+    const queuedId = queued.port.postMessage.mock.calls[0][0].taskId;
+    queued.close();
+    h.navigate(3, 1); // An iframe does not revoke the top document.
+    expect(h.cancelStream).not.toHaveBeenCalledWith(queuedId);
+    h.ownsDocument.mockImplementation((tabId) => tabId !== 3);
+    h.navigate(3);
+    expect(h.cancelStream).toHaveBeenCalledWith(queuedId);
+    first.send({ type: 'cancel' });
+    releases[0]();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(h.streamChat).toHaveBeenCalledTimes(2);
+    second.send({ type: 'cancel' });
+    releases.forEach((release) => release());
+    await vi.waitFor(() =>
+      expect(chrome.storage.session.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          [`agentboard_chat_3_${queuedId}`]: expect.objectContaining({
+            status: 'error',
+            lastEvent: expect.objectContaining({ code: 'interrupted' }),
+          }),
+        })
+      )
+    );
+  });
+  it('revalidates document ownership after preparation even if navigation notification was missed', async () => {
+    const h = harness();
+    let release!: () => void;
+    h.prepare.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        })
+    );
+    const p = h.connect();
+    p.send({ type: 'start', tools: ['get_selection'], text: 'Original origin' });
+    await vi.waitFor(() => expect(h.prepare).toHaveBeenCalledOnce());
+    h.ownsDocument.mockReturnValue(false);
+    release();
+    await vi.waitFor(() =>
+      expect(p.port.postMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ code: 'interrupted', status: 'error' })
+      )
+    );
+    expect(h.streamChat).not.toHaveBeenCalled();
+  });
+  it.each([false, true])(
+    'distinguishes document loss from same-document tool changes (lost=%s)',
+    async (lost) => {
+      const h = harness();
+      const p = h.connect();
+      p.send({ type: 'start', tools: ['get_selection'], text: 'Changes' });
+      await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
+      h.ownsDocument.mockReturnValue(!lost);
+      (h.streamChat.mock.calls[0][3] as StreamCallbacks).onFinish('Partial', {
+        toolsChanged: true,
+        stepsExhausted: false,
+      });
+      expect(p.port.postMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: 'error', code: lost ? 'interrupted' : 'tools-changed' })
+      );
+    }
+  );
 });
