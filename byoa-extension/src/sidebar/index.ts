@@ -379,7 +379,9 @@ function setupMessageListener() {
 
       // Handle text selected from context menu
       if (request.text) {
+        voice?.cancel();
         messageInput.value = `Please help me with this text:\n\n"${request.text}"`;
+        messageInput.dispatchEvent(new Event('input', { bubbles: true }));
         messageInput.focus();
       }
     } else if (request.type === 'PING') {
