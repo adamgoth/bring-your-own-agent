@@ -31,7 +31,11 @@ Typing or changing the document after the request starts disables acceptance, ev
 
 ## Host as a static app
 
-Keep this app in the BYOA repository so its shared SDK import resolves during the build. It deploys independently of the extension and Boardwalk. From the repository root:
+Keep this app in the BYOA repository so its shared SDK import resolves during the build. It deploys independently of the extension and Boardwalk.
+
+Margin's build first compiles the shared SDK with Margin's installed TypeScript compiler. A clean checkout only needs Margin's dependencies; installing or building the extension is not required.
+
+From the repository root:
 
 ```sh
 npm ci --prefix demos/margin
