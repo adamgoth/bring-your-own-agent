@@ -28,6 +28,31 @@
           <p role="status">Loading your profiles…</p>
         </fieldset>
 
+        <fieldset id="sharing" hidden>
+          <legend>Share with this site (optional)</legend>
+          <label
+            ><input type="checkbox" id="share-persona" /><span
+              >Persona and tone<small>IDENTITY.md, SOUL.md</small></span
+            ></label
+          >
+          <label
+            ><input type="checkbox" id="share-user" /><span
+              >About you<small>USER.md</small></span
+            ></label
+          >
+          <label
+            ><input type="checkbox" id="share-memory" /><span
+              >Memory<small
+                >MEMORY.md — most sensitive; may include things learned on other sites</small
+              ></span
+            ></label
+          >
+          <p class="note">
+            Shared files are read-only snapshots. Anything you share can be sent wherever this
+            site's tools send it.
+          </p>
+        </fieldset>
+
         <ul class="scope" aria-label="What this site can do">
           <li>
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -45,7 +70,7 @@
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
               <path class="dash" d="M6 12H18" />
             </svg>
-            Can’t see your API keys or other profiles
+            Can’t see your API keys or other profiles. Workspace files are shared only if ticked
           </li>
         </ul>
 
@@ -59,7 +84,9 @@
           <button id="cancel" class="secondary" type="button">Not now</button>
           <button id="approve" class="primary" type="submit" disabled>Connect</button>
         </div>
-        <button id="settings" class="settings" type="button">Manage profiles in BYOA settings</button>
+        <button id="settings" class="settings" type="button">
+          Manage profiles in BYOA settings
+        </button>
       </form>
     </main>
     <script type="module" src="./index.ts"></script>
