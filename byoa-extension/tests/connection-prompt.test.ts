@@ -7,7 +7,7 @@ import {
   connectionPromptResult,
   closeConnectionPrompt,
 } from '../src/background/connection-prompt';
-import { siteConnectionKey } from '../src/background/site-connection';
+import { siteConnectionKey } from '../src/lib/site-grant';
 import type { ConfigStorage } from '../src/lib/storage/config';
 const origin = 'http://localhost:5184';
 const sender = {
@@ -71,6 +71,56 @@ afterEach(() => {
   vi.useRealTimers();
 });
 describe('extension-owned profile approval', () => {
+  it('validates duration and calculates expiry in the extension', async () => {
+    const { requestId } = await openConnectionPrompt(sender);
+    await expect(
+      decideConnectionPrompt(requestId, 'one', true, popup(requestId), config, undefined, 'invalid')
+    ).rejects.toThrow('duration');
+    const before = Date.now();
+    await decideConnectionPrompt(
+      requestId,
+      'one',
+      true,
+      popup(requestId),
+      config,
+      undefined,
+      'days30'
+    );
+    expect(chrome.storage.local.set).toHaveBeenCalledWith({
+      [siteConnectionKey(origin)]: expect.objectContaining({
+        persist: 'days30',
+        expiresAt: expect.any(Number),
+      }),
+    });
+    const grant = vi
+      .mocked(chrome.storage.local.set)
+      .mock.calls.map(
+        (call) => (call[0] as Record<string, { expiresAt: number }>)[siteConnectionKey(origin)]
+      )
+      .find(Boolean);
+    expect(grant!.expiresAt).toBeGreaterThanOrEqual(before + 2592000000);
+    expect(grant!.expiresAt).toBeLessThanOrEqual(Date.now() + 2592000000);
+  });
+  it('hides duration and forces session approval for incognito tabs', async () => {
+    vi.mocked(chrome.tabs.get).mockResolvedValue({
+      id: 7,
+      url: `${origin}/`,
+      incognito: true,
+    } as chrome.tabs.Tab);
+    const { requestId } = await openConnectionPrompt(sender);
+    expect((await getConnectionPrompt(requestId, popup(requestId), config)).incognito).toBe(true);
+    await decideConnectionPrompt(
+      requestId,
+      'one',
+      true,
+      popup(requestId),
+      config,
+      undefined,
+      'forever'
+    );
+    expect(data[siteConnectionKey(origin)]).toMatchObject({ persist: 'session', incognito: true });
+  });
+
   it('requires popup approval and returns only the approved connection to the page', async () => {
     const { requestId } = await openConnectionPrompt(sender);
     expect(data[siteConnectionKey(origin)]).toBeUndefined();
@@ -112,6 +162,8 @@ describe('extension-owned profile approval', () => {
     });
     expect(data[siteConnectionKey(origin)]).toEqual({
       agentId: 'one',
+      persist: 'session',
+      createdAt: expect.any(Number),
       share: { persona: mounted, user: false, memory: false },
     });
     const result = await connectionPromptResult(requestId, sender, config);

@@ -142,7 +142,7 @@ await new Promise((r) => provider.listen(0, '127.0.0.1', r));
 const endpoint = `http://127.0.0.1:${provider.address().port}/v1`;
 const profile = mkdtempSync(join(tmpdir(), 'byoa-two-app-'));
 const extension = fileURLToPath(new URL('../../dist', import.meta.url));
-const browser = spawn(
+const launchBrowser = () => spawn(
   process.env.CHROME_FOR_TESTING_BIN,
   [
     '--headless=new',
@@ -160,7 +160,8 @@ const browser = spawn(
   ],
   { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] }
 );
-const cdp = new CdpPipe(browser);
+let browser = launchBrowser();
+let cdp = new CdpPipe(browser);
 const send = (method, params = {}, session) =>
   Promise.race([
     cdp.send(method, params, session),
@@ -214,14 +215,14 @@ try {
       ),
     'worker'
   );
-  const ext = await page(`chrome-extension://${new URL(worker.url).host}/src/options/index.html`);
+  let ext = await page(`chrome-extension://${new URL(worker.url).host}/src/options/index.html`);
   await waitFor(() => ext.evaluate(`document.readyState==='complete'&&!!chrome.tabs`), 'options');
   assert.equal(await ext.evaluate(`chrome.runtime.getManifest().name`), 'BYOA');
   assert.equal(await ext.evaluate(`document.title`), 'BYOA: settings');
   await ext.evaluate(
     `chrome.storage.local.get('config').then(({config})=>chrome.storage.local.set({config:{...config,schemaVersion:2,agents:[{id:'fixture',name:'Demo deepseek',provider:'openai',apiProtocol:'openai-chat-completions',model:'fixture',endpoint:${JSON.stringify(endpoint)},temperature:0.7,maxSteps:8,isDefault:true}],defaultAgentId:'fixture'}}))`
   );
-  const board = await page(`${boardOrigin}/`);
+  let board = await page(`${boardOrigin}/`);
   await waitFor(
     () =>
       board.evaluate(
@@ -236,8 +237,8 @@ try {
       ),
     'board SDK bridge'
   );
-  const tabId = await ext.evaluate(
-    `chrome.tabs.query({url:${JSON.stringify(boardOrigin + '/*')}}).then(t=>t[0].id)`
+  let tabId = await ext.evaluate(
+    `chrome.tabs.query({url:${JSON.stringify(boardOrigin + '/*')}}).then(t=>Math.max(...t.map(tab=>tab.id)))`
   );
   await waitFor(async () => {
     const catalog = await ext.evaluate(
@@ -270,6 +271,8 @@ try {
   );
   assert.ok(await firstPrompt.evaluate(`document.querySelector('#sharing').hidden`), 'Sharing hidden without a workspace');
   assert.equal(await firstPrompt.evaluate(`document.querySelectorAll('#sharing input:checked').length`), 0, 'Sharing defaults off');
+  assert.equal(await firstPrompt.evaluate(`document.querySelector('#persist').value`), 'session');
+  await firstPrompt.evaluate(`document.querySelector('#persist').value='days30'`);
   await firstPrompt.click('#approve');
   await waitFor(
     () =>
@@ -278,6 +281,18 @@ try {
       ),
     'connected name'
   );
+  // Restart the actual browser with the same temporary profile; session storage is lost.
+  const optionsUrl = `chrome-extension://${new URL(worker.url).host}/src/options/index.html`;
+  await send('Browser.close');
+  if (browser.exitCode === null) await new Promise(resolve => browser.once('close', resolve));
+  browser = launchBrowser(); cdp = new CdpPipe(browser);
+  ext = await page(optionsUrl);
+  await waitFor(() => ext.evaluate(`document.readyState==='complete'&&!!chrome.tabs`), 'restarted options');
+  board = await page(`${boardOrigin}/`);
+  await waitFor(() => board.evaluate(`document.querySelector('#agent-indicator')?.textContent.includes('Demo deepseek')`), 'persistent connection after restart');
+  await waitFor(() => ext.evaluate(`document.querySelector('[data-origin="${boardOrigin}"]')?.textContent.includes('For 30 days')`), 'connected sites duration');
+  tabId = await ext.evaluate(`chrome.tabs.query({url:${JSON.stringify(boardOrigin + '/*')}}).then(t=>Math.max(...t.map(tab=>tab.id)))`);
+  console.log('PASS 30-day approval survives a real browser restart and appears in Connected sites.');
   await board.click('#agent-indicator');
   await send(
     'Emulation.setDeviceMetricsOverride',
@@ -292,6 +307,7 @@ try {
     )
   );
   // Cancelling the extension-owned picker leaves the existing connection untouched.
+  await board.evaluate(`document.querySelector('#connection-menu').hidden=true`);
   await board.click('#agent-indicator');
   await waitFor(
     () => board.evaluate(`!document.querySelector('[data-action="connect"]').disabled`),
@@ -310,6 +326,7 @@ try {
     () => cancelPrompt.evaluate(`!document.querySelector('#approve').disabled`),
     'switch popup ready'
   );
+  assert.equal(await cancelPrompt.evaluate(`document.querySelector('#persist').value`), 'days30');
   await cancelPrompt.click('#cancel');
   await waitFor(
     () => board.evaluate(`document.querySelector('#toast')?.textContent.includes('cancelled')`),
@@ -555,7 +572,8 @@ try {
   assert.equal(requests.length, 8);
   // Revoking only the board origin stops its held request, while Margin remains connected.
   await board.click('#agent-indicator');
-  await board.click('[data-action="disconnect"]');
+  await ext.click(`[data-origin="${boardOrigin}"] [data-action="disconnect"]`);
+  await waitFor(() => board.evaluate(`document.querySelector('#agent-indicator').textContent.includes('Not connected')`), 'Options disconnect reaches app');
   await waitFor(
     () =>
       board.evaluate(`document.querySelector('#task-status').textContent.includes('Task stopped')`),
@@ -569,6 +587,7 @@ try {
   console.log(
     'PASS cross-app queuing, queued cancellation, and origin-scoped disconnect while a model request waits.'
   );
+  console.log('PASS Options revocation disconnects the app and cancels its running persistent task.');
   // Optional conversation opens only on an explicit user click and focuses the correct task.
   await board.click('[data-action="chat"]');
   const focused = await waitFor(
@@ -625,6 +644,15 @@ try {
     )
   );
   console.log('PASS mobile layout fits the viewport. No real provider credentials used.');
+  await ext.evaluate(`document.querySelector('#connected-sites [data-origin="${marginOrigin}"] select').value='forever'`);
+  await ext.click(`[data-origin="${marginOrigin}"] button`);
+  await waitFor(() => ext.evaluate(`document.querySelector('[data-origin="${marginOrigin}"] p').textContent.includes('Until I disconnect')`), 'forever duration saved');
+  await send('Browser.close');
+  if (browser.exitCode === null) await new Promise(resolve => browser.once('close', resolve));
+  browser = launchBrowser(); cdp = new CdpPipe(browser);
+  const reopened = await page(`${marginOrigin}/`);
+  await waitFor(() => reopened.evaluate(`document.querySelector('.agent-connection-button')?.textContent.includes('Second profile')`), 'forever connection after restart');
+  console.log('PASS until-disconnect approval survives a real browser restart.');
 } finally {
   provider.closeAllConnections();
   provider.close();

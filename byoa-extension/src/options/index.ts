@@ -4,6 +4,7 @@
  */
 
 import log from '../lib/logger';
+import { initializeConnectedSites } from './connected-sites';
 import './styles.css';
 import {
   ConfigStorage,
@@ -50,6 +51,7 @@ let connectionTestGeneration = 0;
 document.addEventListener('DOMContentLoaded', async () => {
   // Recovery must remain operable even when the editor DOM or configuration is unavailable.
   await initializeBackupRestore();
+  await initializeConnectedSites();
   try {
     agentMemoryControls = new AgentMemoryControls(document);
     setupEventListeners();
