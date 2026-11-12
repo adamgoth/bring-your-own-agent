@@ -1661,4 +1661,40 @@ export function execute() { return {}; }`;
       vi.useRealTimers();
     }
   });
+  it('does not acquire replacement-document tools or send shared context after async site preparation', async () => {
+    storeAgent('document-agent');
+    const capture = vi.spyOn(getToolRegistry(), 'captureToolSnapshot');
+    const memory = mountedMemory('PRIVATE_ORIGINAL_DOCUMENT_CONTEXT');
+    let resolveMemory!: (value: typeof memory.resolved) => void;
+    mocks.resolveMemory.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveMemory = resolve;
+        })
+    );
+    const isCurrentDocument = vi.fn().mockReturnValue(true);
+    const onAbort = vi.fn();
+    const onError = vi.fn();
+    const pending = AIClient.getInstance().streamChat(
+      'document-agent',
+      [{ role: 'user', content: 'Original request' }],
+      7,
+      { onFinish: vi.fn(), onError, onAbort },
+      'document-stream',
+      undefined,
+      {
+        tools: ['get_selection'],
+        share: { persona: false, user: false, memory: true },
+        isCurrentDocument,
+      }
+    );
+    await vi.waitFor(() => expect(mocks.resolveMemory).toHaveBeenCalled());
+    isCurrentDocument.mockReturnValue(false);
+    resolveMemory(memory.resolved);
+    await pending;
+    expect(onAbort).toHaveBeenCalledWith('document-changed');
+    expect(onError).not.toHaveBeenCalled();
+    expect(capture).not.toHaveBeenCalled();
+    expect(mocks.streamText).not.toHaveBeenCalled();
+  });
 });

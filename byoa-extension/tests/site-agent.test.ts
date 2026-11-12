@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readSiteGrant, siteConnectionKey } from '../src/lib/site-grant';
 import { createSiteAgentHandler } from '../src/background/site-agent';
 import type { AIClient, StreamCallbacks } from '../src/lib/ai/client';
 import type { ConfigStorage } from '../src/lib/storage/config';
 
+const cleanups: Array<() => void> = [];
 const SITE_CONNECTION_KEY = siteConnectionKey('http://localhost:5183');
 
 function harness() {
@@ -13,23 +14,41 @@ function harness() {
     .fn()
     .mockResolvedValue({ id: 'configured', name: 'API test', apiKey: 'fixture-only-key' });
   const prepare = vi.fn().mockResolvedValue(undefined);
+  const ownsDocument = vi.fn().mockReturnValue(true);
+  const navigations: Array<(details: { tabId: number; frameId: number }) => void> = [];
+  Object.assign(chrome, {
+    webNavigation: {
+      onBeforeNavigate: {
+        addListener: (fn: (details: { tabId: number; frameId: number }) => void) =>
+          navigations.push(fn),
+      },
+    },
+  });
   const listener = createSiteAgentHandler(
     { streamChat, cancelStream } as unknown as AIClient,
     {
+      get: vi.fn().mockResolvedValue({ siteTaskTimeoutMinutes: 2 }),
       getAgent,
       getAgents: vi.fn().mockImplementation(async () => {
         const agent = await getAgent();
         return agent ? [agent] : [];
       }),
     } as unknown as ConfigStorage,
-    prepare
+    prepare,
+    Promise.resolve(),
+    ownsDocument
   );
-  const connect = (url = 'http://localhost:5183/', tabId = 7, incognito = false) => {
+  const connect = (
+    url = 'http://localhost:5183/',
+    tabId = 7,
+    incognito = false,
+    documentId = 'doc-1'
+  ) => {
     let receive: (msg: object) => void = () => {};
     let disconnect: () => void = () => {};
     const port = {
       name: 'agentboard-task',
-      sender: { url, frameId: 0, tab: { id: tabId, incognito } },
+      sender: { url, documentId, frameId: 0, tab: { id: tabId, incognito } },
       postMessage: vi.fn(),
       disconnect: vi.fn(),
       onMessage: {
@@ -44,12 +63,25 @@ function harness() {
       },
     };
     listener(port as unknown as chrome.runtime.Port);
+    cleanups.push(() => receive({ type: 'cancel' }));
     return { port, send: (msg: object) => receive(msg), close: () => disconnect() };
   };
-  return { streamChat, cancelStream, getAgent, prepare, connect };
+  return {
+    streamChat,
+    cancelStream,
+    getAgent,
+    prepare,
+    connect,
+    ownsDocument,
+    navigate: (tabId: number, frameId = 0) => navigations.forEach((fn) => fn({ tabId, frameId })),
+  };
 }
 
 describe('Site background tasks', () => {
+  afterEach(() => {
+    cleanups.splice(0).forEach((cleanup) => cleanup());
+    vi.useRealTimers();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(
@@ -270,7 +302,7 @@ describe('Site background tasks', () => {
     const p = h.connect();
     p.send({ type: 'start', tools: ['get_selection', 'propose_replacement'], text: 'One' });
     await vi.waitFor(() => expect(h.prepare).toHaveBeenCalledOnce());
-    p.close();
+    p.send({ type: 'cancel' });
     release();
     await Promise.resolve();
     expect(h.streamChat).not.toHaveBeenCalled();
@@ -331,6 +363,235 @@ describe('Site background tasks', () => {
         expect.objectContaining({ status: 'cancelled', busy: false })
       );
       p.close();
+    }
+  );
+  it('reattaches only the same document, replays in order, and routes live cancellation', async () => {
+    const h = harness();
+    const p = h.connect();
+    p.send({ type: 'start', tools: ['get_selection'], text: 'Recover' });
+    await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
+    const taskId = h.streamChat.mock.calls[0][4];
+    const callbacks = h.streamChat.mock.calls[0][3] as StreamCallbacks;
+    const last = p.port.postMessage.mock.calls.at(-1)![0].seq;
+    p.close();
+    for (const [url, tab, incognito, doc] of [
+      ['http://localhost:5183/', 8, false, 'doc-1'],
+      ['http://localhost:5184/', 7, false, 'doc-1'],
+      ['http://localhost:5183/', 7, false, 'doc-2'],
+      ['http://localhost:5183/', 7, true, 'doc-1'],
+    ] as const) {
+      const rejected = h.connect(url, tab, incognito, doc);
+      rejected.send({ type: 'attach', taskId, afterSeq: last });
+      expect(rejected.port.postMessage).toHaveBeenCalledWith({ type: 'not-running' });
+    }
+    for (let i = 0; i < 60; i++)
+      callbacks.onToolResult?.({ id: String(i), status: 'success', output: {} } as never);
+    const next = h.connect();
+    next.send({ type: 'attach', taskId, afterSeq: last });
+    const replay = next.port.postMessage.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.seq);
+    expect(replay).toHaveLength(50);
+    expect(replay.map((event) => event.seq)).toEqual(
+      [...replay.map((event) => event.seq)].sort((a, b) => a - b)
+    );
+    expect(replay.every((event) => event.seq > last)).toBe(true);
+    expect(h.cancelStream).not.toHaveBeenCalled();
+    next.send({ type: 'cancel' });
+    expect(h.cancelStream).toHaveBeenCalledWith(taskId);
+    expect(next.port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'cancelled' })
+    );
+  });
+  it('gives a disconnected document ten seconds, including a finish during the gap', async () => {
+    const h = harness();
+    const p = h.connect();
+    p.send({ type: 'start', tools: ['get_selection'], text: 'Recover' });
+    await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
+    vi.useFakeTimers();
+    p.close();
+    await vi.advanceTimersByTimeAsync(9999);
+    expect(h.cancelStream).not.toHaveBeenCalled();
+    (h.streamChat.mock.calls[0][3] as StreamCallbacks).onFinish('Finished offline');
+    const next = h.connect();
+    next.send({ type: 'attach', taskId: h.streamChat.mock.calls[0][4], afterSeq: 0 });
+    expect(next.port.postMessage).toHaveBeenCalledWith(expect.objectContaining({ status: 'done' }));
+    await vi.advanceTimersByTimeAsync(2);
+    expect(h.cancelStream).not.toHaveBeenCalled();
+  });
+  it('expires the grace period and releases the tab for another task', async () => {
+    const h = harness();
+    const p = h.connect();
+    p.send({ type: 'start', tools: ['get_selection'], text: 'Recover' });
+    await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
+    vi.useFakeTimers();
+    p.close();
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(h.cancelStream).toHaveBeenCalledOnce();
+    const next = h.connect();
+    next.send({ type: 'start', tools: ['get_selection'], text: 'Again' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.streamChat).toHaveBeenCalledTimes(2);
+    next.send({ type: 'cancel' });
+  });
+  it('resets inactivity on progress, and app run time is independently clamped', async () => {
+    const h = harness();
+    const p = h.connect();
+    vi.useFakeTimers();
+    p.send({ type: 'start', tools: ['get_selection'], text: 'Recover', timeoutMs: 90000 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.streamChat).toHaveBeenCalledOnce();
+    const callbacks = h.streamChat.mock.calls[0][3] as StreamCallbacks;
+    await vi.advanceTimersByTimeAsync(59000);
+    callbacks.onProgress?.();
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(h.cancelStream).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(p.port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ code: 'timeout', detail: expect.stringContaining('Run time') })
+    );
+    const other = h.connect();
+    other.send({ type: 'start', tools: ['get_selection'], text: 'Idle' });
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(other.port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ code: 'timeout', detail: expect.stringContaining('Inactivity') })
+    );
+  });
+  it('queue wait does not consume run time, and the queue has its own five minute limit', async () => {
+    const h = harness();
+    vi.useFakeTimers();
+    const releases: Array<() => void> = [];
+    h.streamChat.mockImplementation(() => new Promise<void>((resolve) => releases.push(resolve)));
+    const start = (tab: number, timeoutMs = 600000) => {
+      const p = h.connect(undefined, tab);
+      p.send({ type: 'start', tools: ['get_selection'], text: 'Queue', timeoutMs });
+      return p;
+    };
+    const first = start(1);
+    const second = start(2);
+    const queued = start(3, 1000);
+    const expires = start(4);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.streamChat).toHaveBeenCalledTimes(2);
+    // Keep occupied slots making progress while a third and fourth task wait.
+    for (let i = 0; i < 4; i++) {
+      await vi.advanceTimersByTimeAsync(50000);
+      for (const call of h.streamChat.mock.calls) (call[3] as StreamCallbacks).onProgress?.();
+    }
+    first.send({ type: 'cancel' });
+    releases[0]();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.streamChat).toHaveBeenCalledTimes(3);
+    expect(queued.port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'working' })
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(queued.port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ code: 'timeout', detail: expect.stringContaining('Run time') })
+    );
+    for (let i = 0; i < 2; i++) {
+      (h.streamChat.mock.calls[1][3] as StreamCallbacks).onProgress?.();
+      await vi.advanceTimersByTimeAsync(49500);
+    }
+    expect(expires.port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ code: 'timeout', detail: expect.stringContaining('Queue wait') })
+    );
+    second.send({ type: 'cancel' });
+    releases.forEach((release) => release());
+  });
+  it('releases scheduler capacity when cancellation interrupts a stalled preparation', async () => {
+    const h = harness();
+    h.prepare.mockImplementation(() => new Promise(() => {}));
+    const start = (tab: number) => {
+      const p = h.connect(undefined, tab);
+      p.send({ type: 'start', tools: ['get_selection'], text: 'Prepare' });
+      return p;
+    };
+    const first = start(1);
+    const second = start(2);
+    const third = start(3);
+    await vi.waitFor(() => expect(h.prepare).toHaveBeenCalledTimes(2));
+    first.send({ type: 'cancel' });
+    await vi.waitFor(() => expect(h.prepare).toHaveBeenCalledTimes(3));
+    expect(h.streamChat).not.toHaveBeenCalled();
+    second.send({ type: 'cancel' });
+    third.send({ type: 'cancel' });
+  });
+  it('interrupts a queued task on top-document navigation during the port grace window', async () => {
+    const h = harness();
+    const releases: Array<() => void> = [];
+    h.streamChat.mockImplementation(() => new Promise<void>((resolve) => releases.push(resolve)));
+    const start = (tab: number) => {
+      const p = h.connect(undefined, tab);
+      p.send({ type: 'start', tools: ['get_selection'], text: 'Private original context' });
+      return p;
+    };
+    const first = start(1);
+    const second = start(2);
+    const queued = start(3);
+    await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledTimes(2));
+    const queuedId = queued.port.postMessage.mock.calls[0][0].taskId;
+    queued.close();
+    h.navigate(3, 1); // An iframe does not revoke the top document.
+    expect(h.cancelStream).not.toHaveBeenCalledWith(queuedId);
+    h.ownsDocument.mockImplementation((tabId) => tabId !== 3);
+    h.navigate(3);
+    expect(h.cancelStream).toHaveBeenCalledWith(queuedId);
+    first.send({ type: 'cancel' });
+    releases[0]();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(h.streamChat).toHaveBeenCalledTimes(2);
+    second.send({ type: 'cancel' });
+    releases.forEach((release) => release());
+    await vi.waitFor(() =>
+      expect(chrome.storage.session.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          [`agentboard_chat_3_${queuedId}`]: expect.objectContaining({
+            status: 'error',
+            lastEvent: expect.objectContaining({ code: 'interrupted' }),
+          }),
+        })
+      )
+    );
+  });
+  it('revalidates document ownership after preparation even if navigation notification was missed', async () => {
+    const h = harness();
+    let release!: () => void;
+    h.prepare.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        })
+    );
+    const p = h.connect();
+    p.send({ type: 'start', tools: ['get_selection'], text: 'Original origin' });
+    await vi.waitFor(() => expect(h.prepare).toHaveBeenCalledOnce());
+    h.ownsDocument.mockReturnValue(false);
+    release();
+    await vi.waitFor(() =>
+      expect(p.port.postMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ code: 'interrupted', status: 'error' })
+      )
+    );
+    expect(h.streamChat).not.toHaveBeenCalled();
+  });
+  it.each([false, true])(
+    'distinguishes document loss from same-document tool changes (lost=%s)',
+    async (lost) => {
+      const h = harness();
+      const p = h.connect();
+      p.send({ type: 'start', tools: ['get_selection'], text: 'Changes' });
+      await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
+      h.ownsDocument.mockReturnValue(!lost);
+      (h.streamChat.mock.calls[0][3] as StreamCallbacks).onFinish('Partial', {
+        toolsChanged: true,
+        stepsExhausted: false,
+      });
+      expect(p.port.postMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: 'error', code: lost ? 'interrupted' : 'tools-changed' })
+      );
     }
   );
 });

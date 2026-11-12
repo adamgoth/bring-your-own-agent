@@ -14,7 +14,7 @@ We do not sell extension data or use it for advertising.
 
 BYOA stores its settings in your browser. These settings may include service credentials, endpoints, model and tool configuration, command templates, scripts, and interface preferences.
 
-Conversations, attachments, page content, and tool activity may be held in memory while the extension is running, but normal sidebar conversations are not automatically persisted. The experimental page-request interface keeps bounded, per-tab task transcripts (prompt, response, and tool activity) in extension session storage so an optional sidebar can display them. These clear with the browser session; they are not included in settings exports.
+Conversations, attachments, page content, and tool activity may be held in memory while the extension is running, but normal sidebar conversations are not automatically persisted. The experimental page-request interface keeps bounded, per-tab task transcripts (prompt, response, and tool activity) in extension session storage so an optional sidebar can display them. These clear with the browser session; they are not included in settings exports. Session task records also include document identity, sequence and liveness timestamps. An integrating page can look up compact status summaries only for its own tab and exact origin (isolated between regular and private browsing); lookups never return transcript content. Margin keeps its last request ID and retry inputs in that tab’s sessionStorage for an explicit Retry button.
 
 You may optionally connect a local folder to an agent as a Local Workspace. BYOA stores the folder connection in your browser; the files remain in the folder you selected.
 

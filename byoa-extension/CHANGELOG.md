@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — task recovery
+
+- Same-document task-port reattachment with a ten-second grace period and 50-event replay buffer.
+- Session-only sequenced task records, tab/origin-scoped summary lookup, and restart interruption reporting.
+- Separate queue, run and inactivity limits; Options run limit (1–10 minutes), with app requests clamped to it.
+- SDK lookup and retryability; Margin reload recovery with explicit gesture-based retry. No automatic retry or stream resumption.
+
 ## Unreleased
 
 - Isolate sidebar and site model streams. Run up to three site tasks concurrently, with two per profile and one per tab; report provider rate limits clearly.

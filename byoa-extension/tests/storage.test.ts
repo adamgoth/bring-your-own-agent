@@ -183,6 +183,7 @@ describe('schema-v2 parser', () => {
     expect(parsed.migrated).toBe(false);
     expect(parsed.config).toEqual({
       schemaVersion: 2,
+      siteTaskTimeoutMinutes: 2,
       agents: [
         {
           id: 'agent-1',

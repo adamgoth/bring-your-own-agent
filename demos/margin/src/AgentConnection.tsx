@@ -1,11 +1,12 @@
 import { ErrorNotice } from './ErrorNotice';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, X } from 'lucide-react';
-import { agentboard, useAgentBoardConnection, useAgentBoardTask } from './agentboard';
+import { agentboard, useAgentBoardConnection, useAgentBoardTask, useTaskRecovery, retryRecoveredTask, dismissRecovery } from './agentboard';
 
 export function AgentConnection() {
   const connection = useAgentBoardConnection();
   const task = useAgentBoardTask();
+  const recovery = useTaskRecovery();
   const [error, setError] = useState('');
   const [connecting, setConnecting] = useState(false);
   const act = (operation: Promise<unknown>) => { setError(''); void operation.catch(error => setError(error instanceof Error ? error.message : String(error))); };
@@ -27,6 +28,7 @@ export function AgentConnection() {
       aria-expanded={open} aria-controls="agent-connection-menu" onClick={() => setOpen(value => !value)}>
       <span aria-hidden="true" /><span className="agent-profile-name">{label}</span><ChevronDown size={13} aria-hidden="true" />
     </button>
+    {recovery && <aside role="status" className="task-recovery"><p>{recovery.detail} Review existing proposals before repeating this request.</p><button disabled={!!task?.busy || !connection.connected} onClick={() => act(retryRecoveredTask())}>Retry request</button><button onClick={dismissRecovery}>Dismiss</button></aside>}
     {open && <section className="agent-connection-menu" id="agent-connection-menu" aria-label="Agent connection">
       <button className="icon-button connection-close" aria-label="Close agent connection" onClick={() => setOpen(false)}><X size={14}/></button>
       <strong>{connection.connected ? profileName : 'Connect your agent'}</strong>

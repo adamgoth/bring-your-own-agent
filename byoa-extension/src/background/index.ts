@@ -8,6 +8,8 @@ import {
 import { revokeSiteGrant } from '../lib/site-grant';
 import { siteOrigin, siteConnectionStatus } from './site-connection';
 import { createSiteAgentHandler } from './site-agent';
+import { sweepInterruptedTasks, lookupSiteTasks } from './site-tasks';
+const siteTasksReady = sweepInterruptedTasks();
 import { startToolbarIconSync } from './toolbar-icon';
 /**
  * Background service worker for Chrome extension
@@ -392,6 +394,34 @@ chrome.runtime.onMessage.addListener((request: ExtensionMessage, sender, sendRes
           error: error instanceof Error ? error.message : 'Connection failed.',
         })
       );
+      return true;
+    }
+    case 'SITE_TASK':
+    case 'SITE_TASKS': {
+      const tabId = sender.tab?.id;
+      const origin = siteOrigin(sender);
+      if (
+        tabId === undefined ||
+        !origin ||
+        (request.type === 'SITE_TASK' &&
+          (typeof request.taskId !== 'string' || !/^[a-f0-9-]{36}$/.test(request.taskId)))
+      ) {
+        sendResponse({ success: false });
+        return false;
+      }
+      void siteTasksReady
+        .then(() =>
+          lookupSiteTasks(
+            tabId,
+            origin,
+            sender.tab?.incognito === true,
+            request.type === 'SITE_TASK' ? request.taskId : undefined
+          )
+        )
+        .then(
+          (tasks) => sendResponse(request.type === 'SITE_TASK' ? (tasks[0] ?? null) : tasks),
+          () => sendResponse({ success: false, error: 'Task lookup unavailable.' })
+        );
       return true;
     }
     case 'SITE_VIEW_CHAT': {
@@ -858,7 +888,13 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   }
 });
 
-const sitePortHandler = createSiteAgentHandler(aiClient, configStorage, waitForCurrentSystemTools);
+const sitePortHandler = createSiteAgentHandler(
+  aiClient,
+  configStorage,
+  waitForCurrentSystemTools,
+  siteTasksReady,
+  (tabId, documentId) => webmcp.ownsDocument(tabId, documentId)
+);
 
 // Handle long-lived connections for streaming
 chrome.runtime.onConnect.addListener((port) => {

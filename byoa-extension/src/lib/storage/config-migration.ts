@@ -100,3 +100,17 @@ export function migrateAgentToV2(agent: unknown): Record<string, unknown> {
   if (!customEndpoint) delete migrated.endpoint;
   return migrated;
 }
+
+/** Missing settings in older schema-v2 exports migrate to the original two-minute run limit. */
+export function migrateTaskTimeout(value: unknown): number {
+  if (value === undefined) return 2;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 10)
+    throw new Error('Invalid site task timeout');
+  return value;
+}
+export function clampTaskTimeout(minutes: unknown, requested: unknown): number {
+  const limit = migrateTaskTimeout(minutes) * 60000;
+  return typeof requested === 'number' && Number.isFinite(requested) && requested > 0
+    ? Math.max(1, Math.min(limit, requested))
+    : limit;
+}
