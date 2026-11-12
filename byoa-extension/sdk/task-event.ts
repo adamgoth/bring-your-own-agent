@@ -6,7 +6,14 @@ export type TaskCode =
   | 'revoked'
   | 'tools-changed'
   | 'step-limit';
+export type TaskUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  usageKnown: boolean;
+};
 export type TaskEvent = {
+  usage?: TaskUsage;
   taskId: string;
   status: 'queued' | 'working' | 'done' | 'cancelled' | 'error';
   detail: string;

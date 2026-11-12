@@ -34,3 +34,9 @@ Initial BYOA release, based on AgentBoard by Ilya Grigorik.
 - Interact with WebMCP tools through the browser sidebar.
 - Connect agents to the included local writing editor and Kanban demos.
 - Optionally configure remote MCP servers and a local workspace.
+
+### Spending budgets and usage
+
+- Added person-controlled per-task, site daily and all-sites daily budgets, a serialized 35-day local ledger, and isolated private session accounting.
+- Added cumulative token usage to task events/recovery and Boardwalk, with explicit incomplete usage and step-limit fallback. Budget stops preserve proposals and use `error` / `budget`.
+- Added optional profile pricing and extension-private cost/activity reporting. No built-in prices; sidebar chats are excluded. Caps are checked at provider step boundaries and may overshoot by one step per running task.

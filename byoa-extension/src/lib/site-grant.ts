@@ -1,3 +1,4 @@
+import { validateBudget, type SiteBudget } from './usage';
 import { createOperationQueue } from './operation-queue';
 import { appendSiteActivity } from './site-activity';
 
@@ -8,6 +9,7 @@ export interface SiteShare {
 }
 export type SitePersistence = 'session' | 'days30' | 'forever';
 export interface SiteGrant {
+  budget?: SiteBudget;
   agentId: string;
   share: SiteShare;
   persist: SitePersistence;
@@ -33,6 +35,12 @@ export function validateSiteGrant(value: unknown): SiteGrant | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return;
   const grant = value as Record<string, unknown>;
   if (typeof grant.agentId !== 'string' || !grant.agentId.trim()) return;
+  let budget: SiteBudget;
+  try {
+    budget = validateBudget(grant.budget);
+  } catch {
+    return;
+  }
   let persist: SitePersistence;
   try {
     persist = validatePersistence(grant.persist);
@@ -48,6 +56,7 @@ export function validateSiteGrant(value: unknown): SiteGrant | undefined {
   if (grant.incognito === true && persist !== 'session') return;
   if (grant.lastUsedAt !== undefined && !timestamp(grant.lastUsedAt)) return;
   return {
+    ...(Object.keys(budget).length ? { budget } : {}),
     agentId: grant.agentId,
     share: validateSiteShare(grant.share),
     persist,
@@ -98,7 +107,8 @@ export function writeSiteGrant(
   agentId: string,
   share?: unknown,
   duration?: unknown,
-  incognito = privateContext()
+  incognito = privateContext(),
+  budget?: unknown
 ) {
   return run(async () => {
     const requested = validatePersistence(duration);
@@ -106,6 +116,7 @@ export function writeSiteGrant(
     const now = Date.now();
     const grant = validateSiteGrant({
       agentId,
+      budget: validateBudget(budget),
       share,
       persist,
       createdAt: now,

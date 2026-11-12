@@ -1,3 +1,4 @@
+import { publicUsage } from '../lib/usage';
 import { siteChatPrefix, type SiteChat } from '../lib/site-chat';
 import type { TaskEvent } from '../lib/task-event';
 
@@ -42,6 +43,7 @@ export function sweepInterruptedTasks() {
       if (!/^agentboard_chat_\d+_/.test(key) || !['queued', 'working'].includes(value?.status))
         continue;
       const lastEvent: TaskEvent = {
+        ...(value.usage ? { usage: publicUsage(value.usage) } : {}),
         taskId: value.id,
         status: 'error',
         busy: false,
@@ -84,6 +86,7 @@ export function lookupSiteTasks(
         return event
           ? [
               {
+                ...(event.usage ? { usage: publicUsage(event.usage) } : {}),
                 taskId: event.taskId,
                 status: event.status,
                 detail: event.detail,

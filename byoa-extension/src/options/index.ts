@@ -1,3 +1,5 @@
+import { budgetInputs } from '../lib/budget-inputs';
+import { validateSpending } from '../lib/usage';
 /**
  * Options page logic
  * Handles agent configuration and management
@@ -53,6 +55,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initializeBackupRestore();
   await initializeConnectedSites();
   try {
+    const spending = document.createElement('fieldset');
+    spending.append(
+      Object.assign(document.createElement('legend'), {
+        textContent: 'App spending limits (sidebar chats excluded)',
+      })
+    );
+    const readSpending = budgetInputs(
+      spending,
+      validateSpending((await configStorage.get()).spending)
+    );
+    const saveSpending = document.createElement('button');
+    saveSpending.textContent = 'Save app spending limits';
+    saveSpending.onclick = async () => {
+      try {
+        await configStorage.set({ spending: validateSpending(readSpending()) });
+        showStatus('Spending limits saved.', 'success');
+      } catch {
+        showStatus('Enter valid positive limits.', 'error');
+      }
+    };
+    spending.append(saveSpending);
+    document.getElementById('site-task-timeout')?.parentElement?.append(spending);
     agentMemoryControls = new AgentMemoryControls(document);
     setupEventListeners();
     await renderAgents();

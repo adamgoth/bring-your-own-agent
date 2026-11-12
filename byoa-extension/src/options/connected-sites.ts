@@ -1,3 +1,5 @@
+import { budgetInputs } from '../lib/budget-inputs';
+import { todayUsage } from '../background/site-budgets';
 import { listGrants, onGrantChanged, revokeSiteGrant, writeSiteGrant } from '../lib/site-grant';
 import {
   onSiteActivityChanged,
@@ -23,6 +25,9 @@ function activityList(container: HTMLElement, entries: SiteActivity[]) {
       entry.kind,
       entry.agentName,
       entry.status,
+      entry.usage
+        ? `${entry.usage.totalTokens} tokens${entry.usage.usageKnown ? '' : ' (incomplete)'}${entry.usage.costUsd === undefined ? ' · cost unknown' : ` · $${entry.usage.costUsd.toFixed(6)}`}`
+        : undefined,
       entry.tools?.join(', '),
       entry.durationMs === undefined ? undefined : `${entry.durationMs} ms`,
     ]
@@ -59,6 +64,10 @@ export async function initializeConnectedSites() {
     list.replaceChildren();
     if (!entries.length)
       list.textContent = 'No connected sites. Connect from an app to get started.';
+    const total = await todayUsage('', globalThis.chrome?.extension?.inIncognitoContext === true);
+    const overview = document.createElement('p');
+    overview.textContent = `All sites today${globalThis.chrome?.extension?.inIncognitoContext ? ' (Incognito only)' : ' (regular browsing)'}: ${total.global.tokens} tokens${total.global.unknown ? ' (incomplete usage)' : ''} · $${total.global.usd.toFixed(6)}${total.global.unknownCost ? ' (incomplete cost)' : ''}`;
+    list.append(overview);
     for (const { origin, grant } of entries) {
       const row = document.createElement('article');
       row.dataset.origin = origin;
@@ -83,9 +92,17 @@ export async function initializeConnectedSites() {
       select.disabled = grant.incognito === true;
       const change = document.createElement('button');
       change.textContent = 'Change duration';
+      change.dataset.action = 'change-duration';
       change.onclick = () =>
         void act(() =>
-          writeSiteGrant(origin, grant.agentId, grant.share, select.value, grant.incognito === true)
+          writeSiteGrant(
+            origin,
+            grant.agentId,
+            grant.share,
+            select.value,
+            grant.incognito === true,
+            grant.budget
+          )
         );
       const disconnect = document.createElement('button');
       disconnect.textContent = 'Disconnect';
@@ -100,7 +117,26 @@ export async function initializeConnectedSites() {
         activity.filter((entry) => entry.origin === origin)
       );
       details.append(summary, events);
-      row.append(title, info, select, change, disconnect, details);
+      const spending = document.createElement('fieldset');
+      const readBudget = budgetInputs(spending, grant.budget);
+      const save = document.createElement('button');
+      save.textContent = 'Save spending limits';
+      save.dataset.action = 'save-budget';
+      save.onclick = () =>
+        void act(() =>
+          writeSiteGrant(
+            origin,
+            grant.agentId,
+            grant.share,
+            grant.persist,
+            grant.incognito === true,
+            readBudget()
+          )
+        );
+      const totals = await todayUsage(origin, grant.incognito === true);
+      const usage = document.createElement('p');
+      usage.textContent = `Today: ${totals.site.tokens} tokens${totals.site.unknown ? ' (incomplete; step limit fallback)' : ''} · $${totals.site.usd.toFixed(6)}${totals.site.unknownCost ? ' (incomplete cost)' : ''}`;
+      row.append(title, info, usage, spending, save, select, change, disconnect, details);
       list.append(row);
     }
     const all = document.getElementById('site-activity-all');

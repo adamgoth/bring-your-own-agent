@@ -1,3 +1,5 @@
+import { emptyUsage, addUsage, publicUsage, validateSpending } from '../lib/usage';
+import { checkBudget, priceUsage, recordUsage } from './site-budgets';
 import { raceWithAbort } from '../lib/abort';
 import { appendSiteActivity } from '../lib/site-activity';
 import { siteOrigin, siteConnectionStatus } from './site-connection';
@@ -65,6 +67,8 @@ export function createSiteAgentHandler(
     let runTimer: ReturnType<typeof setTimeout> | undefined;
     let idleTimer: ReturnType<typeof setTimeout> | undefined;
     let graceTimer: ReturnType<typeof setTimeout> | undefined;
+    let usage = { ...emptyUsage(), costUsd: 0 } as import('../lib/usage').TaskUsage;
+    let budgetReason: string | undefined;
     let seq = 0;
     const events: TaskEvent[] = [];
     const publish = (
@@ -74,9 +78,13 @@ export function createSiteAgentHandler(
       code?: TaskCode
     ) => {
       const event: TaskEvent = {
+        usage: publicUsage(usage),
         taskId: streamId,
         status,
-        detail,
+        detail:
+          code === 'budget' && detail.includes('dollar')
+            ? 'Spending budget reached. Results so far remain for review. Daily limits reset at local midnight.'
+            : detail,
         busy,
         seq: ++seq,
         ...(code && { code }),
@@ -84,7 +92,7 @@ export function createSiteAgentHandler(
       events.push(event);
       if (events.length > 50) events.shift();
       if (chat) {
-        Object.assign(chat, { status, detail, seq, lastEvent: event });
+        Object.assign(chat, { status, detail, seq, lastEvent: event, usage });
         saveChat();
       }
       try {
@@ -136,14 +144,20 @@ export function createSiteAgentHandler(
           agentName: chat?.agentName,
           tools: [...usedTools],
           durationMs: Date.now() - startedAt,
+          usage,
         }).catch(() => undefined);
       for (const timer of [queueTimer, runTimer, idleTimer]) if (timer) clearTimeout(timer);
       // Retain terminal events only while a disconnected document can still reattach.
       if (currentPort) running.delete(streamId);
       if (ownsTab) activeTabs.delete(tabId);
+      if (!usage.usageKnown)
+        detail +=
+          ' Usage unavailable for one or more steps; token budgets use reported usage only and the step limit remains active.';
       publish(
         status,
-        status === 'done' ? 'Task finished. Review changes in the app.' : detail,
+        status === 'done' && usage.usageKnown
+          ? 'Task finished. Review changes in the app.'
+          : detail,
         false,
         code
       );
@@ -363,6 +377,37 @@ export function createSiteAgentHandler(
               return;
             }
             authorizedShare = grant.share;
+            const beforeStep = async () => {
+              if (finished) return false;
+              const [currentGrant, currentSettings] = await raceWithAbort(
+                Promise.all([readSiteGrant(origin, sender?.tab?.incognito), config.get()]),
+                controller.signal
+              );
+              if (finished) return false;
+              if (
+                !currentGrant ||
+                currentGrant.agentId !== agent.id ||
+                JSON.stringify(currentGrant.share) !== JSON.stringify(authorizedShare)
+              ) {
+                cancel('Site access was revoked.', 'revoked');
+                return false;
+              }
+              budgetReason = await raceWithAbort(
+                checkBudget(
+                  origin,
+                  currentGrant.budget ?? {},
+                  validateSpending(currentSettings.spending),
+                  usage,
+                  sender?.tab?.incognito === true
+                ),
+                controller.signal
+              );
+              return !budgetReason;
+            };
+            if (!(await beforeStep())) {
+              finish('error', budgetReason ?? 'Budget reached.', 'budget');
+              return;
+            }
             await raceWithAbort(touchGrant(origin, sender?.tab?.incognito), controller.signal);
             await raceWithAbort(prepare(), controller.signal);
             if (finished) return;
@@ -383,6 +428,36 @@ export function createSiteAgentHandler(
               ],
               tabId,
               {
+                onUsage: async (step) => {
+                  const priced = priceUsage(step, agent);
+                  usage = addUsage(usage, priced);
+                  if (chat) {
+                    chat.usage = usage;
+                    saveChat();
+                  }
+                  await recordUsage(origin, priced, sender?.tab?.incognito === true);
+                  await beforeStep();
+                  // Account completed provider work even if cancellation won the race.
+                  if (chat) {
+                    chat.usage = usage;
+                    saveChat();
+                  }
+                  if (finished && chat)
+                    publish(
+                      chat.status as TaskEvent['status'],
+                      chat.detail,
+                      false,
+                      chat.lastEvent.code
+                    );
+                  if (!finished)
+                    publish(
+                      'working',
+                      usage.usageKnown
+                        ? 'Usage updated.'
+                        : 'Usage unavailable; falling back to the step limit.',
+                      true
+                    );
+                },
                 onProgress: progress,
                 onTextBlockChunk: (_block, chunk) => {
                   if (finished || !chat) return;
@@ -433,28 +508,43 @@ export function createSiteAgentHandler(
                   }
                   if (chat) chat.response = response.slice(0, 100000);
                   finish(
-                    metadata?.toolsChanged || metadata?.stepsExhausted ? 'error' : 'done',
-                    metadata?.toolsChanged
-                      ? 'The page tools changed. Review any suggestions before retrying.'
-                      : metadata?.stepsExhausted
-                        ? 'The task reached its step limit. Review any suggestions before retrying.'
-                        : 'Finished. Review the result in the app.',
-                    metadata?.toolsChanged
-                      ? 'tools-changed'
-                      : metadata?.stepsExhausted
-                        ? 'step-limit'
-                        : undefined
+                    metadata?.budgetExhausted ||
+                      budgetReason ||
+                      metadata?.toolsChanged ||
+                      metadata?.stepsExhausted
+                      ? 'error'
+                      : 'done',
+                    metadata?.budgetExhausted || budgetReason
+                      ? `${budgetReason ?? 'Budget reached.'} Results so far remain for review.`
+                      : metadata?.toolsChanged
+                        ? 'The page tools changed. Review any suggestions before retrying.'
+                        : metadata?.stepsExhausted
+                          ? 'The task reached its step limit. Review any suggestions before retrying.'
+                          : 'Finished. Review the result in the app.',
+                    metadata?.budgetExhausted || budgetReason
+                      ? 'budget'
+                      : metadata?.toolsChanged
+                        ? 'tools-changed'
+                        : metadata?.stepsExhausted
+                          ? 'step-limit'
+                          : undefined
                   );
                 },
                 onAbort: () =>
-                  finish(
-                    'error',
-                    isCurrentDocument()
-                      ? 'The page tools changed. Results so far remain for review.'
-                      : interruption,
-                    isCurrentDocument() ? 'tools-changed' : 'interrupted'
-                  ),
+                  budgetReason
+                    ? finish('error', `${budgetReason} Results so far remain for review.`, 'budget')
+                    : finish(
+                        'error',
+                        isCurrentDocument()
+                          ? 'The page tools changed. Results so far remain for review.'
+                          : interruption,
+                        isCurrentDocument() ? 'tools-changed' : 'interrupted'
+                      ),
                 onError: (error) => {
+                  if (budgetReason) {
+                    finish('error', `${budgetReason} Results so far remain for review.`, 'budget');
+                    return;
+                  }
                   if (!isCurrentDocument()) {
                     cancel(interruption, 'interrupted');
                     return;
@@ -470,6 +560,7 @@ export function createSiteAgentHandler(
               streamId,
               undefined,
               {
+                beforeStep,
                 lane: `site:${streamId}`,
                 isCurrentDocument,
                 tools,

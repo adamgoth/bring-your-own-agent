@@ -88,6 +88,89 @@ describe('Site background tasks', () => {
       chrome.storage.session.get as (keys: string) => Promise<Record<string, unknown>>
     ).mockResolvedValue({ [SITE_CONNECTION_KEY]: { agentId: 'configured' } });
   });
+  it('blocks an exhausted daily budget before preparing or calling the provider', async () => {
+    vi.mocked(
+      chrome.storage.session.get as (keys: string) => Promise<Record<string, unknown>>
+    ).mockResolvedValue({
+      [SITE_CONNECTION_KEY]: { agentId: 'configured', budget: { perDayTokens: 1 } },
+    });
+    vi.mocked(
+      chrome.storage.local.get as (keys: string) => Promise<Record<string, unknown>>
+    ).mockResolvedValue({
+      byoa_usage_ledger: {
+        [new Date().toLocaleDateString('sv-SE')]: {
+          'http://localhost:5183': { tokens: 1, usd: 0 },
+        },
+      },
+    });
+    const h = harness();
+    const p = h.connect();
+    p.send({ type: 'start', tools: ['get_selection'], text: 'Budget fixture' });
+    await vi.waitFor(() =>
+      expect(p.port.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'error',
+          code: 'budget',
+          usage: expect.objectContaining({ totalTokens: 0 }),
+        })
+      )
+    );
+    expect(h.streamChat).not.toHaveBeenCalled();
+    expect(h.prepare).not.toHaveBeenCalled();
+    vi.mocked(
+      chrome.storage.local.get as (keys: string) => Promise<Record<string, unknown>>
+    ).mockResolvedValue({});
+  });
+  it('retains cumulative token-only usage and proposals on a mid-task budget stop', async () => {
+    vi.mocked(
+      chrome.storage.session.get as (keys: string) => Promise<Record<string, unknown>>
+    ).mockResolvedValue({
+      [SITE_CONNECTION_KEY]: { agentId: 'configured', budget: { perTaskTokens: 10 } },
+    });
+    const h = harness();
+    const p = h.connect();
+    p.send({ type: 'start', tools: ['get_selection'], text: 'Budget fixture' });
+    await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
+    const callbacks = h.streamChat.mock.calls[0][3] as StreamCallbacks;
+    await callbacks.onUsage?.({
+      inputTokens: 8,
+      outputTokens: 4,
+      totalTokens: 12,
+      usageKnown: true,
+    });
+    expect(await h.streamChat.mock.calls[0][6].beforeStep()).toBe(false);
+    callbacks.onFinish('Partial proposal', {
+      toolsChanged: false,
+      stepsExhausted: false,
+      budgetExhausted: true,
+    });
+    const terminal = p.port.postMessage.mock.calls.at(-1)?.[0];
+    expect(terminal).toMatchObject({
+      status: 'error',
+      code: 'budget',
+      usage: { totalTokens: 12, usageKnown: true },
+    });
+    expect(terminal.usage).not.toHaveProperty('costUsd');
+  });
+  it('labels missing usage on the terminal event while retaining step limits', async () => {
+    const h = harness();
+    const p = h.connect();
+    p.send({ type: 'start', tools: ['get_selection'], text: 'Unknown usage fixture' });
+    await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
+    const callbacks = h.streamChat.mock.calls[0][3] as StreamCallbacks;
+    await callbacks.onUsage?.({
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      usageKnown: false,
+    });
+    callbacks.onFinish('Done');
+    expect(p.port.postMessage.mock.calls.at(-1)?.[0]).toMatchObject({
+      status: 'done',
+      detail: expect.stringContaining('step limit'),
+      usage: { usageKnown: false },
+    });
+  });
   it.each([false, true])(
     'revocation cancels only tasks in its browsing context (private=%s)',
     async (incognito) => {

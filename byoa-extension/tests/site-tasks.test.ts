@@ -81,6 +81,24 @@ describe('Session task records', () => {
       'PRIVATE RESPONSE'
     );
   });
+  it('preserves usage on worker interruption while projecting costs out of lookup', async () => {
+    const task = record();
+    task.usage = {
+      inputTokens: 6,
+      outputTokens: 4,
+      totalTokens: 10,
+      usageKnown: false,
+      costUsd: 0.5,
+    };
+    await saveSiteTask(task);
+    await sweepInterruptedTasks();
+    const events = await lookupSiteTasks(7, task.origin, false);
+    expect(events[0]).toMatchObject({
+      code: 'interrupted',
+      usage: { totalTokens: 10, usageKnown: false },
+    });
+    expect(events[0].usage).not.toHaveProperty('costUsd');
+  });
   it('bounds recent terminal records without pruning a live run', async () => {
     await saveSiteTask(record('live'));
     for (let i = 0; i < 15; i++) {

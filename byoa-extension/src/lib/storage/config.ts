@@ -1,3 +1,9 @@
+import {
+  validateSpending,
+  validatePrices,
+  type SpendingSettings,
+  type TokenPrices,
+} from '../usage';
 import { revokeGrantsForAgent } from '../site-grant';
 /**
  * Configuration storage abstraction
@@ -30,6 +36,7 @@ export interface ReasoningConfig {
 }
 
 export interface AgentConfig {
+  prices?: TokenPrices;
   id: string;
   name: string;
   description?: string;
@@ -45,6 +52,7 @@ export interface AgentConfig {
 }
 
 export interface StorageConfig {
+  spending?: SpendingSettings;
   schemaVersion: typeof CONFIG_SCHEMA_VERSION;
   agents: AgentConfig[];
   defaultAgentId?: string;
@@ -337,6 +345,7 @@ function validateAgent(value: unknown): AgentConfig {
   const reasoning = validateReasoning(source.reasoning);
 
   return {
+    prices: validatePrices(source.prices),
     id: source.id as string,
     name: source.name as string,
     provider: source.provider as AIProvider,
@@ -438,6 +447,7 @@ export function validateStorageConfigV2(value: unknown): StorageConfig {
     schemaVersion: CONFIG_SCHEMA_VERSION,
     agents,
     siteTaskTimeoutMinutes,
+    spending: validateSpending(source.spending),
     ...(source.defaultAgentId !== undefined && { defaultAgentId: source.defaultAgentId }),
     ...(mcpConfig !== undefined && { mcpConfig }),
     ...(userScripts !== undefined && { userScripts }),

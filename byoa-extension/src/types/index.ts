@@ -174,6 +174,7 @@ export type ExtensionMessage =
       agentId?: string;
       share?: unknown;
       persist?: unknown;
+      budget?: unknown;
     }
   | { type: 'SITE_TASK'; taskId: string }
   | { type: 'SITE_TASKS' }
