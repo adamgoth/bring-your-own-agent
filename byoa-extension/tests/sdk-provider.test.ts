@@ -108,19 +108,33 @@ describe('SDK client', () => {
     client.dispose();
     expect(f.listeners.get('task')?.size).toBe(0);
   });
-  it('finishes a preflight failure with an empty task ID', async () => {
+  it('rejects uncorrelatable empty IDs instead of attributing another request failure', async () => {
     const f = fixture();
     f.provider.request = vi.fn(async () => {
       f.emit('task', { ...terminal, taskId: '', status: 'error', detail: 'Gesture required' });
       return { taskId: '' };
     });
     const client = createClient(f.provider);
-    const task = await client.request({ prompt: 'Synthetic', tools: [] });
-    const events = [];
-    for await (const event of task.events) events.push(event);
-    expect(events).toHaveLength(1);
-    expect(events[0].detail).toBe('Gesture required');
+    await expect(client.request({ prompt: 'Synthetic', tools: [] })).rejects.toMatchObject({
+      code: -32603,
+    });
     client.dispose();
+  });
+  it('aborts pending discovery on disposal and never attaches to a disposed client', async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    const respond = () =>
+      window.dispatchEvent(new CustomEvent('agent:announceProvider', { detail: f.detail }));
+    window.addEventListener('agent:requestProvider', respond);
+    const on = vi.spyOn(f.provider, 'on');
+    const client = createClient();
+    const result = client.getStatus();
+    client.dispose();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(await result).toMatchObject({ available: false });
+    expect(on).not.toHaveBeenCalled();
+    await expect(client.connect()).rejects.toMatchObject({ code: 4900 });
+    window.removeEventListener('agent:requestProvider', respond);
   });
   it('cancels if aborted during acknowledgement and forwards only task fields', async () => {
     const f = fixture();

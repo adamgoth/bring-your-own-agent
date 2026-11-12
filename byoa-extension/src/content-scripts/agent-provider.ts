@@ -48,15 +48,19 @@ if (window === window.top) {
                 tools: p.tools as string[],
                 timeoutMs: p.timeoutMs as number | undefined,
               });
-              tasks.set(task.id, task);
+              // Legacy preflight failures have no worker record. Give each one a unique
+              // provider-local ID so concurrent failures cannot consume each other's events.
+              const taskId = task.id || `preflight:${globalThis.crypto.randomUUID()}`;
+              tasks.set(taskId, task);
               void (async () => {
                 try {
-                  for await (const event of task.events) emit('task', event);
+                  for await (const event of task.events)
+                    emit('task', task.id ? event : { ...event, taskId });
                 } finally {
-                  tasks.delete(task.id);
+                  tasks.delete(taskId);
                 }
               })();
-              return { taskId: task.id };
+              return { taskId };
             }
             default:
               throw new ProviderError(4200, 'Unsupported agent method.');
