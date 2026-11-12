@@ -793,9 +793,9 @@ try {
     console.log('SKIP active-worker termination: Chrome kept the same worker target after closeTarget and a wake-up ping; startup interruption sweep is unit-tested.');
   }
 
-  await ext.evaluate(`document.querySelector('#connected-sites [data-origin="${marginOrigin}"] select').value='forever'`);
+  await ext.evaluate(`const select=document.querySelector('#connected-sites [data-origin="${marginOrigin}"] select'); select.value='forever'; select.dispatchEvent(new Event('change'))`);
   await ext.click(`[data-origin="${marginOrigin}"] [data-action="change-duration"]`);
-  await waitFor(() => ext.evaluate(`document.querySelector('[data-origin="${marginOrigin}"] p').textContent.includes('Until I disconnect')`), 'forever duration saved');
+  await waitFor(() => ext.evaluate(`document.querySelector('[data-origin="${marginOrigin}"] [data-field="access"]').textContent.includes('Until I disconnect')`), 'forever duration saved');
   await send('Browser.close');
   if (browser.exitCode === null) await new Promise(resolve => browser.once('close', resolve));
   browser = launchBrowser(); cdp = new CdpPipe(browser);
