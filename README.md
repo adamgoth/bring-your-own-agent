@@ -57,7 +57,7 @@ Apps expose their actions with WebMCP. They pass registered tool names to `agent
 
 To build BYOA into a web app, start with the [web app integration guide](docs/web-app-integration.md). See [the SDK contract](byoa-extension/sdk/README.md) for the client API, and [Margin's guide](demos/margin/README.md) and [Boardwalk's guide](demos/boardwalk/README.md) for worked examples.
 
-This is a prototype. Any HTTPS site, and `localhost`/`127.0.0.1` on any port, can ask to connect; nothing is shared until you approve that exact origin in BYOA's popup. Connections are per origin, lasting until the browser closes by default, for 30 days, or until you disconnect; page tasks queue, and each request has a two-minute timeout including queue time. Navigation or worker interruption stops work without automatic retry or recovery. The native sidebar still shares a model client and can interrupt a page task. BYOA owns the profile picker and site-approval popup. Spending budgets, independent model clients, and task recovery remain future work.
+This is a prototype. Any HTTPS site, and `localhost`/`127.0.0.1` on any port, can ask to connect; nothing is shared until you approve that exact origin in BYOA's popup. Connections are per origin, lasting until the browser closes by default, for 30 days, or until you disconnect; page tasks run independently of sidebar chats (up to 3 globally, 2 per profile, and 1 per tab), and each request has a two-minute timeout including queue time. Navigation or worker interruption stops work without automatic retry or recovery. BYOA owns the profile picker and site-approval popup. Spending budgets and task recovery remain future work.
 
 Provider API billing applies. This does not use a ChatGPT or Claude consumer subscription. Use sample content: the configured provider receives instructions, tool definitions, and tool results. Workspace sharing is off by default. In BYOA’s popup, you can share read-only snapshots of Persona (IDENTITY.md and SOUL.md), About you (USER.md), or Memory (MEMORY.md) for that exact origin for the chosen connection duration. Shared content can reach destinations used by the site’s tools. AGENTS.md, journals, file tools, and remote-MCP context remain excluded. The page API exposes no sharing state. Credentials remain in the extension.
 
@@ -72,7 +72,7 @@ pnpm build       # Build the extension and both demos
 CHROME_FOR_TESTING_BIN='/path/to/Chrome for Testing' pnpm test:browser
 ```
 
-The browser test uses a fresh temporary profile and a loopback mock model provider. It verifies both apps, distinct tool scopes, review/acceptance, deletion and column changes, queuing, cancellation, per-origin disconnect, optional task transcripts, and mobile layout. It does not use your normal browser profile or real API credentials. Margin also has its own editor Playwright regressions: `npm --prefix demos/margin run test:e2e` (requires Google Chrome and the dev server).
+The browser test uses a fresh temporary profile and a loopback mock model provider. It verifies both apps, distinct tool scopes, review/acceptance, deletion and column changes, concurrent app tasks and sidebar isolation, cancellation, per-origin disconnect, optional task transcripts, and mobile layout. It does not use your normal browser profile or real API credentials. Margin also has its own editor Playwright regressions: `npm --prefix demos/margin run test:e2e` (requires Google Chrome and the dev server).
 
 ## Source and licensing
 

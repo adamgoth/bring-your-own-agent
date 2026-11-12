@@ -294,6 +294,25 @@ describe('Site background tasks', () => {
     expect(JSON.stringify(q.port.postMessage.mock.calls)).not.toContain('SECRET');
     q.close();
   });
+  it('reports provider rate limits without exposing provider details', async () => {
+    const h = harness();
+    const p = h.connect();
+    p.send({ type: 'start', tools: ['get_selection', 'propose_replacement'], text: 'Rewrite' });
+    await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
+    expect(h.streamChat.mock.calls[0][6]).toMatchObject({
+      lane: `site:${h.streamChat.mock.calls[0][4]}`,
+    });
+    (h.streamChat.mock.calls[0][3] as StreamCallbacks).onError(
+      new Error('The AI service rate limit was reached. Try again later.')
+    );
+    expect(p.port.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        detail: 'The AI service rate limit was reached. Try again later.',
+      })
+    );
+    p.close();
+  });
   it.each([{ agentId: 'different-profile' }, { agentId: 'configured', share: { persona: true } }])(
     'cancels this site task when the grant changes: %j',
     async (grant) => {

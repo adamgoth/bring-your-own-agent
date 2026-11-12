@@ -269,19 +269,23 @@ export interface StreamCallbacks {
 export class AIClient {
   private static instance: AIClient;
   private configStorage: ConfigStorage;
-  private activeStream?: {
-    id: string;
-    controller: AbortController;
-    notifyAbort: (reason?: StreamAbortReason) => void;
-  };
+  private activeStreams = new Map<
+    string,
+    {
+      id: string;
+      controller: AbortController;
+      notifyAbort: (reason?: StreamAbortReason) => void;
+    }
+  >();
   private streamRequestSequence = 0;
-  private latestAcceptedStreamSequence = 0;
+  private latestAcceptedStreamSequence = new Map<string, number>();
   private pendingStreams = new Map<
     string,
     {
       controller: AbortController;
       notifyAbort: (reason?: StreamAbortReason) => void;
       sequence: number;
+      lane: string;
     }
   >();
 
@@ -317,11 +321,13 @@ export class AIClient {
     streamId: string = globalThis.crypto.randomUUID(),
     workspaceContext?: ConversationWorkspaceContext,
     siteTask?: {
+      lane?: string;
       tools: readonly string[];
       share?: SiteShare;
       onContext?: (shared: string[], notice?: string) => void;
     }
   ): Promise<void> {
+    const lane = siteTask?.lane ?? (siteTask ? `site:${streamId}` : 'sidebar');
     const requestSequence = ++this.streamRequestSequence;
     let abortController: AbortController | undefined;
     let removeRemoteRevocationListener: (() => void) | undefined;
@@ -339,6 +345,7 @@ export class AIClient {
       controller: new AbortController(),
       notifyAbort,
       sequence: requestSequence,
+      lane,
     };
     this.pendingStreams.set(streamId, pendingStream);
 
@@ -348,7 +355,7 @@ export class AIClient {
         this.configStorage.getAgent(agentId),
         pendingStream.controller.signal
       );
-      if (requestSequence < this.latestAcceptedStreamSequence) {
+      if (requestSequence < (this.latestAcceptedStreamSequence.get(lane) ?? 0)) {
         notifyAbort();
         return;
       }
@@ -443,7 +450,7 @@ export class AIClient {
         : { ...toolSnapshot.tools, ...memoryTools };
       // Tools lead the prompt for every provider, so this is the prefix most able to cost us
       // a cache hit. Logged before the request so a miss reported at finish can be attributed.
-      log.debug('Prompt cache: tool set', recordToolSet(allTools));
+      log.debug('Prompt cache: tool set', recordToolSet(allTools, lane));
       const toolCallSources = new Map<string, ToolCallSource>();
       for (const [name, executionSource] of toolSnapshot.toolSources) {
         const source = displayToolSource(name, executionSource, userToolNames);
@@ -482,25 +489,26 @@ export class AIClient {
       }
       if (pendingStream.controller.signal.aborted) return;
 
-      if (requestSequence < this.latestAcceptedStreamSequence) {
+      if (requestSequence < (this.latestAcceptedStreamSequence.get(lane) ?? 0)) {
         notifyAbort();
         return;
       }
 
       // Only a fully prepared newer request may supersede the active provider stream.
-      this.latestAcceptedStreamSequence = requestSequence;
+      this.latestAcceptedStreamSequence.set(lane, requestSequence);
       this.pendingStreams.delete(streamId);
       for (const [pendingId, olderPendingStream] of this.pendingStreams) {
-        if (olderPendingStream.sequence >= requestSequence) continue;
+        if (olderPendingStream.lane !== lane || olderPendingStream.sequence >= requestSequence)
+          continue;
         this.pendingStreams.delete(pendingId);
         olderPendingStream.controller.abort();
         olderPendingStream.notifyAbort();
       }
-      const supersededStream = this.activeStream;
+      const supersededStream = this.activeStreams.get(lane);
       supersededStream?.controller.abort();
       supersededStream?.notifyAbort();
       abortController = new AbortController();
-      this.activeStream = { id: streamId, controller: abortController, notifyAbort };
+      this.activeStreams.set(lane, { id: streamId, controller: abortController, notifyAbort });
 
       // Subscribe to tab-scoped tool changes for the duration of this stream.
       // When tools change (navigation, user toggle, etc.), we stop after the
@@ -789,7 +797,7 @@ export class AIClient {
       // Note: onFinish above handles the completion
     } catch (error) {
       if (
-        requestSequence < this.latestAcceptedStreamSequence ||
+        requestSequence < (this.latestAcceptedStreamSequence.get(lane) ?? 0) ||
         pendingStream.controller.signal.aborted ||
         abortController?.signal.aborted
       ) {
@@ -802,8 +810,14 @@ export class AIClient {
       if (this.pendingStreams.get(streamId) === pendingStream) {
         this.pendingStreams.delete(streamId);
       }
-      if (abortController && this.activeStream?.controller === abortController) {
-        this.activeStream = undefined;
+      if (abortController && this.activeStreams.get(lane)?.controller === abortController) {
+        this.activeStreams.delete(lane);
+      }
+      if (
+        !this.activeStreams.has(lane) &&
+        ![...this.pendingStreams.values()].some((stream) => stream.lane === lane)
+      ) {
+        this.latestAcceptedStreamSequence.delete(lane);
       }
     }
   }
@@ -820,12 +834,14 @@ export class AIClient {
       return true;
     }
 
-    const stream = this.activeStream;
-    if (stream?.id !== streamId) return false;
-    stream.controller.abort();
-    stream.notifyAbort();
-    if (this.activeStream === stream) this.activeStream = undefined;
-    return true;
+    for (const [lane, stream] of this.activeStreams) {
+      if (stream.id !== streamId) continue;
+      stream.controller.abort();
+      stream.notifyAbort();
+      if (this.activeStreams.get(lane) === stream) this.activeStreams.delete(lane);
+      return true;
+    }
+    return false;
   }
 
   /**
