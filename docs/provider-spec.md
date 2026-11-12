@@ -4,7 +4,7 @@ This experimental, neutral page interface is independent of WebMCP and npm. BYOA
 
 ## Discovery
 
-Listen for `agent:announceProvider` on `window`, then dispatch `new Event('agent:requestProvider')` there. Every provider responds **only to requests**, using `CustomEvent` with a frozen `detail: { info, provider }`. It must not announce on installation, startup or a timer. No discovery request means no provider announcements or transport messages. Providers retain a stable object and UUID for the document's lifetime and answer repeated requests, allowing late listeners and concurrent discovery.
+Listen for `agent:announceProvider` on `window`, then dispatch `new Event('agent:requestProvider')` there. Every provider responds **only to requests**, using `CustomEvent` with a frozen `detail: { info, provider }`. It must not announce on installation, startup or a timer. Sites making neither discovery requests nor legacy v1 calls receive no provider announcements or transport messages. Discovery by itself sends no transport messages. Providers retain a stable object and UUID for the document's lifetime and answer repeated requests, allowing late listeners and concurrent discovery.
 
 `info` contains `uuid` (document-lifetime random instance ID), `name` (display name), `icon` (data image URI), and `rdns` (implementer identifier). BYOA currently uses `BYOA`, its existing icon, and `dev.byoa.extension`. This identifier is a stable protocol label, not proof of domain ownership. It is independent of the npm scope. Render names as text, and icons as images, never executable markup.
 
@@ -20,7 +20,7 @@ interface AgentProvider {
 }
 ```
 
-Listeners are sets, run independently, and may be removed by identity. Task events may precede request resolution: register before requesting, buffer until the returned task ID is known, then filter by that ID. Events carry monotonic per-task optional `seq`; deduplicate replayed sequence numbers. Terminal events have `busy: false`. Unsubscribe when the owning UI is disposed. The SDK offers `dispose()` for provider listeners; cancel active tasks before disposal.
+Listeners are sets, run independently, and may be removed by identity. Task events may precede request resolution: register before requesting, buffer until the returned task ID is known, then filter by that ID. Events carry monotonic per-task optional `seq`; deduplicate replayed sequence numbers. Terminal events have `busy: false`. Unsubscribe when the owning UI is disposed. The SDK offers `dispose()` for provider listeners; cancel active tasks and await their terminal events before disposal. Disposal is final, aborts pending client discovery and removes provider listeners; create a new client to reconnect.
 
 | Method | Params | Result | Trusted gesture |
 | --- | --- | --- | --- |
@@ -34,7 +34,7 @@ Listeners are sets, run independently, and may be removed by identity. Task even
 | `agent_getTask` | `{ taskId }` | TaskSummary or null | no |
 | `agent_listTasks` | none | TaskSummary[] | no |
 
-`tools` contains registered WebMCP **names**, never tool definitions. `timeoutMs` may only shorten the extension's run limit. No method accepts grants, profile selection, sharing, budgets, prices or configuration. Unknown methods reject with numeric `code: 4200`. Errors are Error objects with numeric codes: 4001 (approval cancelled/expired), 4100 (gesture/authorization refused), 4200 (unsupported method), 4900 (transport unavailable). Task execution failures use terminal TaskEvents, preserving the existing task contract, including a failure before a task ID is allocated.
+`tools` contains registered WebMCP **names**, never tool definitions. `timeoutMs` may only shorten the extension's run limit. No method accepts grants, profile selection, sharing, budgets, prices or configuration. Unknown methods reject with numeric `code: 4200`. Errors are Error objects with numeric codes: 4001 (approval cancelled/expired), 4100 (gesture/authorization refused), 4200 (unsupported method), 4900 (transport unavailable). Task execution failures use terminal TaskEvents, preserving the existing task contract, including a failure before a worker task is allocated. Every request result and its events must have a unique nonempty taskId; BYOA assigns provider-local `preflight:` IDs to these failures. They have no worker record, so lookup returns null. An SDK encountering an empty or invalid ID rejects with -32603 (invalid provider response) rather than misattributing another request’s events.
 
 Connection contains `available`, `configured`, `connected`, optional approved `agentId`, `agentName`, and `error`. It does not expose other profiles or their settings. `connectionChanged` carries Connection. `task` carries the additive TaskEvent contract: taskId, status (queued/working/done/cancelled/error), detail, busy, optional seq, code and cumulative token-only usage (`inputTokens`, `outputTokens`, `totalTokens`, `usageKnown`). TaskSummary adds retryable. Codes remain budget/timeout/interrupted/revoked/tools-changed/step-limit. Lookup is summary-only and scoped to the calling tab, origin and browsing context; it cannot resume a stream, expose transcripts or gain control of an old document's task.
 

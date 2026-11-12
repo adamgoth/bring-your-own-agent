@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest';
+import { createClient } from '../sdk/index';
 const mock = vi.hoisted(() => ({
   getStatus: vi.fn(),
   connect: vi.fn(),
@@ -78,5 +79,32 @@ it('announces only on request with stable identity; routes the complete API and 
     timeoutMs: undefined,
   });
   await vi.waitFor(() => expect(taskListener).toHaveBeenCalledWith(event));
+  const failure = (detail: string, code: string) => ({
+    id: '',
+    events: {
+      async *[Symbol.asyncIterator]() {
+        yield { taskId: '', status: 'error', detail, code, busy: false, seq: 1 };
+      },
+    },
+  });
+  mock.request
+    .mockResolvedValueOnce(failure('First failure', 'timeout'))
+    .mockResolvedValueOnce(failure('Second failure', 'revoked'));
+  const client = createClient(provider);
+  const [first, second] = await Promise.all([
+    client.request({ prompt: 'First synthetic', tools: [] }),
+    client.request({ prompt: 'Second synthetic', tools: [] }),
+  ]);
+  expect(first.id).toMatch(/^preflight:/);
+  expect(second.id).not.toBe(first.id);
+  const firstEvents = [];
+  for await (const event of first.events) firstEvents.push(event);
+  const secondEvents = [];
+  for await (const event of second.events) secondEvents.push(event);
+  expect(firstEvents.map((event) => event.detail)).toEqual(['First failure']);
+  expect(secondEvents.map((event) => event.detail)).toEqual(['Second failure']);
+  expect(first.retryable).toBe(true);
+  expect(second.retryable).toBe(false);
+  client.dispose();
   window.removeEventListener('agent:announceProvider', announced);
 });

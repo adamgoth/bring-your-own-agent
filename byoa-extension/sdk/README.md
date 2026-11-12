@@ -50,8 +50,10 @@ import { byoa, createClient, discoverProviders } from '@byoagent/browser';
 const providers = await byoa.providers(); // or discoverProviders({ timeoutMs: 200, signal })
 const client = providers[0] ? createClient(providers[0].provider) : null;
 // Show a provider picker when several exist. Call connect/request from a fresh gesture.
-// On disposal, cancel active tasks and call client?.dispose().
+// On disposal, cancel active tasks, await terminal events and call client?.dispose().
 ```
+
+Disposal is final and aborts pending discovery; create a new client afterward. Preflight failures receive unique provider-local task IDs without worker records (lookup returns null). Invalid or empty IDs from other providers reject rather than mixing request events.
 
 Discovery times out with an empty list when none answer. It removes its listeners, retries within the collection window, deduplicates announcements and can be aborted. The default discovery window is 200 ms; a 1000 ms maximum preserves the 1500 ms trusted-gesture window. Discover ahead of a picker rather than waiting during a click.
 

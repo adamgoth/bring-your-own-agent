@@ -17,6 +17,11 @@ export function createClient(provider?: AgentProvider) {
   let connection = disconnected;
   let latestTask: TaskEvent | null = null;
   let attached = false;
+  let disposed = false;
+  let discoveryController: AbortController | undefined;
+  const assertOpen = () => {
+    if (disposed) throw new ProviderError(4900, 'Client disposed. Create a new client.');
+  };
   const statuses = new Set<(value: Connection) => void>();
   const taskListeners = new Set<(value: TaskEvent | null) => void>();
   const sinks = new Set<(value: TaskEvent) => void>();
@@ -43,6 +48,7 @@ export function createClient(provider?: AgentProvider) {
     for (const sink of sinks) sink(event);
   };
   const attach = (p: AgentProvider) => {
+    assertOpen();
     if (!attached) {
       p.on('connectionChanged', status);
       p.on('task', task);
@@ -51,9 +57,11 @@ export function createClient(provider?: AgentProvider) {
     return p;
   };
   const getProvider = (): Promise<AgentProvider> => {
+    assertOpen();
     if (selected) return Promise.resolve(attach(selected));
-    if (!selecting)
-      selecting = discoverProviders()
+    if (!selecting) {
+      discoveryController = new AbortController();
+      selecting = discoverProviders({ signal: discoveryController.signal })
         .then((found) => {
           if (!found.length)
             throw new ProviderError(
@@ -65,11 +73,16 @@ export function createClient(provider?: AgentProvider) {
         })
         .finally(() => {
           selecting = undefined;
+          discoveryController = undefined;
         });
+    }
     return selecting;
   };
-  const call = async <T>(method: string, params?: unknown): Promise<T> =>
-    (await getProvider()).request({ method, params }) as Promise<T>;
+  const call = async <T>(method: string, params?: unknown): Promise<T> => {
+    const p = await getProvider();
+    assertOpen();
+    return p.request({ method, params }) as Promise<T>;
+  };
   const client = {
     providers: (options?: Parameters<typeof discoverProviders>[0]): Promise<ProviderDetail[]> =>
       discoverProviders(options),
@@ -118,8 +131,10 @@ export function createClient(provider?: AgentProvider) {
         taskListeners.delete(listener);
       };
     },
-    /** Release provider listeners. Active tasks must be cancelled before disposal. */
+    /** Release listeners permanently. Cancel active tasks and await terminal events first. */
     dispose() {
+      disposed = true;
+      discoveryController?.abort(new ProviderError(4900, 'Client disposed.'));
       if (selected && attached) {
         selected.removeListener('connectionChanged', status);
         selected.removeListener('task', task);
@@ -141,6 +156,7 @@ export function createClient(provider?: AgentProvider) {
     }): Promise<AgentTask> {
       if (signal?.aborted) throw signal.reason || new ProviderError(4001, 'Cancelled.');
       const p = await getProvider();
+      assertOpen();
       if (signal?.aborted) throw signal.reason || new ProviderError(4001, 'Cancelled.');
       let id: string | undefined;
       let terminal = false;
@@ -183,6 +199,8 @@ export function createClient(provider?: AgentProvider) {
           method: 'agent_requestTask',
           params: { prompt, tools, timeoutMs },
         })) as { taskId: string };
+        if (typeof result?.taskId !== 'string' || !result.taskId)
+          throw new ProviderError(-32603, 'Provider returned an invalid task ID.');
         id = result.taskId;
         for (const event of early) receive(event);
         if (signal?.aborted) abort();

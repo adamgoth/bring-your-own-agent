@@ -118,7 +118,7 @@ integration with no skips. Astra follow-up review of `a64e985` found no actionab
 
 Based on merged main `a30c2f0` (PR #6, including pending-tool usage accounting and detached execution-profile pricing). Implementation uses an isolated checkout; no unrelated working-tree changes are included.
 
-- `pnpm check`: extension types, strict lint, 83 files / 1,171 tests; Margin 5 tests; Boardwalk 10 tests and demo builds passed.
+- `pnpm check`: extension types, strict lint, 83 files / 1,172 tests; Margin 5 tests; Boardwalk 10 tests and demo builds passed.
 - `pnpm build`: extension and both demo production builds passed.
 - `pnpm check:sdk`: ESM/declarations build, npm pack, install into a fresh scratch consumer, strict NodeNext TypeScript import, and SSR import with a throwing window getter passed. No runtime dependencies, registry publication or store submission.
 - Protocol tests cover zero/one/two providers, late registration/repeated request races, duplicates/concurrent collectors, discovery cancellation and listener cleanup, raw method routing and numeric errors, connect polling expiry/cancellation, early task events, empty-ID preflight failures, abort during acknowledgement, recovery summaries and provider-listener disposal.
@@ -126,3 +126,8 @@ Based on merged main `a30c2f0` (PR #6, including pending-tool usage accounting a
 - Prices, costs, credentials and real private context were not used or transmitted. Worker/model client/grant/accounting implementation and the additive TaskEvent contract were not changed.
 
 The first browser runs caught fixture issues (favicon handling, an extra raw-provider request affecting old wire-count assertions) and a new SDK empty-task-ID buffering bug, which was fixed with a regression test. Those failed runs are not counted as passes. The inherited Boardwalk catalog-discovery timeout remains a possible browser flake; record any occurrence explicitly rather than suppressing it.
+
+
+### Plan 6 independent review and fixes
+
+The separate user-visible review of `de4b8a2` identified two P2 lifecycle issues: concurrent empty-ID preflight failures could consume each other's events, and discovery could attach listeners after client disposal. Preflight failures now have unique provider-local IDs without worker records; invalid IDs from other providers reject. Disposal aborts pending discovery and guards attachment/reuse. Regression tests exercise concurrent failures through the real MAIN-world adapter and SDK, preserving the correct detail/retryability, plus disposal during discovery. Full checks/builds/packed-consumer verification were rerun after both fixes.

@@ -247,6 +247,9 @@ try {
   assert.equal(rawStatus.available, true); assert.equal(rawStatus.connected, false);
   assert.equal(await rawPage.evaluate(`window.__rawProvider.request({method:'unknown'}).catch(e=>e.code)`), 4200);
   assert.equal(await rawPage.evaluate(`window.__rawProvider.request({method:'agent_openSettings'}).catch(e=>e.code)`), 4100);
+  const preflightIds = await rawPage.evaluate(`(async()=>{window.__preflightEvents=[];const listener=e=>window.__preflightEvents.push(e);window.__rawProvider.on('task',listener);const results=await Promise.all([window.__rawProvider.request({method:'agent_requestTask',params:{prompt:'First synthetic failure',tools:[]}}),window.__rawProvider.request({method:'agent_requestTask',params:{prompt:'Second synthetic failure',tools:[]}})]);window.__rawProvider.removeListener('task',listener);return results.map(r=>r.taskId)})()`);
+  assert.equal(new Set(preflightIds).size, 2, 'Concurrent preflight failures have unique request correlation');
+  assert.ok(preflightIds.every(id => id.startsWith('preflight:')));
   await rawPage.evaluate(`window.postMessage({source:'agentboard:page',version:1,id:'v1-synthetic',method:'status'},location.origin)`);
   await waitFor(() => rawPage.evaluate(`window.__observed.some(e=>e.kind==='response'&&e.id==='v1-synthetic'&&e.ok&&e.value.available)`), 'v1 pasted client compatibility');
   console.log('PASS silent page, request-only raw discovery, raw errors and v1 compatibility.');
