@@ -90,12 +90,13 @@ export function fingerprintToolSet(tools: Record<string, unknown>): ToolSetPrint
  * state dies with the MV3 worker, so the first request after every wake reports no
  * comparison; that is honest, and a false "unchanged" would be worse than a gap.
  */
-let previousPrint: ToolSetPrint | undefined;
+const previousPrints = new Map<string, ToolSetPrint>();
 
-export function recordToolSet(tools: Record<string, unknown>): ToolSetChange {
+export function recordToolSet(tools: Record<string, unknown>, lane = 'sidebar'): ToolSetChange {
   const print = fingerprintToolSet(tools);
-  const previous = previousPrint;
-  previousPrint = print;
+  const previous = previousPrints.get(lane);
+  // Site lanes are unique per task; retain only sidebar history to avoid unbounded state.
+  if (lane === 'sidebar') previousPrints.set(lane, print);
 
   if (!previous) return print;
   if (previous.hash === print.hash) return { ...print, changedSincePreviousRequest: false };
@@ -120,7 +121,7 @@ export function recordToolSet(tools: Record<string, unknown>): ToolSetChange {
 
 /** Reset between tests; the worker has no reason to call this. */
 export function resetToolSetTracking(): void {
-  previousPrint = undefined;
+  previousPrints.clear();
 }
 
 export interface CacheUsageSummary {

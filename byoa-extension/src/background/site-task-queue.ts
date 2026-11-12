@@ -1,42 +1,52 @@
-/** Serialize page tasks because the existing model client has one active stream. */
+/** Limits provider load while allowing independent apps to make progress. */
+export const SITE_TASK_LIMIT = 3;
+export const SITE_TASK_PROFILE_LIMIT = 2;
+
 export class SiteTaskQueue {
-  private active = false;
-  private waiting: Array<() => void> = [];
-  acquire(signal: AbortSignal): Promise<() => void> {
+  private active = 0;
+  private profiles = new Map<string, number>();
+  private waiting: Array<{ agentId: string; enter: () => void }> = [];
+
+  acquire(signal: AbortSignal, agentId: string): Promise<() => void> {
     return new Promise((resolve, reject) => {
-      let admitted = false;
+      const waiter = { agentId, enter: () => {} };
       const abort = () => {
-        if (admitted) return;
-        this.waiting = this.waiting.filter((entry) => entry !== enter);
+        this.waiting = this.waiting.filter((entry) => entry !== waiter);
         reject(new Error('Task cancelled while queued.'));
+        this.next();
       };
-      const enter = () => {
-        if (signal.aborted) {
-          abort();
-          this.next();
-          return;
-        }
-        admitted = true;
-        this.active = true;
+      waiter.enter = () => {
         signal.removeEventListener('abort', abort);
+        this.active++;
+        this.profiles.set(agentId, (this.profiles.get(agentId) ?? 0) + 1);
         let released = false;
         resolve(() => {
           if (released) return;
           released = true;
-          this.active = false;
+          this.active--;
+          const count = (this.profiles.get(agentId) ?? 1) - 1;
+          if (count) this.profiles.set(agentId, count);
+          else this.profiles.delete(agentId);
           this.next();
         });
       };
       if (signal.aborted) {
-        abort();
+        reject(new Error('Task cancelled while queued.'));
         return;
       }
       signal.addEventListener('abort', abort, { once: true });
-      if (this.active) this.waiting.push(enter);
-      else enter();
+      this.waiting.push(waiter);
+      this.next();
     });
   }
-  private next() {
-    if (!this.active) this.waiting.shift()?.();
+
+  private next(): void {
+    while (this.active < SITE_TASK_LIMIT) {
+      const index = this.waiting.findIndex(
+        ({ agentId }) => (this.profiles.get(agentId) ?? 0) < SITE_TASK_PROFILE_LIMIT
+      );
+      if (index < 0) return;
+      this.waiting.splice(index, 1)[0].enter();
+    }
   }
 }

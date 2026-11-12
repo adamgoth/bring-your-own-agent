@@ -164,7 +164,7 @@ export function createSiteAgentHandler(
         }
         chat.agentName = agent.name;
         saveChat();
-        const release = await queue.acquire(controller.signal);
+        const release = await queue.acquire(controller.signal, agent.id);
         if (finished) {
           release();
           return;
@@ -247,19 +247,19 @@ export function createSiteAgentHandler(
                 );
               },
               onAbort: () =>
-                finish(
-                  'cancelled',
-                  'BYOA stopped this task because another request or tool change interrupted it.'
-                ),
-              onError: () =>
+                finish('cancelled', 'BYOA stopped this task because the page tools changed.'),
+              onError: (error) =>
                 finish(
                   'error',
-                  'Agent request failed. Check the default agent’s connection in BYOA Options, then retry.'
+                  error.message.includes('rate limit')
+                    ? 'The AI service rate limit was reached. Try again later.'
+                    : 'Agent request failed. Check this site’s agent connection in BYOA Options, then retry.'
                 ),
             },
             streamId,
             undefined,
             {
+              lane: `site:${streamId}`,
               tools,
               share: authorizedShare,
               onContext: (shared, notice) => {

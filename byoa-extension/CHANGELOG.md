@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Isolate sidebar and site model streams. Run up to three site tasks concurrently, with two per profile and one per tab; report provider rate limits clearly.
 - Choose session-only, 30-day, or until-disconnect site approvals; incognito stays session-only.
 - Manage Connected sites in Options, including duration, shared files, last use and revocation that cancels running tasks.
 - Keep a clearable, metadata-only local activity log (500 entries, 30 days), excluded with grants from settings backups.

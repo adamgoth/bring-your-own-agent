@@ -13,6 +13,7 @@ const boardOrigin = `http://${demoHost}:5184`;
 const marginOrigin = `http://${demoHost}:5183`;
 const requests = [];
 let holdNext = false;
+const heldResponses = [];
 function respond(body, res) {
   res.writeHead(200, { 'content-type': 'text/event-stream' });
   assert.ok(Array.isArray(body.tools), 'The task request must include its registered tools');
@@ -24,7 +25,9 @@ function respond(body, res) {
     .join('\n');
   const board = names.includes('get_board_snapshot');
   let name, args;
-  if (board) {
+  if (user.includes('SIDEBAR_ISOLATION_FIXTURE')) {
+    // Sidebar has its own broader tool set; return text without calling a tool.
+  } else if (board) {
     assert.deepEqual(
       names.sort(),
       ['get_board_snapshot', 'get_selected_cards', 'propose_board_changes'].sort()
@@ -129,6 +132,7 @@ const provider = http.createServer(async (req, res) => {
   requests.push(body);
   if (holdNext) {
     holdNext = false;
+    heldResponses.push(() => respond(body, res));
     return;
   }
   try {
@@ -539,37 +543,39 @@ try {
   console.log(
     'PASS trusted Command+Enter starts a task after click activation expires; synthetic shortcuts are rejected. Margin retains its 5-tool scope.'
   );
-  // Hold a board model request, queue a Margin request, cancel only the queued task.
+  // Hold both apps to prove overlap before either finishes.
   holdNext = true;
   await board.click('[data-action="close-review"]');
   await board.click('[data-action="ask"]');
   await board.evaluate(`document.querySelector('#instruction').value='Review board'`);
   await board.click('#send-button');
   await waitFor(() => requests.length === 8, 'held board request');
+  holdNext = true;
   await selectMargin();
   await submitMarginWithKeyboard(2);
-  await waitFor(
-    () => margin.evaluate(`window.__events.at(-1)?.status==='queued'`),
-    'Margin queued'
-  ).catch(async (e) => {
-    console.log(
-      'QUEUE DEBUG',
-      await margin.evaluate(
-        `({keys:window.__keys,events:window.__events,popup:document.querySelector('.margin-selection-popup')?.innerText})`
-      )
-    );
-    throw e;
-  });
-  assert.equal(requests.length, 8);
-  await margin.evaluate(`document.querySelector('.agent-send + button').click()`);
-  await waitFor(
-    () =>
-      margin.evaluate(
-        `document.querySelector('.margin-selection-popup [role="status"]')?.textContent.includes('Cancelled')`
-      ),
-    'queued cancellation'
+  await waitFor(() => requests.length === 9, 'concurrent Margin request');
+  assert.equal(await margin.evaluate(`window.__events.at(-1)?.status`), 'working');
+  assert.ok(await board.evaluate(`document.querySelector('#task-status').textContent.includes('working')`));
+  const isolationSidebar = await page(
+    `chrome-extension://${new URL(worker.url).host}/src/sidebar/index.html#tab=${tabId}`
   );
-  assert.equal(requests.length, 8);
+  await waitFor(() => isolationSidebar.evaluate(`document.querySelector('#message-input')?.disabled === false && document.querySelector('.agent-switcher-label')?.textContent === 'Demo deepseek' && document.querySelector('.chat-container')?.hidden === false`), 'sidebar ready');
+  await isolationSidebar.evaluate(`document.querySelector('#message-input').value='SIDEBAR_ISOLATION_FIXTURE'; document.querySelector('#message-input').dispatchEvent(new Event('input', { bubbles: true }))`);
+  await isolationSidebar.evaluate(`document.querySelector('#send-button').click()`);
+  await waitFor(() => requests.length === 10, 'sidebar alongside two site tasks');
+  await waitFor(() => isolationSidebar.evaluate(`document.querySelector('#messages').textContent.includes('Your proposals are ready')`), 'sidebar completed independently');
+  heldResponses.shift()();
+  heldResponses.shift()();
+  await waitFor(() => margin.evaluate(`window.__events.at(-1)?.status==='done'`), 'Margin completes after sidebar');
+  await waitFor(() => board.evaluate(`document.querySelector('#task-status').textContent.includes('A little progress, together.')`), 'Board completes after sidebar');
+  console.log('PASS two apps reach working together; sidebar completes without cancelling either site task.');
+  // Start a fresh held task for origin-scoped revocation.
+  holdNext = true;
+  await board.click('[data-action="ask"]');
+  await board.evaluate(`document.querySelector('#instruction').value='Review board'`);
+  const beforeRevocation = requests.length;
+  await board.click('#send-button');
+  await waitFor(() => requests.length === beforeRevocation + 1, 'held revocation request');
   // Revoking only the board origin stops its held request, while Margin remains connected.
   await board.click('#agent-indicator');
   await ext.click(`[data-origin="${boardOrigin}"] [data-action="disconnect"]`);
@@ -585,7 +591,7 @@ try {
     )
   );
   console.log(
-    'PASS cross-app queuing, queued cancellation, and origin-scoped disconnect while a model request waits.'
+    'PASS origin-scoped disconnect while a model request waits.'
   );
   console.log('PASS Options revocation disconnects the app and cancels its running persistent task.');
   // Optional conversation opens only on an explicit user click and focuses the correct task.
