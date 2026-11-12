@@ -185,8 +185,9 @@ if (connectableOrigin(window.location.href) && window === window.top) {
     }, 15000);
     window.addEventListener('focus', () => void refresh());
     onGrantChanged(
-      (origin) => {
-        if (origin === window.location.origin) void refresh();
+      (origin, _grant, incognito) => {
+        if (origin === window.location.origin && incognito === chrome.extension.inIncognitoContext)
+          void refresh();
       },
       { signalOnly: true }
     );

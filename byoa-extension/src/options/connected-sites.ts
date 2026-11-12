@@ -63,7 +63,7 @@ export async function initializeConnectedSites() {
       const row = document.createElement('article');
       row.dataset.origin = origin;
       const title = document.createElement('h3');
-      title.textContent = origin;
+      title.textContent = `${origin}${grant.incognito ? ' (Incognito)' : ''}`;
       const info = document.createElement('p');
       const files = [
         grant.share.persona ? 'IDENTITY.md, SOUL.md' : '',
@@ -85,12 +85,12 @@ export async function initializeConnectedSites() {
       change.textContent = 'Change duration';
       change.onclick = () =>
         void act(() =>
-          writeSiteGrant(origin, grant.agentId, grant.share, select.value, grant.incognito)
+          writeSiteGrant(origin, grant.agentId, grant.share, select.value, grant.incognito === true)
         );
       const disconnect = document.createElement('button');
       disconnect.textContent = 'Disconnect';
       disconnect.dataset.action = 'disconnect';
-      disconnect.onclick = () => void act(() => revokeSiteGrant(origin));
+      disconnect.onclick = () => void act(() => revokeSiteGrant(origin, grant.incognito === true));
       const details = document.createElement('details');
       const summary = document.createElement('summary');
       summary.textContent = 'View activity';
@@ -110,7 +110,8 @@ export async function initializeConnectedSites() {
     'click',
     () =>
       void act(async () => {
-        for (const { origin } of await listGrants()) await revokeSiteGrant(origin);
+        for (const { origin, grant } of await listGrants())
+          await revokeSiteGrant(origin, grant.incognito === true);
       })
   );
   document

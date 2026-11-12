@@ -118,7 +118,15 @@ describe('extension-owned profile approval', () => {
       undefined,
       'forever'
     );
-    expect(data[siteConnectionKey(origin)]).toMatchObject({ persist: 'session', incognito: true });
+    expect(data[siteConnectionKey(origin, true)]).toMatchObject({
+      persist: 'session',
+      incognito: true,
+    });
+    expect(data[siteConnectionKey(origin)]).toBeUndefined();
+    expect((await connectionPromptResult(requestId, sender, config)).connection).toMatchObject({
+      connected: true,
+      agentId: 'one',
+    });
   });
 
   it('requires popup approval and returns only the approved connection to the page', async () => {
