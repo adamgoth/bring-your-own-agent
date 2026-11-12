@@ -9,8 +9,8 @@ import { CdpPipe, chromeSandboxArgs, waitFor } from './chrome-harness.mjs';
 
 const demoHost = process.env.BYOA_DEMO_HOST || 'localhost';
 assert.ok(['localhost', '127.0.0.1'].includes(demoHost));
-const boardOrigin = `http://${demoHost}:5184`;
-const marginOrigin = `http://${demoHost}:5183`;
+const boardOrigin = `http://${demoHost}:${process.env.BYOA_BOARD_PORT || 5184}`;
+const marginOrigin = `http://${demoHost}:${process.env.BYOA_MARGIN_PORT || 5183}`;
 const requests = [];
 let holdNext = false;
 const heldResponses = [];
@@ -25,7 +25,9 @@ function respond(body, res) {
     .join('\n');
   const board = names.includes('get_board_snapshot');
   let name, args;
-  if (user.includes('SIDEBAR_ISOLATION_FIXTURE')) {
+  if (user.includes('Recovery fixture') || user.includes('Restart fixture')) {
+    // Recovery tests need a held stream, not another proposal.
+  } else if (user.includes('SIDEBAR_ISOLATION_FIXTURE')) {
     // Sidebar has its own broader tool set; return text without calling a tool.
   } else if (board) {
     assert.deepEqual(
@@ -152,6 +154,7 @@ const launchBrowser = () => spawn(
     '--headless=new',
     ...chromeSandboxArgs(),
     '--disable-background-networking',
+    '--disable-blink-features=WebMCP', // Exercise the shipped polyfill consistently across Chrome versions.
     '--disable-sync',
     '--no-first-run',
     '--no-default-browser-check',
@@ -292,10 +295,10 @@ try {
   browser = launchBrowser(); cdp = new CdpPipe(browser);
   ext = await page(optionsUrl);
   await waitFor(() => ext.evaluate(`document.readyState==='complete'&&!!chrome.tabs`), 'restarted options');
-  board = await page(`${boardOrigin}/`);
+  board = await page(`${boardOrigin}/?integration=active`);
   await waitFor(() => board.evaluate(`document.querySelector('#agent-indicator')?.textContent.includes('Demo deepseek')`), 'persistent connection after restart');
   await waitFor(() => ext.evaluate(`document.querySelector('[data-origin="${boardOrigin}"]')?.textContent.includes('For 30 days')`), 'connected sites duration');
-  tabId = await ext.evaluate(`chrome.tabs.query({url:${JSON.stringify(boardOrigin + '/*')}}).then(t=>Math.max(...t.map(tab=>tab.id)))`);
+  tabId = await ext.evaluate(`chrome.tabs.query({url:${JSON.stringify(boardOrigin + '/*')}}).then(t=>t.find(tab=>tab.url.includes('?integration=active'))?.id)`);
   console.log('PASS 30-day approval survives a real browser restart and appears in Connected sites.');
   await board.click('#agent-indicator');
   await send(
@@ -594,6 +597,7 @@ try {
     'PASS origin-scoped disconnect while a model request waits.'
   );
   console.log('PASS Options revocation disconnects the app and cancels its running persistent task.');
+  heldResponses.shift()(); // Dispose of the cancelled provider response before recovery fixtures.
   // Optional conversation opens only on an explicit user click and focuses the correct task.
   await board.click('[data-action="chat"]');
   const focused = await waitFor(
@@ -650,6 +654,91 @@ try {
     )
   );
   console.log('PASS mobile layout fits the viewport. No real provider credentials used.');
+  // Capture the real task port in the extension's isolated content world, never in page JS.
+  const contentContext = await waitFor(() => [...cdp.contexts.values()].find(context =>
+    context.sessionId === margin.sessionId && context.origin === `chrome-extension://${new URL(worker.url).host}`), 'Margin content world');
+  const contentEval = async expression => {
+    const result = await send('Runtime.evaluate', { expression, contextId: contentContext.id, awaitPromise: true, returnByValue: true }, margin.sessionId);
+    if (result.exceptionDetails) throw Error(result.exceptionDetails.exception?.description || 'Content-world evaluation failed');
+    return result.result?.value;
+  };
+  await contentEval(`(() => {
+    const original = chrome.runtime.connect.bind(chrome.runtime);
+    globalThis.__taskPorts = [];
+    chrome.runtime.connect = (...args) => { const port = original(...args); if (port.name === 'agentboard-task') __taskPorts.push(port); return port; };
+  })()`);
+  const liveWorker = await waitFor(async () => (await send('Target.getTargets')).targetInfos.find(target => target.type === 'service_worker' && target.url === worker.url), 'live worker');
+  const { sessionId: workerSession } = await send('Target.attachToTarget', { targetId: liveWorker.targetId, flatten: true });
+  await send('Runtime.evaluate', { expression: `globalThis.__taskPorts=[]; chrome.runtime.onConnect.addListener(port=>{if(port.name==='agentboard-task') __taskPorts.push(port);});` }, workerSession);
+  // Use Margin's real request wrapper so reload recovery persists the acknowledged ID.
+  await margin.evaluate(`(async () => {
+    const api = await import('/src/agentboard.ts'); window.__recoveryApi = api;
+    const button = document.createElement('button'); button.id='recovery-request'; button.textContent='Recovery fixture';
+    button.onclick=()=>{window.__recoveryDone=null; api.requestAgent('Recovery fixture', ['get_document_outline']).then(event=>window.__recoveryDone=event);};
+    document.body.append(button);
+  })()`);
+  holdNext = true; const beforeDrop = requests.length;
+  await margin.click('#recovery-request'); await waitFor(() => requests.length > beforeDrop, 'held recovery request');
+  const recoveryId = await margin.evaluate(`JSON.parse(sessionStorage.getItem('margin-agent-request')).id`);
+  const eventCount = await margin.evaluate('window.__events.length');
+  await send('Runtime.evaluate', { expression: '__taskPorts.at(-1).disconnect()' }, workerSession);
+  await waitFor(() => contentEval('__taskPorts.length>=2'), 'real port reattachment');
+  heldResponses.shift()();
+  await waitFor(() => margin.evaluate(`window.__recoveryDone?.status==='done'`), 'reattached completion');
+  assert.equal(await margin.evaluate(`window.__events.slice(${eventCount}).some(event=>event.status==='error')`), false);
+  assert.equal(await margin.evaluate(`window.__recoveryDone.taskId`), recoveryId);
+  await send('Target.detachFromTarget', { sessionId: workerSession });
+  console.log('PASS real task-port disconnect reattaches invisibly and completes on the same task.');
+
+  holdNext = true; const beforeReload = requests.length;
+  await margin.click('#recovery-request'); await waitFor(() => requests.length > beforeReload, 'held reload request');
+  const reloadId = await margin.evaluate(`JSON.parse(sessionStorage.getItem('margin-agent-request')).id`);
+  await send('Page.reload', {}, margin.sessionId);
+  await waitFor(() => margin.evaluate(`!!document.querySelector('.task-recovery')`), 'Margin interrupted recovery banner', 20000);
+  const lookup = await margin.evaluate(`import('/src/agentboard.ts').then(({agentboard})=>agentboard.getTask(${JSON.stringify(reloadId)}))`);
+  assert.equal(lookup.busy, false); assert.equal(lookup.retryable, true);
+  assert.equal(lookup.code, 'interrupted');
+  assert.deepEqual(Object.keys(lookup).sort(), ['taskId','status','detail','busy','seq','code','retryable'].sort());
+  const taskCountAfterReload = requests.length;
+  await new Promise(resolve=>setTimeout(resolve, 500));
+  assert.equal(requests.length, taskCountAfterReload, 'Reload lookup must not automatically retry');
+  heldResponses.shift()();
+  await margin.click('.task-recovery button:first-of-type');
+  await waitFor(() => requests.length === taskCountAfterReload + 1, 'trusted explicit retry request');
+  await waitFor(() => margin.evaluate(`!document.querySelector('.task-recovery')`), 'retry completes and clears recovery');
+  console.log('PASS reload stops the old run, SDK returns only a retryable terminal summary, and only the trusted Retry click sends a fresh request.');
+
+  // Stop the real MV3 worker mid-run. The reconnect wakes it and the startup sweep terminates the task.
+  await margin.evaluate(`(async () => {
+    const {requestAgent}=await import('/src/agentboard.ts');
+    const button=document.createElement('button'); button.id='restart-request'; button.textContent='Restart fixture';
+    button.onclick=()=>requestAgent('Restart fixture',['get_document_outline']); document.body.append(button);
+  })()`);
+  holdNext = true; const beforeRestart = requests.length;
+  await margin.click('#restart-request'); await waitFor(() => requests.length > beforeRestart, 'held worker restart request');
+  const workerToClose = await waitFor(async () => (await send('Target.getTargets')).targetInfos.find(target => target.type === 'service_worker' && target.url === worker.url), 'worker to terminate');
+  const { success: workerClosed } = await send('Target.closeTarget', { targetId: workerToClose.targetId });
+  assert.equal(workerClosed, true);
+  await ext.evaluate(`chrome.runtime.sendMessage({type:'PING'})`);
+  const replacementWorker = await waitFor(async () => (await send('Target.getTargets')).targetInfos.find(target => target.type === 'service_worker' && target.url === worker.url && target.targetId !== workerToClose.targetId), 'replacement worker', 5000).catch(() => null);
+  if (replacementWorker) {
+    try {
+      await waitFor(() => margin.evaluate(`!!document.querySelector('.task-recovery')`), 'worker restart recovery banner', 40000);
+    } catch (error) {
+      console.error('Worker recovery summary:', await margin.evaluate(`import('/src/agentboard.ts').then(({agentboard})=>agentboard.getTask(JSON.parse(sessionStorage.getItem('margin-agent-request')).id))`));
+      throw error;
+    }
+    const restarted = await margin.evaluate(`import('/src/agentboard.ts').then(({agentboard})=>agentboard.getTask(JSON.parse(sessionStorage.getItem('margin-agent-request')).id))`);
+    assert.equal(restarted.code, 'interrupted'); assert.equal(restarted.busy, false);
+    heldResponses.shift()();
+    await margin.click('.task-recovery button:last-child');
+    console.log('PASS real worker termination produces an interrupted terminal event after reconnect and startup sweep.');
+  } else {
+    await margin.evaluate(`import('/src/agentboard.ts').then(api=>api.cancelAgent())`);
+    heldResponses.shift()();
+    console.log('SKIP active-worker termination: Chrome kept the same worker target after closeTarget and a wake-up ping; startup interruption sweep is unit-tested.');
+  }
+
   await ext.evaluate(`document.querySelector('#connected-sites [data-origin="${marginOrigin}"] select').value='forever'`);
   await ext.click(`[data-origin="${marginOrigin}"] button`);
   await waitFor(() => ext.evaluate(`document.querySelector('[data-origin="${marginOrigin}"] p').textContent.includes('Until I disconnect')`), 'forever duration saved');

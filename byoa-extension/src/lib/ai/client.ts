@@ -240,6 +240,7 @@ export interface StreamFinishMetadata {
 export type StreamAbortReason = 'replaced' | 'remote-tools-changed';
 
 export interface StreamCallbacks {
+  onProgress?: () => void;
   // Text block callbacks - each text-start/end creates a separate message
   onTextBlockStart?: (blockId: string) => void;
   onTextBlockChunk?: (blockId: string, chunk: string) => void;
@@ -578,6 +579,7 @@ export class AIClient {
         // Use fullStream for tools OR reasoning support
         if (hasTools || agent.reasoning?.enabled) {
           for await (const part of abortableAsyncIterable(fullStream, abortController.signal)) {
+            callbacks.onProgress?.();
             // Handle reasoning events from various providers.
             const eventType = (part as Record<string, unknown>).type;
 
@@ -780,6 +782,7 @@ export class AIClient {
         } else {
           // No tools, use simple text stream
           for await (const chunk of abortableAsyncIterable(textStream, abortController.signal)) {
+            callbacks.onProgress?.();
             _fullText += chunk;
             // Legacy mode - no structured events, just raw text
           }

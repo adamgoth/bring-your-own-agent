@@ -5,7 +5,7 @@ import { revokeGrantsForAgent } from '../site-grant';
  */
 
 import { isApiProtocol, type ApiProtocol } from '../ai/protocol';
-import { migrateAgentToV2 } from './config-migration';
+import { migrateAgentToV2, migrateTaskTimeout } from './config-migration';
 import { runStorageOperation } from './operation-queue';
 
 export const CONFIG_SCHEMA_VERSION = 2 as const;
@@ -52,6 +52,7 @@ export interface StorageConfig {
   userScripts?: UserScript[]; // WebMCP user-defined tool scripts
   builtinScripts?: BuiltinScript[]; // Built-in tool state (only stores user overrides)
   logLevel?: LogLevel;
+  siteTaskTimeoutMinutes?: number;
 }
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'silent';
@@ -150,6 +151,7 @@ export const DEFAULT_CONFIG: StorageConfig = {
   agents: [],
   defaultAgentId: undefined,
   mcpConfig: undefined,
+  siteTaskTimeoutMinutes: 2,
   logLevel: 'warn', // Default: balance between feedback and noise
 };
 
@@ -423,11 +425,19 @@ export function validateStorageConfigV2(value: unknown): StorageConfig {
     throw new ConfigValidationError('INVALID_LOG_LEVEL');
   }
 
+  let siteTaskTimeoutMinutes: number;
+  try {
+    siteTaskTimeoutMinutes = migrateTaskTimeout(source.siteTaskTimeoutMinutes);
+  } catch {
+    throw new ConfigValidationError('INVALID_CONFIG');
+  }
+
   // Projection is the canonical boundary: unknown keys are harmless input but
   // never enter runtime state, persistence writes, or settings exports.
   return {
     schemaVersion: CONFIG_SCHEMA_VERSION,
     agents,
+    siteTaskTimeoutMinutes,
     ...(source.defaultAgentId !== undefined && { defaultAgentId: source.defaultAgentId }),
     ...(mcpConfig !== undefined && { mcpConfig }),
     ...(userScripts !== undefined && { userScripts }),
@@ -452,7 +462,10 @@ export function parseStorageConfig(value: unknown): { config: StorageConfig; mig
     throw new ConfigValidationError('UNSUPPORTED_SCHEMA_VERSION');
   }
   if (source.schemaVersion === CONFIG_SCHEMA_VERSION) {
-    return { config: canonicalConfig(source), migrated: false };
+    return {
+      config: canonicalConfig(source),
+      migrated: false,
+    };
   }
   const sourceAgents = denseArray(source.agents, 'INVALID_CONFIG');
   let agents: Record<string, unknown>[];

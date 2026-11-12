@@ -450,6 +450,7 @@ describe('backup schema boundary', () => {
     expect(exported.version).toBe(BACKUP_VERSION);
     expect(exported.config).toEqual({
       schemaVersion: 2,
+      siteTaskTimeoutMinutes: 2,
       agents: [currentAgent()],
       logLevel: 'warn',
     });
