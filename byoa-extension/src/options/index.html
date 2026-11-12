@@ -18,21 +18,41 @@
         <h1 class="page-title">Settings</h1>
       </div>
       <main>
-        <section class="settings-section" id="connected-sites">
-          <h2>Connected sites</h2>
-          <p>Sites connect when you approve a request in BYOA’s connection window.</p>
-          <button id="disconnect-all" class="button button-secondary" type="button">
-            Disconnect all
-          </button>
-          <button id="clear-site-activity" class="button button-secondary" type="button">
-            Clear activity
-          </button>
-          <p id="site-permissions-error" role="alert" hidden></p>
-          <div id="connected-sites-list"></div>
-          <details>
-            <summary>Recent activity (all sites)</summary>
-            <div id="site-activity-all"></div>
-          </details>
+        <section class="settings-section connected-sites" id="connected-sites">
+          <div class="section-header">
+            <div>
+              <h2>Connected sites</h2>
+              <p class="section-description">
+                Sites connect when you approve a request in BYOA’s connection window. Disconnect
+                anytime.
+              </p>
+            </div>
+            <button
+              id="disconnect-all"
+              class="button button-danger-quiet button-small"
+              type="button"
+              hidden
+            >
+              Disconnect all
+            </button>
+          </div>
+          <p
+            id="site-permissions-error"
+            class="ui-banner"
+            data-tone="danger"
+            role="alert"
+            hidden
+          ></p>
+          <p
+            id="site-permissions-status"
+            class="ui-banner"
+            data-tone="success"
+            role="status"
+            hidden
+          ></p>
+          <div id="site-usage-summary" class="site-summary"></div>
+          <div id="connected-sites-list" class="site-list"></div>
+          <div id="site-activity-all"></div>
         </section>
         <section class="agents-section">
           <div class="agents-header">
