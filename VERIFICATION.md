@@ -131,3 +131,6 @@ The first browser runs caught fixture issues (favicon handling, an extra raw-pro
 ### Plan 6 independent review and fixes
 
 The separate user-visible review of `de4b8a2` identified two P2 lifecycle issues: concurrent empty-ID preflight failures could consume each other's events, and discovery could attach listeners after client disposal. Preflight failures now have unique provider-local IDs without worker records; invalid IDs from other providers reject. Disposal aborts pending discovery and guards attachment/reuse. Regression tests exercise concurrent failures through the real MAIN-world adapter and SDK, preserving the correct detail/retryability, plus disposal during discovery. Full checks/builds/packed-consumer verification were rerun after both fixes.
+
+
+Follow-up review of `a30c2f0..3159bca` returned no actionable findings and confirmed both P2 fixes using synthetic checks against matching build output. Review chat: `01a1ced9-1de8-7503-9410-d120616fff29` (gpt-6-astra, medium). The reviewer did not rerun the full suite or browser integration; the implementation task reran those checks. Both post-fix localhost and 127.0.0.1 browser integrations passed, including the concurrent raw preflight check and real worker termination, with no skipped cases or catalog-discovery flake on the passing runs.
