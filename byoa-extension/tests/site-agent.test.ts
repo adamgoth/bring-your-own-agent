@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { siteConnectionKey } from '../src/background/site-connection';
+import { readSiteGrant, siteConnectionKey } from '../src/lib/site-grant';
 import { createSiteAgentHandler } from '../src/background/site-agent';
 import type { AIClient, StreamCallbacks } from '../src/lib/ai/client';
 import type { ConfigStorage } from '../src/lib/storage/config';
@@ -24,12 +24,12 @@ function harness() {
     } as unknown as ConfigStorage,
     prepare
   );
-  const connect = (url = 'http://localhost:5183/', tabId = 7) => {
+  const connect = (url = 'http://localhost:5183/', tabId = 7, incognito = false) => {
     let receive: (msg: object) => void = () => {};
     let disconnect: () => void = () => {};
     const port = {
       name: 'agentboard-task',
-      sender: { url, frameId: 0, tab: { id: tabId } },
+      sender: { url, frameId: 0, tab: { id: tabId, incognito } },
       postMessage: vi.fn(),
       disconnect: vi.fn(),
       onMessage: {
@@ -55,6 +55,70 @@ describe('Site background tasks', () => {
     vi.mocked(
       chrome.storage.session.get as (keys: string) => Promise<Record<string, unknown>>
     ).mockResolvedValue({ [SITE_CONNECTION_KEY]: { agentId: 'configured' } });
+  });
+  it.each([false, true])(
+    'revocation cancels only tasks in its browsing context (private=%s)',
+    async (incognito) => {
+      const privateKey = siteConnectionKey('http://localhost:5183', true);
+      const privateGrant = {
+        agentId: 'configured',
+        persist: 'session',
+        createdAt: Date.now(),
+        incognito: true,
+      };
+      vi.mocked(
+        chrome.storage.session.get as (keys: string) => Promise<Record<string, unknown>>
+      ).mockResolvedValue({
+        [SITE_CONNECTION_KEY]: { agentId: 'configured' },
+        [privateKey]: privateGrant,
+      });
+      const h = harness();
+      const p = h.connect('http://localhost:5183/', 7, incognito);
+      p.send({ type: 'start', tools: ['get_selection'], text: 'One' });
+      await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
+      const changed = vi.mocked(chrome.storage.onChanged.addListener).mock.calls.at(-1)![0];
+      const ownKey = incognito ? privateKey : SITE_CONNECTION_KEY;
+      const otherKey = incognito ? SITE_CONNECTION_KEY : privateKey;
+      vi.mocked(
+        chrome.storage.session.get as (keys: string) => Promise<Record<string, unknown>>
+      ).mockResolvedValue({
+        [ownKey]: incognito ? privateGrant : { agentId: 'configured' },
+        [otherKey]: false,
+      });
+      changed({ [otherKey]: { newValue: false } }, 'session');
+      // Flush the serialized grant read triggered by the change notification.
+      await readSiteGrant('http://localhost:5183', !incognito);
+      expect(h.cancelStream).not.toHaveBeenCalled();
+      vi.mocked(
+        chrome.storage.session.get as (keys: string) => Promise<Record<string, unknown>>
+      ).mockResolvedValue({ [ownKey]: false });
+      changed({ [ownKey]: { newValue: false } }, 'session');
+      await vi.waitFor(() => expect(h.cancelStream).toHaveBeenCalledOnce());
+    }
+  );
+  it('cancels a running task when Options revokes its persistent grant', async () => {
+    const grant = { agentId: 'configured', persist: 'forever', createdAt: Date.now() };
+    vi.mocked(
+      chrome.storage.local.get as (keys: string) => Promise<Record<string, unknown>>
+    ).mockResolvedValue({ [SITE_CONNECTION_KEY]: grant });
+    vi.mocked(
+      chrome.storage.session.get as (keys: string) => Promise<Record<string, unknown>>
+    ).mockResolvedValue({});
+    const h = harness();
+    const p = h.connect();
+    p.send({ type: 'start', tools: ['get_selection'], text: 'One' });
+    await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
+    vi.mocked(
+      chrome.storage.local.get as (keys: string) => Promise<Record<string, unknown>>
+    ).mockResolvedValue({});
+    const changed = vi.mocked(chrome.storage.onChanged.addListener).mock.calls.at(-1)![0];
+    changed({ [SITE_CONNECTION_KEY]: { oldValue: grant } }, 'local');
+    await vi.waitFor(() =>
+      expect(h.cancelStream).toHaveBeenCalledWith(h.streamChat.mock.calls[0][4])
+    );
+    expect(p.port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'cancelled' })
+    );
   });
   it('uses the chosen profile with a restricted tool list, reports progress, and never opens the sidebar', async () => {
     const h = harness();
@@ -133,7 +197,13 @@ describe('Site background tasks', () => {
     running.send({ type: 'start', tools: ['get_selection', 'propose_replacement'], text: 'Two' });
     await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
     const changed = vi.mocked(chrome.storage.onChanged.addListener).mock.calls.at(-1)![0];
+    vi.mocked(
+      chrome.storage.session.get as (keys: string) => Promise<Record<string, unknown>>
+    ).mockResolvedValue({ [SITE_CONNECTION_KEY]: false });
     changed({ [SITE_CONNECTION_KEY]: { newValue: false } }, 'session');
+    await vi.waitFor(() =>
+      expect(h.cancelStream).toHaveBeenCalledWith(h.streamChat.mock.calls[0][4])
+    );
     expect(h.cancelStream).toHaveBeenCalledWith(h.streamChat.mock.calls[0][4]);
     expect(running.port.postMessage).toHaveBeenLastCalledWith(
       expect.objectContaining({ status: 'cancelled' })
@@ -232,7 +302,11 @@ describe('Site background tasks', () => {
       p.send({ type: 'start', tools: ['get_selection'], text: 'Read my selection' });
       await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
       const changed = vi.mocked(chrome.storage.onChanged.addListener).mock.calls.at(-1)![0];
+      vi.mocked(
+        chrome.storage.session.get as (keys: string) => Promise<Record<string, unknown>>
+      ).mockResolvedValue({ [SITE_CONNECTION_KEY]: grant });
       changed({ [SITE_CONNECTION_KEY]: { newValue: grant } }, 'session');
+      await vi.waitFor(() => expect(h.cancelStream).toHaveBeenCalled());
       expect(h.cancelStream).toHaveBeenCalledWith(h.streamChat.mock.calls[0][4]);
       expect(p.port.postMessage).toHaveBeenLastCalledWith(
         expect.objectContaining({ status: 'cancelled', busy: false })

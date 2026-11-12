@@ -89,7 +89,7 @@ disconnectButton.addEventListener('click', async () => {
 
 Call `connect()` from a user click. BYOA opens its own window showing the requesting origin and available profiles, and waits for approval. Your app does not build a profile picker or receive credentials. The returned connection includes readiness and the approved profile's ID and display name.
 
-Offer **Change profile** by calling `connect()` again. Cancelling preserves the current connection; approving a different profile cancels this origin's existing tasks. Disconnecting cancels this origin's queued and active tasks. Connections are per exact origin and browser session, so `localhost` and `127.0.0.1` require separate approvals.
+Offer **Change profile** by calling `connect()` again. Cancelling preserves the current connection; approving a different profile cancels this origin's existing tasks. Disconnecting cancels this origin's queued and active tasks. Connections are per exact origin and chosen connection duration, so `localhost` and `127.0.0.1` require separate approvals.
 
 ## 3. Request work and show progress
 
@@ -184,8 +184,15 @@ The test uses a temporary browser profile and a loopback mock provider. See the 
 
 Page tasks queue across apps, with at most one outstanding task per tab. The two-minute task timeout includes queue time. The sidebar shares a model client and can interrupt a page task. Keep the page open: navigation, closing the page, or worker interruption stops work without automatic retry or recovery.
 
-App tasks receive only the requested site-provenance WebMCP tools; Workspace sharing is off by default. In BYOA’s popup, you can share read-only snapshots of Persona (IDENTITY.md and SOUL.md), About you (USER.md), or Memory (MEMORY.md) for that exact origin and browser session. Shared content can reach destinations used by the site’s tools. AGENTS.md, journals, file tools, and remote-MCP context remain excluded. The page API exposes no sharing state. Every script on an approved origin shares that origin's authority. The page transport does not isolate scripts from one another.
+App tasks receive only the requested site-provenance WebMCP tools; Workspace sharing is off by default. In BYOA’s popup, you can share read-only snapshots of Persona (IDENTITY.md and SOUL.md), About you (USER.md), or Memory (MEMORY.md) for that exact origin and chosen connection duration. Shared content can reach destinations used by the site’s tools. AGENTS.md, journals, file tools, and remote-MCP context remain excluded. The page API exposes no sharing state. Every script on an approved origin shares that origin's authority. The page transport does not isolate scripts from one another.
 
 Credentials stay in the extension, but prompts, tool definitions, and tool results go to the configured model endpoint. API billing applies; this does not use a consumer ChatGPT or Claude subscription. Use sample content for development.
 
 See the [SDK contract](../byoa-extension/sdk/README.md) for the full prototype boundaries and client behavior. Spending budgets, persistent site permissions, SDK distribution and provider discovery, independent model clients, and task recovery still need implementation before this becomes a general hosted-app integration.
+
+
+### Connection duration and activity
+
+BYOA’s approval popup defaults to “Until I close the browser”; the person can choose “For 30 days” or “Until I disconnect”. Incognito approvals are session-only. Persistent grants remain on this device across browser restarts and extension updates. Expiry is checked when access is read, without background alarms. Deleting a profile revokes its site grants.
+
+Options → Connected sites lists profiles, shared files, duration, expiry and last use. Disconnecting there stops running tasks. Its clearable local activity log retains at most 500 entries and 30 days: connection events and task IDs, status, profile names, tool names and duration. It contains no prompts, tool arguments or results. Grants and activity are excluded from settings export/import. The page-facing Connection API is unchanged and exposes no duration, expiry, sharing state or activity.

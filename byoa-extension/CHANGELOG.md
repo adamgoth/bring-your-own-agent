@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Choose session-only, 30-day, or until-disconnect site approvals; incognito stays session-only.
+- Manage Connected sites in Options, including duration, shared files, last use and revocation that cancels running tasks.
+- Keep a clearable, metadata-only local activity log (500 entries, 30 days), excluded with grants from settings backups.
+- Revoke approvals when their profile is deleted and enforce expiry on read.
+
+
+## Unreleased
+
 - Add optional per-origin, session-only sharing of persona, user, and memory snapshots with site tasks. Sharing defaults off, excludes file tools, and is recorded in extension transcripts.
 
 ## 0.1.1

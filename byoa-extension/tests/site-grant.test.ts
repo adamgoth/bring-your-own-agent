@@ -10,7 +10,12 @@ describe('site grants', () => {
   it('accepts only real booleans and valid agent ids', () => {
     expect(
       validateSiteGrant({ agentId: 'a', share: { persona: true, user: false, memory: true } })
-    ).toEqual({ agentId: 'a', share: { persona: true, user: false, memory: true } });
+    ).toEqual({
+      agentId: 'a',
+      share: { persona: true, user: false, memory: true },
+      persist: 'session',
+      createdAt: 0,
+    });
     expect(validateSiteGrant({ agentId: 1 })).toBeUndefined();
   });
 });

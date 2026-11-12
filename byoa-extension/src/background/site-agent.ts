@@ -1,5 +1,6 @@
-import { siteOrigin, siteConnectionKey, siteConnectionStatus } from './site-connection';
-import { readSiteGrant, validateSiteGrant, type SiteShare } from '../lib/site-grant';
+import { appendSiteActivity } from '../lib/site-activity';
+import { siteOrigin, siteConnectionStatus } from './site-connection';
+import { readSiteGrant, onGrantChanged, touchGrant, type SiteShare } from '../lib/site-grant';
 import { SiteTaskQueue } from './site-task-queue';
 import { siteChatPrefix, type SiteChat } from '../lib/site-chat';
 import type { AIClient } from '../lib/ai/client';
@@ -22,7 +23,8 @@ export function createSiteAgentHandler(
       port.disconnect();
       return;
     }
-    const connectionKey = siteConnectionKey(origin);
+    const startedAt = Date.now();
+    const usedTools = new Set<string>();
     const controller = new AbortController();
     const streamId = globalThis.crypto.randomUUID();
     const chatKey = `${siteChatPrefix(tabId)}${streamId}`;
@@ -49,27 +51,31 @@ export function createSiteAgentHandler(
         /* Page closed. */
       }
     };
-    const onConnectionChanged = (
-      changes: Record<string, chrome.storage.StorageChange>,
-      area: string
-    ) => {
+    const unsubscribe = onGrantChanged((changedOrigin, grant, incognito) => {
       if (
-        area === 'session' &&
-        connectionKey in changes &&
-        (changes[connectionKey].newValue === false ||
-          (authorizedAgentId &&
-            validateSiteGrant(changes[connectionKey].newValue)?.agentId !== authorizedAgentId) ||
-          (authorizedShare &&
-            JSON.stringify(validateSiteGrant(changes[connectionKey].newValue)?.share) !==
-              JSON.stringify(authorizedShare)))
+        changedOrigin === origin &&
+        incognito === (sender?.tab?.incognito === true) &&
+        (!grant ||
+          (authorizedAgentId && grant.agentId !== authorizedAgentId) ||
+          (authorizedShare && JSON.stringify(grant.share) !== JSON.stringify(authorizedShare)))
       )
         cancel('Agent disconnected from this site. Any existing suggestions remain for review.');
-    };
-    chrome.storage.onChanged.addListener(onConnectionChanged);
+    });
     const finish = (status: string, detail: string) => {
       if (finished) return;
       finished = true;
-      chrome.storage.onChanged.removeListener(onConnectionChanged);
+      unsubscribe();
+      if (started && !sender?.tab?.incognito)
+        void appendSiteActivity({
+          at: Date.now(),
+          origin,
+          kind: 'task',
+          taskId: streamId,
+          status,
+          agentName: chat?.agentName,
+          tools: [...usedTools],
+          durationMs: Date.now() - startedAt,
+        }).catch(() => undefined);
       if (timer) clearTimeout(timer);
       if (ownsTab) activeTabs.delete(tabId);
       if (chat) {
@@ -144,7 +150,7 @@ export function createSiteAgentHandler(
       );
       publish('queued', 'Waiting for BYOA…', true);
       void (async () => {
-        const connection = await siteConnectionStatus(config, origin);
+        const connection = await siteConnectionStatus(config, origin, sender?.tab?.incognito);
         if (finished) return;
         if (!connection.connected) {
           finish('error', 'Connect your API agent to this site first.');
@@ -165,17 +171,18 @@ export function createSiteAgentHandler(
           return;
         }
         try {
-          const stillConnected = await siteConnectionStatus(config, origin);
+          const stillConnected = await siteConnectionStatus(config, origin, sender?.tab?.incognito);
           if (!stillConnected.connected || stillConnected.agentId !== agent.id || finished) {
             if (!finished) finish('error', 'Site access was revoked.');
             return;
           }
-          const grant = await readSiteGrant(origin);
+          const grant = await readSiteGrant(origin, sender?.tab?.incognito);
           if (!grant || grant.agentId !== agent.id || finished) {
             if (!finished) finish('error', 'Site access was revoked.');
             return;
           }
           authorizedShare = grant.share;
+          await touchGrant(origin, sender?.tab?.incognito);
           await prepare();
           if (finished) return;
           publish('working', `${agent.name} is working…`, true);
@@ -200,6 +207,7 @@ export function createSiteAgentHandler(
                 }
               },
               onToolCall: (tool) => {
+                if (!finished) usedTools.add(tool.toolName);
                 if (!finished && chat) {
                   chat.activity.push({
                     name: tool.toolName,

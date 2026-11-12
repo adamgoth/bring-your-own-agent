@@ -346,12 +346,13 @@ chrome.runtime.onMessage.addListener((request: ExtensionMessage, sender, sendRes
           sendResponse({ success: true });
           return;
         }
-        if (request.type === 'SITE_DISCONNECT') await revokeSiteGrant(origin);
+        if (request.type === 'SITE_DISCONNECT')
+          await revokeSiteGrant(origin, sender.tab?.incognito);
         if (request.type === 'SITE_CONNECT') {
           sendResponse(await openConnectionPrompt(sender));
           return;
         }
-        const connection = await siteConnectionStatus(configStorage, origin);
+        const connection = await siteConnectionStatus(configStorage, origin, sender.tab?.incognito);
         sendResponse(connection);
       })().catch(() =>
         sendResponse(
@@ -382,7 +383,8 @@ chrome.runtime.onMessage.addListener((request: ExtensionMessage, sender, sendRes
                 request.type === 'CONNECTION_PROMPT_APPROVE',
                 sender,
                 configStorage,
-                request.share
+                request.share,
+                request.persist
               );
       void operation.then(sendResponse, (error) =>
         sendResponse({

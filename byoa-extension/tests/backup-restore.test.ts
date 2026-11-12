@@ -430,7 +430,12 @@ describe('backup schema boundary', () => {
       const requested = keys as unknown;
       const result =
         Array.isArray(requested) && requested.includes('config')
-          ? { config, slashCommands: commands }
+          ? {
+              config,
+              slashCommands: commands,
+              agentboard_connection_private: { agentId: 'private' },
+              byoa_site_activity: [{ origin: 'private' }],
+            }
           : {};
       callback?.(result);
       return Promise.resolve(result);
@@ -438,6 +443,9 @@ describe('backup schema boundary', () => {
     chrome.runtime.getManifest = vi.fn(() => ({ version: '0.7.3' })) as never;
 
     const exported = await gatherBackupData();
+    expect(JSON.stringify(exported)).not.toMatch(
+      /agentboard_connection|byoa_site_activity|private/
+    );
 
     expect(exported.version).toBe(BACKUP_VERSION);
     expect(exported.config).toEqual({

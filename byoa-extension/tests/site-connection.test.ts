@@ -1,10 +1,6 @@
+import { siteConnectionKey } from '../src/lib/site-grant';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  siteOrigin,
-  siteConnectionStatus,
-  siteConnectionKey,
-  siteProfiles,
-} from '../src/background/site-connection';
+import { siteOrigin, siteConnectionStatus, siteProfiles } from '../src/background/site-connection';
 import type { ConfigStorage } from '../src/lib/storage/config';
 const origin = 'http://localhost:5183';
 const key = siteConnectionKey(origin);
@@ -64,6 +60,23 @@ describe('site profile choice', () => {
       stored(grant);
       expect((await siteConnectionStatus(config(), origin)).connected).toBe(false);
     }
+  });
+  it('selects only the grant for the requesting browsing context', async () => {
+    stored({ agentId: 'first' });
+    expect((await siteConnectionStatus(config(), origin, true)).connected).toBe(false);
+    vi.mocked(
+      chrome.storage.session.get as (key: string) => Promise<Record<string, unknown>>
+    ).mockResolvedValue({
+      [key]: { agentId: 'first' },
+      [siteConnectionKey(origin, true)]: {
+        agentId: 'second',
+        persist: 'session',
+        createdAt: Date.now(),
+        incognito: true,
+      },
+    });
+    expect((await siteConnectionStatus(config(), origin)).agentId).toBe('first');
+    expect((await siteConnectionStatus(config(), origin, true)).agentId).toBe('second');
   });
   it('keeps connections isolated by origin', async () => {
     stored({ agentId: 'second' });
