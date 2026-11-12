@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>BYOA voice</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <button id="mic" title="Dictate to this site" aria-label="Dictate to this site" disabled>
+      <svg
+        viewBox="0 0 24 24"
+        width="24"
+        height="24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.7"
+        aria-hidden="true"
+      >
+        <rect x="9" y="2" width="6" height="12" rx="3" />
+        <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" />
+      </svg>
+    </button>
+    <section id="panel" hidden aria-label="Site voice">
+      <header>
+        <strong>BYOA · this site</strong
+        ><button id="collapse" aria-label="Collapse voice">−</button>
+      </header>
+      <p id="status" role="status">Connecting…</p>
+      <canvas id="bars" width="280" height="38" hidden aria-label="Microphone volume"></canvas>
+      <textarea id="draft" aria-label="Review your transcript" maxlength="30000" hidden></textarea>
+      <div id="result" hidden></div>
+      <div class="actions">
+        <button id="finish" hidden>Finish</button><button id="send" hidden>Send</button
+        ><button id="cancel" hidden>Cancel</button
+        ><button id="open" hidden>Open conversation</button>
+      </div>
+      <footer>
+        <label
+          >Language
+          <select id="language">
+            <option value="en-US">English (US)</option>
+            <option value="en-GB">English (UK)</option>
+            <option value="sv-SE">Swedish</option>
+          </select></label
+        ><button id="setup">Voice setup</button>
+      </footer>
+    </section>
+    <script type="module" src="./index.ts"></script>
+  </body>
+</html>

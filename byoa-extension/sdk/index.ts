@@ -105,6 +105,11 @@ export function createClient(provider?: AgentProvider) {
       status(result);
       return result;
     },
+    configureVoice: (options: {
+      enabled: boolean;
+      tools?: readonly string[];
+      instructions?: string;
+    }) => call<void>('agent_configureVoice', options),
     openSettings: () => call<void>('agent_openSettings'),
     openChat: (taskId?: string) => call<void>('agent_openChat', { taskId }),
     async getTask(taskId: string): Promise<TaskSummary | null> {

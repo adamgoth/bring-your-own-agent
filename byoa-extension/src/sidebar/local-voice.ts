@@ -1,55 +1,20 @@
+import { createVoiceCapture } from '../lib/voice-capture';
+import { claimVoiceLease } from '../lib/voice-lease';
 import { startVoiceMeter } from './voice-meter';
 
-/** Local-only Web Speech adapter. Never use recognition without explicit local support. */
-export interface LocalRecognition {
-  processLocally: boolean;
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
-  onend: (() => void) | null;
-  start(): void;
-  stop(): void;
-  abort(): void;
-}
-export interface LocalRecognitionConstructor {
-  new (): LocalRecognition;
-  prototype: LocalRecognition;
-  available(options: { langs: string[]; processLocally: true }): Promise<string>;
-  install(options: { langs: string[]; processLocally: true }): Promise<boolean>;
-}
-export function localRecognizer(): LocalRecognitionConstructor | undefined {
-  const scope = window as unknown as {
-    SpeechRecognition?: LocalRecognitionConstructor;
-    webkitSpeechRecognition?: LocalRecognitionConstructor;
-  };
-  const API = scope.SpeechRecognition ?? scope.webkitSpeechRecognition;
-  if (
-    !API ||
-    !('processLocally' in API.prototype) ||
-    typeof API.available !== 'function' ||
-    typeof API.install !== 'function'
-  )
-    return;
-  return API;
-}
-
-async function withDeadline<T>(operation: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      operation,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Speech operation timed out')), ms);
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
+import { localRecognizer, withDeadline } from '../lib/local-speech';
+export { localRecognizer } from '../lib/local-speech';
+export type { LocalRecognition, LocalRecognitionConstructor } from '../lib/local-speech';
 
 export function setupLocalVoice(options: { changed?: () => void; canStart?: () => boolean } = {}) {
+  const probe = document.querySelector<HTMLButtonElement>('#voice-probe');
+  if (probe && import.meta.env.BYOA_VOICE_PROBE) {
+    probe.hidden = false;
+    probe.addEventListener('click', () => {
+      abort(true);
+      void chrome.tabs.create({ url: chrome.runtime.getURL('voice-probe/setup.html') });
+    });
+  }
   const panel = document.querySelector<HTMLDetailsElement>('#local-voice');
   const mic = document.querySelector<HTMLButtonElement>('#voice-button');
   const composer = document.querySelector<HTMLTextAreaElement>('#message-input');
@@ -66,7 +31,8 @@ export function setupLocalVoice(options: { changed?: () => void; canStart?: () =
   const status = panel.querySelector<HTMLElement>('#voice-status');
   if (!permissionHelp || !language || !check || !install || !record || !status) return;
   const API = localRecognizer();
-  let recognition: LocalRecognition | undefined;
+  let recognition: ReturnType<typeof createVoiceCapture> | undefined;
+  let releaseLease: (() => void) | undefined;
   let ready = false;
   let pending = false;
   let closed = false;
@@ -74,7 +40,6 @@ export function setupLocalVoice(options: { changed?: () => void; canStart?: () =
   let baseText = '';
   let transcript = '';
   let priorReadOnly = false;
-  let timeout: ReturnType<typeof setTimeout> | undefined;
   let stopMeter: (() => void) | undefined;
   let completion: Promise<boolean> | undefined;
   let resolveCompletion: ((ok: boolean) => void) | undefined;
@@ -95,7 +60,8 @@ export function setupLocalVoice(options: { changed?: () => void; canStart?: () =
     options.changed?.();
   };
   const settle = (ok: boolean, discard = false) => {
-    clearTimeout(timeout);
+    releaseLease?.();
+    releaseLease = undefined;
     stopMeter?.();
     stopMeter = undefined;
     recognition = undefined;
@@ -116,9 +82,10 @@ export function setupLocalVoice(options: { changed?: () => void; canStart?: () =
   const abort = (discard = false) => {
     if (!recognition) return;
     const active = recognition;
+    transcript = active.text;
     settle(false, discard);
     try {
-      active.abort();
+      active.cancel();
     } catch {
       // State and meter are already released even if the recognizer has ended.
     }
@@ -129,23 +96,8 @@ export function setupLocalVoice(options: { changed?: () => void; canStart?: () =
     recordingStatus.textContent = 'Finishing…';
     stopMeter?.();
     stopMeter = undefined;
-    clearTimeout(timeout);
-    const active = recognition;
-    timeout = setTimeout(() => {
-      if (recognition !== active) return;
-      abort();
-      panel.open = true;
-      status.textContent =
-        'Transcription did not finish. Any captured text is in your message for review; nothing was sent.';
-    }, 8000);
     render();
-    try {
-      active.stop();
-    } catch {
-      abort();
-      panel.open = true;
-      status.textContent = 'Could not finish dictation. Review your message before sending.';
-    }
+    recognition.finish();
   };
   const checkAvailability = async () => {
     if (!API) return;
@@ -221,54 +173,63 @@ export function setupLocalVoice(options: { changed?: () => void; canStart?: () =
     transcript = '';
     priorReadOnly = composer.readOnly;
     try {
-      const active = new API();
-      active.processLocally = true;
-      if (active.processLocally !== true) throw new Error('Local processing unavailable');
-      active.lang = language.value;
-      active.continuous = true;
-      active.interimResults = true;
+      const active = createVoiceCapture({
+        state: (state) => {
+          if (recognition !== active) return;
+          stopping = state === 'finishing';
+          recordingStatus.textContent = stopping ? 'Finishing…' : 'Listening locally';
+          if (stopping) {
+            stopMeter?.();
+            stopMeter = undefined;
+          } else
+            stopMeter = startVoiceMeter(waveform, () => {
+              if (recognition === active && !stopping)
+                recordingStatus.textContent = 'Listening · meter unavailable';
+            });
+          render();
+        },
+        result: (result) => {
+          if (recognition !== active) return;
+          transcript = result.text;
+          settle(result.ok, result.cancelled);
+          if (result.error) {
+            panel.open = true;
+            permissionHelp.hidden = !result.error.includes('not-allowed');
+            status.textContent = result.error.includes('not-allowed')
+              ? 'Microphone access needs approval. Choose Set up microphone access, then try again.'
+              : result.error;
+          } else {
+            status.textContent = 'Transcript added to your message.';
+            composer.focus();
+          }
+        },
+      });
       recognition = active;
       completion = new Promise((resolve) => {
         resolveCompletion = resolve;
       });
       composer.readOnly = true;
       panel.open = false;
-      recordingStatus.textContent = 'Listening locally';
-      active.onresult = (event) => {
-        if (recognition !== active) return;
-        transcript = Array.from(event.results)
-          .map((result) => result[0].transcript)
-          .join(' ');
-      };
-      active.onerror = (event) => {
-        if (recognition !== active) return;
-        abort();
-        panel.open = true;
-        permissionHelp.hidden =
-          event.error !== 'not-allowed' && event.error !== 'service-not-allowed';
-        status.textContent =
-          event.error === 'not-allowed'
-            ? 'Microphone access needs approval. Choose Set up microphone access, then try again.'
-            : `Local dictation stopped (${event.error}). Review any captured text before sending. No cloud service was used.`;
-      };
-      active.onend = () => {
-        if (recognition !== active) return;
-        settle(true);
-        if (!transcript.trim()) {
+      recordingStatus.textContent = 'Starting local dictation…';
+      releaseLease = claimVoiceLease(
+        () => {
+          if (recognition !== active) return;
+          const finishImmediately = stopping;
+          void active.start(language.value, true);
+          if (finishImmediately) active.finish();
+        },
+        () => {
+          abort();
           panel.open = true;
-          status.textContent = 'No speech detected. Nothing was sent. Try again.';
-        } else {
-          status.textContent = 'Transcript added to your message.';
-          composer.focus();
+          status.textContent =
+            'Recording stopped because its connection or focus changed. Nothing was sent.';
+        },
+        () => {
+          abort(true);
+          panel.open = true;
+          status.textContent = 'Microphone is busy in another BYOA view.';
         }
-      };
-      active.start();
-      if (recognition !== active) return;
-      stopMeter = startVoiceMeter(waveform, () => {
-        if (recognition === active && !stopping)
-          recordingStatus.textContent = 'Listening · meter unavailable';
-      });
-      timeout = setTimeout(stop, 60_000);
+      );
       render();
     } catch {
       abort();
@@ -290,6 +251,13 @@ export function setupLocalVoice(options: { changed?: () => void; canStart?: () =
         status.textContent =
           'Open Chrome Settings → Privacy and security → Site settings → Microphone.';
       });
+  });
+  composer.addEventListener('input', () => {
+    if (!recognition || composer.value === baseText) return;
+    const replacement = composer.value;
+    abort(true);
+    composer.value = replacement;
+    options.changed?.();
   });
   panel.addEventListener('toggle', render);
   document.addEventListener('visibilitychange', () => {

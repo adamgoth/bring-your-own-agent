@@ -1,3 +1,4 @@
+vi.mock('../src/background/site-voice', () => ({ setupSiteVoice: vi.fn() }));
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   issuePdfWorkerCapability,

@@ -23,3 +23,14 @@ Only recognition implementations exposing `processLocally`, `available`, and `in
 Focused tests cover local-only recognition, final result waiting, cancellation and late events, errors, permission setup, and microphone/audio-context cleanup. The built-extension browser fixture uses a temporary Chrome profile, a synthetic microphone and a deterministic recognizer to verify composer layout, actual waveform drawing and Send integration. This does not measure recognition accuracy.
 
 Manual testing confirmed local transcription in installed Chrome. Chrome for Testing 148 exposed the local API and a downloadable English pack, but its installation attempt timed out. Availability checks are bounded at ten seconds and installation at two minutes; neither failure enables a cloud fallback.
+
+
+## Floating site voice
+
+Local builds now support an extension-owned mic on explicitly opted-in, connected sites. Margin opts in after registering its editing tools. Reload BYOA from `byoa-extension/dist`, reload local Margin, and connect it. The mic appears at bottom right; the sidebar can remain closed.
+
+Click the mic, speak, then Finish to review or Send to wait for final words and submit once. Voice setup handles microphone permission and local language-pack downloads visibly. The result quotes the actual site task response. Open conversation focuses its App agent chat, where follow-ups keep the same site tool and grant boundaries. General sidebar chat and its draft stay separate.
+
+Capture stops on cancellation, tab/window focus loss, navigation, widget removal or hiding, grant changes, worker disconnect and timeout. One lease coordinates sidebar and floating capture. Audio remains local; only approved text reaches the configured agent. The site never receives the extension transcript or result DOM.
+
+Floating site voice is controlled by **Settings → Voice mode (beta)** and is off by default. Enable it to show the pane on connected apps that explicitly opt in. Switching it off removes the pane and cancels its capture and site task; sidebar dictation remains available.

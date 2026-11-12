@@ -1,4 +1,7 @@
+import { setupSiteVoice } from './site-voice';
 import { createChatSessionService } from './chat-session';
+import { registerVoiceProbe } from '../voice-probe/worker';
+if (import.meta.env.BYOA_VOICE_PROBE) registerVoiceProbe();
 import { CHAT_SESSION_PORT } from '../lib/chat-session';
 import {
   openConnectionPrompt,
@@ -917,6 +920,27 @@ const sitePortHandler = createSiteAgentHandler(
   siteTasksReady,
   (tabId, documentId) => webmcp.ownsDocument(tabId, documentId)
 );
+
+setupSiteVoice({
+  config: configStorage,
+  execute: sitePortHandler,
+  prepare: async (tabId) => {
+    await ensureWebMCPReady(tabId);
+    await webmcp.requestToolsAndWait(tabId);
+  },
+  open: (tabId, taskId) => {
+    const opening = chrome.sidePanel.open({ tabId }).catch(async () => {
+      await ensureTabPanel(tabId);
+      await chrome.sidePanel.open({ tabId });
+    });
+    return Promise.all([
+      opening,
+      chrome.storage.session.set({
+        [`agentboard_chat_focus_${tabId}`]: { taskId, timestamp: Date.now() },
+      }),
+    ]).then(() => undefined);
+  },
+});
 
 // Handle long-lived connections for streaming
 chrome.runtime.onConnect.addListener((port) => {

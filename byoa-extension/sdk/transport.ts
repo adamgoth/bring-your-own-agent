@@ -85,6 +85,11 @@ export function createTransport(window: Window) {
     return result;
   }
   const agentboard = {
+    configureVoice: (options: {
+      enabled: boolean;
+      tools?: readonly string[];
+      instructions?: string;
+    }) => call<void>('voice', options),
     async getTask(taskId: string): Promise<TaskSummary | null> {
       const event = await call<TaskEvent | null>('task', { taskId });
       return event ? { ...event, retryable: retryable(event) } : null;

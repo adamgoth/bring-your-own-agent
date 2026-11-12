@@ -672,6 +672,7 @@ try {
   await margin.click('.draft-use');
   await waitFor(() => margin.evaluate(`document.querySelector('.tiptap').textContent.includes('DRAFT_FIXTURE') && !document.querySelector('.draft-preview')`), 'accepted draft');
   console.log('PASS empty document → scoped draft tool → separate preview → explicit acceptance.');
+  await waitFor(() => margin.evaluate(`document.querySelector('.suggest-title')?.disabled === false`), 'title suggestion ready');
   await margin.click('.suggest-title');
   await waitFor(() => margin.evaluate(`document.querySelector('.document-title').value==='Reading Group Invitation'`), 'suggested title', 30000);
   assert.ok(await margin.evaluate(`document.querySelector('.tiptap').textContent.includes('DRAFT_FIXTURE')`));

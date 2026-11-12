@@ -451,6 +451,7 @@ describe('backup schema boundary', () => {
     expect(exported.config).toEqual({
       schemaVersion: 2,
       siteTaskTimeoutMinutes: 2,
+      voiceMode: false,
       spending: { perTaskTokens: 200000 },
       agents: [currentAgent()],
       logLevel: 'warn',

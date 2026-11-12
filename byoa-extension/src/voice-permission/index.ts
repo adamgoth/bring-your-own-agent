@@ -1,3 +1,4 @@
+import { localRecognizer, withDeadline } from '../lib/local-speech';
 export function setupMicrophonePermission() {
   const allow = document.querySelector<HTMLButtonElement>('#allow-microphone');
   const status = document.querySelector<HTMLElement>('#permission-status');
@@ -40,3 +41,45 @@ export function setupMicrophonePermission() {
   });
 }
 setupMicrophonePermission();
+
+const speechLanguage = document.querySelector<HTMLSelectElement>('#speech-language');
+const speechStatus = document.querySelector<HTMLElement>('#speech-status');
+const speechOptions = () => ({
+  langs: [speechLanguage?.value || 'en-US'],
+  processLocally: true as const,
+});
+document.querySelector('#speech-check')?.addEventListener('click', () => {
+  const API = localRecognizer();
+  if (!speechStatus) return;
+  if (!API) {
+    speechStatus.textContent = 'Local speech is unsupported in this Chrome version.';
+    return;
+  }
+  void withDeadline(API.available(speechOptions()), 10000).then(
+    (state) => {
+      speechStatus.textContent =
+        state === 'available'
+          ? 'Ready. Return to the site and click its microphone.'
+          : `Local language pack: ${state}.`;
+    },
+    () => {
+      speechStatus.textContent = 'Could not check local speech. Try again.';
+    }
+  );
+});
+document.querySelector('#speech-install')?.addEventListener('click', () => {
+  const API = localRecognizer();
+  if (!speechStatus || !API) return;
+  const install = API.install(speechOptions());
+  speechStatus.textContent = 'Downloading a local speech model. No audio is uploaded.';
+  void withDeadline(install, 120000).then(
+    (ok) => {
+      speechStatus.textContent = ok
+        ? 'Language pack ready. Return to your site to start recording.'
+        : 'Download did not complete. Check availability again.';
+    },
+    () => {
+      speechStatus.textContent = 'Download timed out. Check availability again.';
+    }
+  );
+});

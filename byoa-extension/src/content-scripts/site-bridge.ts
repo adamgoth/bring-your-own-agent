@@ -1,3 +1,4 @@
+import { createFloatingVoice } from './floating-voice';
 import { onGrantChanged } from '../lib/site-grant';
 import { connectableOrigin } from '../background/site-connection';
 import { isTrustedSubmitShortcut } from './site-gesture';
@@ -5,6 +6,22 @@ import { isTrustedSubmitShortcut } from './site-gesture';
 // Runs on every eligible top-level page, so it stays dormant (no polling, no storage listener,
 // no messages) until the page itself calls the BYOA client.
 if (connectableOrigin(window.location.href) && window === window.top) {
+  const floatingVoice = createFloatingVoice();
+  let voiceOptions: unknown;
+  let voiceSync = 0;
+  const syncVoice = async () => {
+    if (!voiceOptions) return;
+    const sync = ++voiceSync;
+    try {
+      const result = await chrome.runtime.sendMessage({
+        type: 'SITE_VOICE_SYNC',
+        options: voiceOptions,
+      });
+      if (sync === voiceSync) floatingVoice(result?.enabled === true, result?.bindingId);
+    } catch {
+      if (sync === voiceSync) floatingVoice(false);
+    }
+  };
   let lastGesture = 0;
   let activated = false;
   let refreshTimer: ReturnType<typeof setInterval> | undefined;
@@ -22,6 +39,7 @@ if (connectableOrigin(window.location.href) && window === window.top) {
     emit({ kind: 'response', id, ok, value, error, code });
   const refresh = async () => {
     try {
+      await syncVoice();
       emit({
         kind: 'status',
         value: await chrome.runtime.sendMessage({ type: 'SITE_CONNECTION_STATUS' }),
@@ -75,6 +93,11 @@ if (connectableOrigin(window.location.href) && window === window.top) {
       return;
     activate();
     const { id, method, params = {} } = data;
+    if (method === 'voice') {
+      voiceOptions = params;
+      void syncVoice().then(() => reply(id, true));
+      return;
+    }
     if (method === 'cancel') {
       const task = active.get(id);
       if (task) {

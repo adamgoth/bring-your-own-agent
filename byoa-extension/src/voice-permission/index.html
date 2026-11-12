@@ -19,6 +19,19 @@
       <p id="permission-status" role="status">
         Choose Allow microphone, then approve Chrome’s prompt.
       </p>
+      <section>
+        <h2>Local language pack</h2>
+        <select id="speech-language" aria-label="Speech language">
+          <option value="en-US">English (US)</option>
+          <option value="en-GB">English (UK)</option>
+          <option value="sv-SE">Swedish</option>
+        </select>
+        <button id="speech-check">Check local speech</button
+        ><button id="speech-install">Download language pack</button>
+        <p id="speech-status" role="status">
+          Check availability, then download if needed. Downloads require this button click.
+        </p>
+      </section>
       <section id="permission-help" hidden>
         <h2>If access is blocked</h2>
         <ol>
@@ -38,7 +51,7 @@
       </section>
       <p>
         Once access is allowed, return to your original tab and use the mic button in the BYOA
-        sidebar. You can review the transcript before sending it.
+        sidebar or on the connected site. You can review the transcript before sending it.
       </p>
     </main>
     <script type="module" src="./index.ts"></script>

@@ -184,6 +184,7 @@ describe('schema-v2 parser', () => {
     expect(parsed.config).toEqual({
       schemaVersion: 2,
       siteTaskTimeoutMinutes: 2,
+      voiceMode: false,
       spending: { perTaskTokens: 200000 },
       agents: [
         {
@@ -689,4 +690,11 @@ describe('ConfigStorage', () => {
     await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(expect.any(ConfigValidationError)));
     expect((onError.mock.calls[0][0] as ConfigValidationError).message).toBe('INVALID_CONFIG');
   });
+});
+
+it('defaults voice mode off and preserves explicit opt-in through config parsing', () => {
+  expect(parseStorageConfig({ ...DEFAULT_CONFIG, voiceMode: undefined }).config.voiceMode).toBe(
+    false
+  );
+  expect(parseStorageConfig({ ...DEFAULT_CONFIG, voiceMode: true }).config.voiceMode).toBe(true);
 });

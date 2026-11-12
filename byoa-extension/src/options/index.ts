@@ -55,6 +55,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initializeBackupRestore();
   await initializeConnectedSites();
   try {
+    const voiceMode = document.getElementById('voice-mode') as HTMLInputElement;
+    voiceMode.checked = (await configStorage.get()).voiceMode === true;
+    voiceMode.addEventListener('change', async () => {
+      voiceMode.disabled = true;
+      try {
+        await configStorage.set({ voiceMode: voiceMode.checked });
+        showStatus('Voice mode setting saved.', 'success');
+      } catch {
+        voiceMode.checked = !voiceMode.checked;
+        showStatus('Could not save voice mode setting.', 'error');
+      } finally {
+        voiceMode.disabled = false;
+      }
+    });
     const spending = document.createElement('fieldset');
     spending.append(
       Object.assign(document.createElement('legend'), {
