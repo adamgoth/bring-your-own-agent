@@ -1,3 +1,4 @@
+import { onGrantChanged } from '../lib/site-grant';
 import { connectableOrigin } from '../background/site-connection';
 import { isTrustedSubmitShortcut } from './site-gesture';
 
@@ -183,13 +184,14 @@ if (connectableOrigin(window.location.href) && window === window.top) {
       }
     }, 15000);
     window.addEventListener('focus', () => void refresh());
+    onGrantChanged(
+      (origin) => {
+        if (origin === window.location.origin) void refresh();
+      },
+      { signalOnly: true }
+    );
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (
-        (area === 'local' && changes.config) ||
-        (area === 'session' &&
-          Object.keys(changes).some((key) => key.startsWith('agentboard_connection_')))
-      )
-        void refresh();
+      if (area === 'local' && changes.config) void refresh();
     });
     void refresh();
   }

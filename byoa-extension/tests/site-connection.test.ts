@@ -1,10 +1,6 @@
+import { siteConnectionKey } from '../src/lib/site-grant';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  siteOrigin,
-  siteConnectionStatus,
-  siteConnectionKey,
-  siteProfiles,
-} from '../src/background/site-connection';
+import { siteOrigin, siteConnectionStatus, siteProfiles } from '../src/background/site-connection';
 import type { ConfigStorage } from '../src/lib/storage/config';
 const origin = 'http://localhost:5183';
 const key = siteConnectionKey(origin);

@@ -26,6 +26,7 @@ async function send(type: string, agentId?: string) {
     agentId,
     ...(type === 'CONNECTION_PROMPT_APPROVE'
       ? {
+          persist: document.querySelector<HTMLSelectElement>('#persist')?.value ?? 'session',
           share: Object.fromEntries(
             Object.entries(shareInputs).map(([key, input]) => [
               key,
@@ -56,8 +57,14 @@ async function load() {
       origin: string;
       selectedAgentId?: string;
       share?: SiteShare;
+      persist: string;
+      incognito: boolean;
       profiles: Array<ProfileList['profiles'][number] & { hasWorkspace: boolean }>;
     };
+    const duration = document.querySelector<HTMLElement>('#duration');
+    if (duration) duration.hidden = result.incognito;
+    const persist = document.querySelector<HTMLSelectElement>('#persist');
+    if (persist) persist.value = result.incognito ? 'session' : result.persist;
     const origin = document.querySelector('#origin');
     if (origin) origin.textContent = result.origin;
     const title = document.querySelector('#title');

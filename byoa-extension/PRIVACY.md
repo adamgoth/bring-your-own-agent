@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: November 9, 2026
+Last updated: November 12, 2026
 
 BYOA is a browser extension that connects your browser to services and tools you choose. This policy explains what stays on your device, what is sent to BYOA, and what may be sent to third parties.
 
@@ -28,7 +28,7 @@ When you configure or use a provider, server, tool, or script, BYOA or that tool
 
 Depending on the action, shared data may include content you provide, attachments, Local Workspace file contents, URL and title context from current or earlier conversation turns, page content, tool definitions and instructions, tool inputs and results, model settings, and credentials or browser-session data needed to access the selected service.
 
-Websites that integrate BYOA can ask to connect to your agent. Any HTTPS site, and local development servers on `localhost` or `127.0.0.1`, can make this request. When a site calls BYOA's page client, it can tell that BYOA is installed and whether you have a profile ready to use. It cannot see your API keys, endpoints, or other profiles. Until you approve that exact site in BYOA's connection window, it cannot send tasks to your agent. After approval, it can send tasks that use your configured provider (and may incur charges) and can see the approved profile's name. Your requests, plus that site's tool definitions and tool results, are sent to the provider. Approvals last until you disconnect or the browser session ends. Workspace sharing defaults off. The extension popup lets you share Persona (IDENTITY.md and SOUL.md), About you (USER.md), and Memory (MEMORY.md) separately for that exact origin. Shared content goes to your provider and can be sent wherever the site’s tools send it. Memory may include things learned on other sites. The page API does not expose sharing settings or whether a workspace exists.
+Websites that integrate BYOA can ask to connect to your agent. Any HTTPS site, and local development servers on `localhost` or `127.0.0.1`, can make this request. When a site calls BYOA's page client, it can tell that BYOA is installed and whether you have a profile ready to use. It cannot see your API keys, endpoints, or other profiles. Until you approve that exact site in BYOA's connection window, it cannot send tasks to your agent. After approval, it can send tasks that use your configured provider (and may incur charges) and can see the approved profile's name. Your requests, plus that site's tool definitions and tool results, are sent to the provider. Approvals last until the browser closes by default, for 30 days, or until you disconnect. Workspace sharing defaults off. The extension popup lets you share Persona (IDENTITY.md and SOUL.md), About you (USER.md), and Memory (MEMORY.md) separately for that exact origin. Shared content goes to your provider and can be sent wherever the site’s tools send it. Memory may include things learned on other sites. The page API does not expose sharing settings or whether a workspace exists.
 
 BYOA requests the `<all_urls>` host permission, which Chrome describes as access to your data on all websites. You can restrict or revoke site access at any time from `chrome://extensions`.
 
@@ -55,3 +55,10 @@ Deleting local data does not delete exported backups or data already received by
 For questions about BYOA or this policy, use the [BYOA issue tracker](https://github.com/adamgoth/bring-your-own-agent/issues). Issues are public: do not include API keys, private page content, settings exports, or other sensitive information. To report a security concern, see the repository's [security reporting options](https://github.com/adamgoth/bring-your-own-agent/security).
 
 The upstream [AgentBoard project](https://github.com/igrigorik/agentboard) is credited for provenance; its issue tracker is not a BYOA support channel.
+
+
+### Connection duration and activity
+
+BYOA’s approval popup defaults to “Until I close the browser”; the person can choose “For 30 days” or “Until I disconnect”. Incognito approvals are session-only. Persistent grants remain on this device across browser restarts and extension updates. Expiry is checked when access is read, without background alarms. Deleting a profile revokes its site grants.
+
+Options → Connected sites lists profiles, shared files, duration, expiry and last use. Disconnecting there stops running tasks. Its clearable local activity log retains at most 500 entries and 30 days: connection events and task IDs, status, profile names, tool names and duration. It contains no prompts, tool arguments or results. Grants and activity are excluded from settings export/import. The page-facing Connection API is unchanged and exposes no duration, expiry, sharing state or activity.
