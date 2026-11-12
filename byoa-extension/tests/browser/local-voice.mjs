@@ -159,6 +159,40 @@ try {
       throw error;
     }
   );
+  // A context-menu selection supersedes dictation, including an in-flight Send.
+  const { sessionId: workerSession } = await cdp.send('Target.attachToTarget', {
+    targetId: worker.targetId,
+    flatten: true,
+  });
+  await evaluate(
+    `document.querySelector('#voice-button').click();window.__recognition.onresult({results:[[{transcript:'Superseded dictation'}]]});document.querySelector('#send-button').click()`
+  );
+  await cdp.send(
+    'Runtime.evaluate',
+    {
+      expression: `void chrome.runtime.sendMessage({type:'CONTEXT_SELECTION',tabId:${attachedTab},text:'Selected page text'}).catch(()=>{})`,
+    },
+    workerSession
+  );
+  await waitFor(
+    () =>
+      evaluate(
+        `document.querySelector('#message-input').value.includes('Selected page text') && !document.querySelector('#message-input').readOnly`
+      ),
+    'context selection cancels dictation'
+  );
+  await evaluate(
+    `window.__recognition.onresult({results:[[{transcript:'Late result'}]]});window.__recognition.onend()`
+  );
+  assert.equal(
+    await evaluate(`document.querySelector('#message-input').value`),
+    'Please help me with this text:\n\n"Selected page text"'
+  );
+  assert.equal(await evaluate(`window.__submissions.length`), 0);
+  assert.equal(await evaluate(`document.querySelector('#send-button').disabled`), false);
+  console.log(
+    'PASS context-menu selection survives dictation cancellation and late results without sending.'
+  );
   await evaluate(
     `document.querySelector('#message-input').value='Typed draft';document.querySelector('#voice-button').click();window.__recognition.onresult({results:[[{transcript:'Synthetic transcript'}]]});`
   );
