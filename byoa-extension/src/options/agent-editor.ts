@@ -24,6 +24,8 @@ export interface AgentEditorState {
   endpoint: string;
   apiKey: string;
   temperature: number;
+  priceInput: string;
+  priceOutput: string;
   maxSteps: number;
   isDefault: boolean;
   reasoning: {
@@ -46,6 +48,8 @@ const DEFAULT_EDITOR_STATE: AgentEditorState = {
   endpoint: PROVIDER_ENDPOINTS.openai,
   apiKey: '',
   temperature: 0.7,
+  priceInput: '',
+  priceOutput: '',
   maxSteps: 10,
   isDefault: false,
   reasoning: {
@@ -77,6 +81,8 @@ export function agentToEditorState(agent: AgentConfig): AgentEditorState {
   state.endpoint = agent.endpoint ?? '';
   state.apiKey = agent.apiKey ?? '';
   state.temperature = agent.temperature;
+  state.priceInput = agent.prices ? String(agent.prices.input) : '';
+  state.priceOutput = agent.prices ? String(agent.prices.output) : '';
   state.maxSteps = agent.maxSteps ?? 10;
   state.isDefault = agent.isDefault ?? false;
   state.reasoning = {
@@ -169,8 +175,17 @@ export function readAgentDraft(form: HTMLFormElement): AgentDraft {
   const description = formString(data, 'description').trim();
   const apiKey = formString(data, 'apiKey').trim();
   const endpoint = formString(data, 'endpoint').trim();
+  if ((formString(data, 'priceInput') === '') !== (formString(data, 'priceOutput') === ''))
+    throw new Error('Enter both input and output prices, or leave both blank.');
 
   return {
+    prices:
+      formString(data, 'priceInput') === '' && formString(data, 'priceOutput') === ''
+        ? undefined
+        : {
+            input: Number(formString(data, 'priceInput')),
+            output: Number(formString(data, 'priceOutput')),
+          },
     name: formString(data, 'name').trim(),
     // updateAgent() shallow-merges drafts, so explicit undefined is required to
     // clear values that existed in the persisted agent.
@@ -269,6 +284,8 @@ export function renderAgentEditor(form: HTMLFormElement, state: AgentEditorState
   setValue(form, 'agent-endpoint', state.endpoint);
   setValue(form, 'agent-api-key', state.apiKey);
   setValue(form, 'agent-temperature', state.temperature.toString());
+  setValue(form, 'agent-price-input', state.priceInput);
+  setValue(form, 'agent-price-output', state.priceOutput);
   setValue(form, 'agent-max-steps', state.maxSteps.toString());
   requiredControl<HTMLInputElement>(form, 'agent-is-default').checked = state.isDefault;
 

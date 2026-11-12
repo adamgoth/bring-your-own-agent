@@ -386,7 +386,8 @@ chrome.runtime.onMessage.addListener((request: ExtensionMessage, sender, sendRes
                 sender,
                 configStorage,
                 request.share,
-                request.persist
+                request.persist,
+                request.budget
               );
       void operation.then(sendResponse, (error) =>
         sendResponse({

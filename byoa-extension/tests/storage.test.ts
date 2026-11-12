@@ -184,6 +184,7 @@ describe('schema-v2 parser', () => {
     expect(parsed.config).toEqual({
       schemaVersion: 2,
       siteTaskTimeoutMinutes: 2,
+      spending: { perTaskTokens: 200000 },
       agents: [
         {
           id: 'agent-1',

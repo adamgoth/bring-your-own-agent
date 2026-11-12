@@ -1,3 +1,4 @@
+import { normalizeUsage, emptyUsage, addUsage, type TaskUsage } from '../usage';
 import { validateSiteShare, type SiteShare } from '../site-grant';
 /**
  * AI Client - Service Worker LLM integration using Vercel AI SDK
@@ -229,6 +230,8 @@ function attachMemoryContext(messages: CoreMessage[], snapshot: string): CoreMes
 }
 
 export interface StreamFinishMetadata {
+  usage?: TaskUsage;
+  budgetExhausted?: boolean;
   /** True when the stream ended because the tab's tool set changed mid-stream.
    *  The caller should restart the conversation with fresh tools. */
   toolsChanged: boolean;
@@ -240,6 +243,7 @@ export interface StreamFinishMetadata {
 export type StreamAbortReason = 'replaced' | 'remote-tools-changed' | 'document-changed';
 
 export interface StreamCallbacks {
+  onUsage?: (usage: TaskUsage) => Promise<void> | void;
   onProgress?: () => void;
   // Text block callbacks - each text-start/end creates a separate message
   onTextBlockStart?: (blockId: string) => void;
@@ -322,6 +326,7 @@ export class AIClient {
     streamId: string = globalThis.crypto.randomUUID(),
     workspaceContext?: ConversationWorkspaceContext,
     siteTask?: {
+      beforeStep?: () => Promise<boolean>;
       lane?: string;
       isCurrentDocument?: () => boolean;
       tools: readonly string[];
@@ -523,6 +528,8 @@ export class AIClient {
       // current step so the caller can restart with a correct tool set.
       let toolsInvalidated = false;
       let stepsExhausted = false;
+      let budgetExhausted = false;
+      let cumulativeUsage = emptyUsage();
       let unsubToolChange: (() => void) | null = null;
 
       if (tabId) {
@@ -542,6 +549,33 @@ export class AIClient {
         let streamFailure: unknown;
 
         const streamParams: Parameters<typeof streamText>[0] = {
+          prepareStep: async () => {
+            if (siteTask?.isCurrentDocument && !siteTask.isCurrentDocument()) {
+              notifyAbort('document-changed');
+              abortController?.abort();
+              throw new Error('Document changed');
+            }
+            if (siteTask?.beforeStep && !(await siteTask.beforeStep())) {
+              budgetExhausted = true;
+              abortController?.abort();
+              throw new Error('Budget reached');
+            }
+            if (siteTask?.isCurrentDocument && !siteTask.isCurrentDocument()) {
+              notifyAbort('document-changed');
+              abortController?.abort();
+              throw new Error('Document changed');
+            }
+            if (abortController?.signal.aborted) throw new Error('Task cancelled');
+            return {};
+          },
+          onStepFinish: async (step) => {
+            const usage = normalizeUsage(step.usage);
+            const directCost = step.providerMetadata?.openrouter?.cost;
+            if (typeof directCost === 'number' && Number.isFinite(directCost) && directCost >= 0)
+              usage.costUsd = directCost;
+            cumulativeUsage = addUsage(cumulativeUsage, usage);
+            await callbacks.onUsage?.(usage);
+          },
           model: runtime.model,
           messages: messagesWithSystem,
           // Don't pass temperature when reasoning is enabled (SDK warning suggests this)
@@ -557,7 +591,11 @@ export class AIClient {
             tools: allTools,
             // Stop after current step if tools changed (navigation, etc.)
             // or after agent-configured step limit (default 10).
-            stopWhen: ({ steps }) => {
+            stopWhen: async ({ steps }) => {
+              if (siteTask?.beforeStep && !(await siteTask.beforeStep())) {
+                budgetExhausted = true;
+                return true;
+              }
               const decision = decideStreamStop(steps.length, agent.maxSteps, toolsInvalidated);
               if (decision.stepsExhausted) stepsExhausted = true;
               return decision.shouldStop;
@@ -802,7 +840,12 @@ export class AIClient {
         // textStream omits non-text parts, so its SDK error callback is the only
         // signal that a provider failure occurred.
         if (streamFailed) throw streamFailure;
-        callbacks.onFinish(_fullText, { toolsChanged: toolsInvalidated, stepsExhausted });
+        callbacks.onFinish(_fullText, {
+          toolsChanged: toolsInvalidated,
+          stepsExhausted,
+          budgetExhausted,
+          usage: cumulativeUsage,
+        });
       } finally {
         // Always clean up the tool-change subscription to prevent leaks
         unsubToolChange?.();

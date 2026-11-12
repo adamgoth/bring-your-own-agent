@@ -122,6 +122,7 @@ function respond(body, res) {
         created: 0,
         model: 'fixture',
         choices: [{ index: 0, delta, finish_reason: name ? 'tool_calls' : 'stop' }],
+        usage: { prompt_tokens: 60, completion_tokens: 40, total_tokens: 100 },
       }) +
       '\n\n'
   );
@@ -230,6 +231,7 @@ try {
     `chrome.storage.local.get('config').then(({config})=>chrome.storage.local.set({config:{...config,schemaVersion:2,agents:[{id:'fixture',name:'Demo deepseek',provider:'openai',apiProtocol:'openai-chat-completions',model:'fixture',endpoint:${JSON.stringify(endpoint)},temperature:0.7,maxSteps:8,isDefault:true}],defaultAgentId:'fixture'}}))`
   );
   let board = await page(`${boardOrigin}/`);
+  await board.evaluate(`window.__events=[];window.addEventListener('message',e=>{if(e.data?.kind==='task')window.__events.push(e.data.event)})`);
   await waitFor(
     () =>
       board.evaluate(
@@ -387,6 +389,7 @@ try {
       )
     );
   }, 'extension tool discovery after board reload');
+  await board.evaluate(`window.__events=[];window.addEventListener('message',e=>{if(e.data?.kind==='task')window.__events.push(e.data.event)})`);
   await board.click('[data-select="onboarding"]');
   await board.click('[data-action="ask"]');
   await board.evaluate(
@@ -402,6 +405,9 @@ try {
     30000
   );
   assert.equal(requests.length, 4);
+  assert.equal(await board.evaluate(`window.__events.at(-1).usage.totalTokens`), 400);
+  assert.equal(await board.evaluate(`window.__events.at(-1).usage.usageKnown`), true);
+  assert.equal(await board.evaluate(`'costUsd' in window.__events.at(-1).usage`), false);
   assert.equal(await board.evaluate(`document.querySelectorAll('.card').length`), 9);
   assert.ok(
     await board.evaluate(
@@ -698,7 +704,7 @@ try {
   const lookup = await margin.evaluate(`import('/src/agentboard.ts').then(({agentboard})=>agentboard.getTask(${JSON.stringify(reloadId)}))`);
   assert.equal(lookup.busy, false); assert.equal(lookup.retryable, true);
   assert.equal(lookup.code, 'interrupted');
-  assert.deepEqual(Object.keys(lookup).sort(), ['taskId','status','detail','busy','seq','code','retryable'].sort());
+  assert.deepEqual(Object.keys(lookup).sort(), ['taskId','status','detail','busy','seq','code','retryable','usage'].sort());
   const taskCountAfterReload = requests.length;
   await new Promise(resolve=>setTimeout(resolve, 500));
   assert.equal(requests.length, taskCountAfterReload, 'Reload lookup must not automatically retry');
@@ -707,6 +713,22 @@ try {
   await waitFor(() => requests.length === taskCountAfterReload + 1, 'trusted explicit retry request');
   await waitFor(() => margin.evaluate(`!document.querySelector('.task-recovery')`), 'retry completes and clears recovery');
   console.log('PASS reload stops the old run, SDK returns only a retryable terminal summary, and only the trusted Retry click sends a fresh request.');
+
+  // Fixture-only budgets: one step overshoots a tiny task cap, then daily cap refuses without HTTP.
+  await ext.evaluate(`chrome.storage.session.get('agentboard_connection_${marginOrigin}').then(v=>chrome.storage.session.set({['agentboard_connection_${marginOrigin}']:{...v['agentboard_connection_${marginOrigin}'],budget:{perTaskTokens:1}}}))`);
+  const budgetBefore = requests.length;
+  await margin.evaluate(`(async()=>{const api=await import('/src/agentboard.ts');const b=document.createElement('button');b.id='budget-request';b.textContent='Budget fixture';b.onclick=()=>api.requestAgent('Recovery fixture',['get_document_outline']).then(event=>window.__budgetDone=event);document.body.append(b);})()`);
+  await margin.click('#budget-request');
+  await waitFor(()=>margin.evaluate(`window.__budgetDone?.code==='budget'`),'one-step budget stop');
+  assert.equal(requests.length-budgetBefore,1);
+  assert.equal(await margin.evaluate(`window.__budgetDone.usage.totalTokens`),100);
+  await ext.evaluate(`chrome.storage.session.get('agentboard_connection_${marginOrigin}').then(v=>chrome.storage.session.set({['agentboard_connection_${marginOrigin}']:{...v['agentboard_connection_${marginOrigin}'],budget:{perDayTokens:1}}}))`);
+  await margin.evaluate(`window.__budgetDone=null`); await margin.click('#budget-request');
+  await waitFor(()=>margin.evaluate(`window.__budgetDone?.code==='budget'`),'daily budget refusal');
+  assert.equal(requests.length-budgetBefore,1);
+  assert.equal(await margin.evaluate(`window.__budgetDone.usage.totalTokens`),0);
+  await ext.evaluate(`chrome.storage.session.get('agentboard_connection_${marginOrigin}').then(v=>chrome.storage.session.set({['agentboard_connection_${marginOrigin}']:{...v['agentboard_connection_${marginOrigin}'],budget:{}}}))`);
+  console.log('PASS cumulative token-only usage, one-step budget overshoot, and zero-request daily refusal.');
 
   // Stop the real MV3 worker mid-run. The reconnect wakes it and the startup sweep terminates the task.
   await margin.evaluate(`(async () => {
@@ -740,7 +762,7 @@ try {
   }
 
   await ext.evaluate(`document.querySelector('#connected-sites [data-origin="${marginOrigin}"] select').value='forever'`);
-  await ext.click(`[data-origin="${marginOrigin}"] button`);
+  await ext.click(`[data-origin="${marginOrigin}"] [data-action="change-duration"]`);
   await waitFor(() => ext.evaluate(`document.querySelector('[data-origin="${marginOrigin}"] p').textContent.includes('Until I disconnect')`), 'forever duration saved');
   await send('Browser.close');
   if (browser.exitCode === null) await new Promise(resolve => browser.once('close', resolve));

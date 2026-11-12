@@ -75,3 +75,5 @@ if (previous?.retryable) showRetryButton(previous.detail);
 
 Reattachment replays bounded progress, not a provider stream. A restart loses the stream and cannot resume it.
 Tools that wait on a person would currently trip inactivity; design review as a proposal returned promptly to the app.
+
+Task events include optional cumulative `usage` (input/output/total tokens and `usageKnown`). Show incomplete usage when `usageKnown` is false. `error` with `code: 'budget'` means a person-controlled cap stopped execution; retain proposals for review. Daily caps reset at local midnight. Each running task may overshoot by one provider step. Prices and dollars are extension-private; apps cannot set budgets. Recovery summaries preserve usage and sequence numbers.

@@ -202,7 +202,7 @@ function renderTask() {
     task.status === "done"
       ? "Review proposals on the board, or open the agent chat for details."
       : task.detail;
-  status.innerHTML = `<span class="task-symbol ${task.busy ? "spinning" : ""}">${icon("sparkle")}</span><div><strong>${title}</strong><p>${esc(detail)}</p></div><div class="task-buttons">${task.busy ? '<button data-action="cancel">Cancel</button>' : '<button data-action="review">Review</button>'}<button data-action="chat">View chat</button>${!task.busy ? `<button class="icon-button" data-action="dismiss-task" aria-label="Dismiss task status">${icon("close")}</button>` : ""}</div>`;
+  status.innerHTML = `<span class="task-symbol ${task.busy ? "spinning" : ""}">${icon("sparkle")}</span><div><strong>${title}</strong><p>${esc(detail)}${task.usage ? ` · ${task.usage.totalTokens.toLocaleString()} tokens${task.usage.usageKnown ? "" : " (usage incomplete; step limit applies)"}` : ""}</p></div><div class="task-buttons">${task.busy ? '<button data-action="cancel">Cancel</button>' : '<button data-action="review">Review</button>'}<button data-action="chat">View chat</button>${!task.busy ? `<button class="icon-button" data-action="dismiss-task" aria-label="Dismiss task status">${icon("close")}</button>` : ""}</div>`;
 }
 function openAsk() {
   const selected = store.state.cards.filter((c) => store.selected.has(c.id));

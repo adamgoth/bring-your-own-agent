@@ -1,1 +1,1 @@
-export type { TaskCode, TaskEvent } from '../../sdk/task-event';
+export type { TaskCode, TaskEvent, TaskUsage } from '../../sdk/task-event';
