@@ -152,6 +152,46 @@ describe('Site background tasks', () => {
     });
     expect(terminal.usage).not.toHaveProperty('costUsd');
   });
+  it('prices queued work with the profile snapshot selected by the executing client', async () => {
+    const h = harness();
+    const p = h.connect();
+    p.send({ type: 'start', tools: ['get_selection'], text: 'Pricing fixture' });
+    await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
+    const options = h.streamChat.mock.calls[0][6];
+    options.onProfile({
+      id: 'configured',
+      name: 'Updated fixture',
+      apiKey: 'fixture-paid',
+      prices: { input: 2, output: 4 },
+    });
+    await (h.streamChat.mock.calls[0][3] as StreamCallbacks).onUsage?.({
+      inputTokens: 60,
+      outputTokens: 40,
+      totalTokens: 100,
+      usageKnown: true,
+    });
+    expect(chrome.storage.local.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        byoa_usage_ledger: expect.objectContaining({
+          [new Date().toLocaleDateString('sv-SE')]: expect.objectContaining({
+            'http://localhost:5183': expect.objectContaining({ usd: 0.00028 }),
+          }),
+        }),
+      })
+    );
+  });
+  it('marks cancellation before provider usage as incomplete rather than complete zero', async () => {
+    const h = harness();
+    const p = h.connect();
+    p.send({ type: 'start', tools: ['get_selection'], text: 'Pending usage fixture' });
+    await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledOnce());
+    (h.streamChat.mock.calls[0][3] as StreamCallbacks).onUsagePending?.();
+    p.send({ type: 'cancel' });
+    expect(p.port.postMessage.mock.calls.at(-1)?.[0]).toMatchObject({
+      status: 'cancelled',
+      usage: { totalTokens: 0, usageKnown: false },
+    });
+  });
   it('labels missing usage on the terminal event while retaining step limits', async () => {
     const h = harness();
     const p = h.connect();

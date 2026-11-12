@@ -68,6 +68,7 @@ export function createSiteAgentHandler(
     let idleTimer: ReturnType<typeof setTimeout> | undefined;
     let graceTimer: ReturnType<typeof setTimeout> | undefined;
     let usage = { ...emptyUsage(), costUsd: 0 } as import('../lib/usage').TaskUsage;
+    let pendingUsage = 0;
     let budgetReason: string | undefined;
     let seq = 0;
     const events: TaskEvent[] = [];
@@ -133,6 +134,14 @@ export function createSiteAgentHandler(
     const finish = (status: TaskEvent['status'], detail: string, code?: TaskCode) => {
       if (finished) return;
       finished = true;
+      if (pendingUsage > 0) {
+        usage = { ...usage, usageKnown: false, costUsd: undefined };
+        void recordUsage(
+          origin,
+          { ...emptyUsage(), usageKnown: false },
+          sender?.tab?.incognito === true
+        ).catch(() => undefined);
+      }
       unsubscribe();
       if (started && !sender?.tab?.incognito)
         void appendSiteActivity({
@@ -164,7 +173,11 @@ export function createSiteAgentHandler(
     };
     const cancel = (detail: string, code?: TaskCode) => {
       if (finished) return;
-      finish(code === 'timeout' || code === 'interrupted' ? 'error' : 'cancelled', detail, code);
+      finish(
+        code === 'budget' || code === 'timeout' || code === 'interrupted' ? 'error' : 'cancelled',
+        detail,
+        code
+      );
       controller.abort();
       client.cancelStream(streamId);
     };
@@ -333,6 +346,7 @@ export function createSiteAgentHandler(
             finish('error', 'Choose an agent profile in the connection menu first.');
             return;
           }
+          let executionProfile = agent;
           chat.agentName = agent.name;
           saveChat();
           const release = await queue.acquire(controller.signal, agent.id);
@@ -428,8 +442,12 @@ export function createSiteAgentHandler(
               ],
               tabId,
               {
+                onUsagePending: () => {
+                  pendingUsage++;
+                },
                 onUsage: async (step) => {
-                  const priced = priceUsage(step, agent);
+                  pendingUsage = Math.max(0, pendingUsage - 1);
+                  const priced = priceUsage(step, executionProfile);
                   usage = addUsage(usage, priced);
                   if (chat) {
                     chat.usage = usage;
@@ -437,6 +455,10 @@ export function createSiteAgentHandler(
                   }
                   await recordUsage(origin, priced, sender?.tab?.incognito === true);
                   await beforeStep();
+                  if (!finished && budgetReason) {
+                    cancel(`${budgetReason} Results so far remain for review.`, 'budget');
+                    return;
+                  }
                   // Account completed provider work even if cancellation won the race.
                   if (chat) {
                     chat.usage = usage;
@@ -560,6 +582,13 @@ export function createSiteAgentHandler(
               streamId,
               undefined,
               {
+                onProfile: (profile) => {
+                  executionProfile = profile;
+                  if (chat) {
+                    chat.agentName = profile.name;
+                    saveChat();
+                  }
+                },
                 beforeStep,
                 lane: `site:${streamId}`,
                 isCurrentDocument,

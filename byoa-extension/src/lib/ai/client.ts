@@ -1,4 +1,5 @@
-import { normalizeUsage, emptyUsage, addUsage, type TaskUsage } from '../usage';
+import { withUsageAccounting } from './usage-model';
+import { emptyUsage, addUsage, type TaskUsage } from '../usage';
 import { validateSiteShare, type SiteShare } from '../site-grant';
 /**
  * AI Client - Service Worker LLM integration using Vercel AI SDK
@@ -243,6 +244,7 @@ export interface StreamFinishMetadata {
 export type StreamAbortReason = 'replaced' | 'remote-tools-changed' | 'document-changed';
 
 export interface StreamCallbacks {
+  onUsagePending?: () => void;
   onUsage?: (usage: TaskUsage) => Promise<void> | void;
   onProgress?: () => void;
   // Text block callbacks - each text-start/end creates a separate message
@@ -326,6 +328,7 @@ export class AIClient {
     streamId: string = globalThis.crypto.randomUUID(),
     workspaceContext?: ConversationWorkspaceContext,
     siteTask?: {
+      onProfile?: (profile: AgentConfig) => void;
       beforeStep?: () => Promise<boolean>;
       lane?: string;
       isCurrentDocument?: () => boolean;
@@ -358,10 +361,11 @@ export class AIClient {
 
     try {
       validateWorkspaceContext(workspaceContext, agentId);
-      const agent = await raceWithAbort(
+      const loadedAgent = await raceWithAbort(
         this.configStorage.getAgent(agentId),
         pendingStream.controller.signal
       );
+      const agent = loadedAgent ? globalThis.structuredClone(loadedAgent) : null;
       if (requestSequence < (this.latestAcceptedStreamSequence.get(lane) ?? 0)) {
         notifyAbort();
         return;
@@ -373,6 +377,7 @@ export class AIClient {
         throw new Error('Configure credentials or a custom endpoint in Settings.');
       }
 
+      if (agent) siteTask?.onProfile?.(globalThis.structuredClone(agent));
       const establishingWorkspaceContext = workspaceContext === undefined;
       const share = validateSiteShare(siteTask?.share);
       const wantsShared = share.persona || share.user || share.memory;
@@ -568,15 +573,22 @@ export class AIClient {
             if (abortController?.signal.aborted) throw new Error('Task cancelled');
             return {};
           },
-          onStepFinish: async (step) => {
-            const usage = normalizeUsage(step.usage);
-            const directCost = step.providerMetadata?.openrouter?.cost;
-            if (typeof directCost === 'number' && Number.isFinite(directCost) && directCost >= 0)
-              usage.costUsd = directCost;
-            cumulativeUsage = addUsage(cumulativeUsage, usage);
-            await callbacks.onUsage?.(usage);
-          },
-          model: runtime.model,
+          model: withUsageAccounting(
+            runtime.model,
+            async (usage) => {
+              cumulativeUsage = addUsage(cumulativeUsage, usage);
+              await callbacks.onUsage?.(usage);
+            },
+            () => {
+              if (siteTask?.isCurrentDocument && !siteTask.isCurrentDocument()) {
+                notifyAbort('document-changed');
+                abortController?.abort();
+                throw new Error('Document changed');
+              }
+              if (abortController?.signal.aborted) throw new Error('Task cancelled');
+              callbacks.onUsagePending?.();
+            }
+          ),
           messages: messagesWithSystem,
           // Don't pass temperature when reasoning is enabled (SDK warning suggests this)
           ...(agent.reasoning?.enabled ? {} : { temperature: agent.temperature }),

@@ -83,7 +83,7 @@ usage, explicit missing-usage fallback, and usage-preserving worker interruption
 A real AI SDK fixture verifies that awaited per-step accounting stops a second model call and
 reports budget metadata after one step overshoots the cap. Popup tests reject malformed budgets.
 
-`pnpm check` passed: extension types, strict lint, 81 files / 1,157 tests; Margin's five tests,
+`pnpm check` passed: extension types, strict lint, 81 files / 1,160 tests; Margin's five tests,
 Boardwalk's ten tests, and both demo builds. `pnpm build` passed from the root.
 
 The full root browser suite passed with no skips. The browser suite uses Chrome for Testing 157.0.8103.38, fresh temporary profiles, a loopback mock
@@ -100,3 +100,15 @@ worker termination cannot be verified by this fixture. The bundled OpenAI-compat
 arbitrary OpenRouter cost fields; user-entered prices are required for reliable cost estimates there.
 Costs remain extension-private. Private accounting is deterministic unit coverage rather than a claim
 of automated Chrome incognito end-to-end verification.
+
+Independent Astra review of the initial plan 5 snapshot found two issues: provider-reported usage
+could be lost when cancellation occurred during a pending tool, and queued-task costs could use an
+older profile than the executing client. Accounting now intercepts each provider finish before the
+SDK waits for tools, with a guard per transport invocation and no duplicate step-summary accounting.
+The client supplies a detached snapshot of its executing profile to pricing. Regression fixtures
+cover pending-tool cancellation (12 tokens recorded exactly once), execution-profile pricing, and
+incomplete usage when cancellation precedes any provider usage report. Startup sweeps similarly mark
+working tasks' potentially unreported usage incomplete while keeping public summaries token-only.
+
+After the review fixes, root `pnpm check` and `pnpm build` passed again, as did the full Chrome
+integration with no skips. Astra follow-up review is requested against the fix commit.
