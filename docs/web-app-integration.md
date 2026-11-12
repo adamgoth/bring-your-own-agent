@@ -182,13 +182,13 @@ The test uses a temporary browser profile and a loopback mock provider. See the 
 
 ## Current operating limits
 
-Page tasks queue across apps, with at most one outstanding task per tab. The two-minute task timeout includes queue time. The sidebar shares a model client and can interrupt a page task. Keep the page open: navigation, closing the page, or worker interruption stops work without automatic retry or recovery.
+Site tasks run independently of sidebar chats, with at most 3 running globally, 2 per profile, and 1 outstanding task per tab. Excess tasks wait in eligible FIFO order. The two-minute task timeout includes queue time. Keep the page open: navigation, closing the page, or worker interruption stops work without automatic retry or recovery.
 
 App tasks receive only the requested site-provenance WebMCP tools; Workspace sharing is off by default. In BYOA’s popup, you can share read-only snapshots of Persona (IDENTITY.md and SOUL.md), About you (USER.md), or Memory (MEMORY.md) for that exact origin and chosen connection duration. Shared content can reach destinations used by the site’s tools. AGENTS.md, journals, file tools, and remote-MCP context remain excluded. The page API exposes no sharing state. Every script on an approved origin shares that origin's authority. The page transport does not isolate scripts from one another.
 
 Credentials stay in the extension, but prompts, tool definitions, and tool results go to the configured model endpoint. API billing applies; this does not use a consumer ChatGPT or Claude subscription. Use sample content for development.
 
-See the [SDK contract](../byoa-extension/sdk/README.md) for the full prototype boundaries and client behavior. Spending budgets, persistent site permissions, SDK distribution and provider discovery, independent model clients, and task recovery still need implementation before this becomes a general hosted-app integration.
+See the [SDK contract](../byoa-extension/sdk/README.md) for the full prototype boundaries and client behavior. Spending budgets, persistent site permissions, SDK distribution and provider discovery, and task recovery still need implementation before this becomes a general hosted-app integration.
 
 
 ### Connection duration and activity
