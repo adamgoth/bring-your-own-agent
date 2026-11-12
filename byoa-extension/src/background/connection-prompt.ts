@@ -125,8 +125,11 @@ export async function connectionPromptResult(
   if (prompt.state === 'pending') return { pending: true };
   await chrome.storage.session.remove(prefix + prompt.id);
   if (prompt.state !== 'approved') throw new Error('Connection cancelled.');
-  await current(prompt);
-  return { pending: false, connection: await siteConnectionStatus(config, prompt.origin) };
+  const tab = await current(prompt);
+  return {
+    pending: false,
+    connection: await siteConnectionStatus(config, prompt.origin, tab.incognito),
+  };
 }
 export async function getConnectionPrompt(
   id: unknown,
@@ -137,14 +140,14 @@ export async function getConnectionPrompt(
   popupSender(prompt, sender);
   if (prompt.state !== 'pending' || prompt.expires < Date.now())
     throw new Error('This connection request has ended.');
-  await current(prompt);
+  const tab = await current(prompt);
   const [profiles, connection] = await Promise.all([
     siteProfiles(config),
-    siteConnectionStatus(config, prompt.origin),
+    siteConnectionStatus(config, prompt.origin, tab.incognito),
   ]);
   const [mounted, grant] = await Promise.all([
     bindings.list().catch(() => []),
-    readSiteGrant(prompt.origin),
+    readSiteGrant(prompt.origin, tab.incognito),
   ]);
   return {
     origin: prompt.origin,
@@ -153,7 +156,7 @@ export async function getConnectionPrompt(
       ...profile,
       hasWorkspace: mounted.some((binding) => binding.agentId === profile.id),
     })),
-    incognito: (await current(prompt)).incognito === true,
+    incognito: tab.incognito === true,
     persist: grant?.persist ?? 'session',
     selectedAgentId: connection.agentId,
     share: grant?.agentId === connection.agentId ? grant?.share : undefined,

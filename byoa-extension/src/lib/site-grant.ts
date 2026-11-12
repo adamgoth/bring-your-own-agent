@@ -58,13 +58,28 @@ export function validateSiteGrant(value: unknown): SiteGrant | undefined {
   };
 }
 const prefix = 'agentboard_connection_';
-export const siteConnectionKey = (origin: string) => `${prefix}${origin}`;
+const privatePrefix = `${prefix}incognito_`;
+const privateContext = () => globalThis.chrome?.extension?.inIncognitoContext === true;
+export const siteConnectionKey = (origin: string, incognito = false) =>
+  `${incognito ? privatePrefix : prefix}${origin}`;
+function keyContext(key: string) {
+  if (key.startsWith(privatePrefix))
+    return { origin: key.slice(privatePrefix.length), incognito: true };
+  if (key.startsWith(prefix)) return { origin: key.slice(prefix.length), incognito: false };
+  return undefined;
+}
 const run = createOperationQueue('byoa-site-grants');
-async function read(origin: string): Promise<SiteGrant | undefined> {
-  const key = siteConnectionKey(origin);
-  for (const area of ['local', 'session'] as const) {
+async function read(origin: string, incognito = false): Promise<SiteGrant | undefined> {
+  const key = siteConnectionKey(origin, incognito);
+  const areas: Array<'local' | 'session'> = incognito ? ['session'] : ['local', 'session'];
+  for (const area of areas) {
     const grant = validateSiteGrant((await chrome.storage[area].get(key))[key]);
-    if (!grant || (area === 'local' && grant.persist === 'session')) continue;
+    if (
+      !grant ||
+      !!grant.incognito !== incognito ||
+      (area === 'local' && grant.persist === 'session')
+    )
+      continue;
     if (grant.expiresAt !== undefined && grant.expiresAt <= Date.now()) {
       await chrome.storage.local.remove(key);
       await chrome.storage.session.remove(key);
@@ -75,20 +90,19 @@ async function read(origin: string): Promise<SiteGrant | undefined> {
   }
   return undefined;
 }
-export function readSiteGrant(origin: string) {
-  return run(() => read(origin));
+export function readSiteGrant(origin: string, incognito = privateContext()) {
+  return run(() => read(origin, incognito));
 }
 export function writeSiteGrant(
   origin: string,
   agentId: string,
   share?: unknown,
   duration?: unknown,
-  incognito = false
+  incognito = privateContext()
 ) {
   return run(async () => {
     const requested = validatePersistence(duration);
-    const persist =
-      incognito || globalThis.chrome?.extension?.inIncognitoContext ? 'session' : requested;
+    const persist = incognito ? 'session' : requested;
     const now = Date.now();
     const grant = validateSiteGrant({
       agentId,
@@ -100,38 +114,34 @@ export function writeSiteGrant(
     });
     if (!grant) throw new Error('Invalid site grant.');
     const area = persist === 'session' ? 'session' : 'local';
-    const key = siteConnectionKey(origin);
+    const key = siteConnectionKey(origin, incognito);
     await chrome.storage[area].set({ [key]: grant });
-    await chrome.storage[area === 'local' ? 'session' : 'local'].remove(key);
+    if (!incognito) await chrome.storage[area === 'local' ? 'session' : 'local'].remove(key);
     if (!incognito) await appendSiteActivity({ at: now, origin, kind: 'connected' });
   });
 }
-async function revoke(origin: string) {
-  const old = await read(origin);
-  const key = siteConnectionKey(origin);
-  await chrome.storage.local.remove(key);
+async function revoke(origin: string, incognito = false) {
+  const key = siteConnectionKey(origin, incognito);
+  if (!incognito) await chrome.storage.local.remove(key);
   await chrome.storage.session.set({ [key]: false });
-  if (!old?.incognito) await appendSiteActivity({ at: Date.now(), origin, kind: 'disconnected' });
+  // Caller context is authoritative even if the grant never existed or was already removed.
+  if (!incognito) await appendSiteActivity({ at: Date.now(), origin, kind: 'disconnected' });
 }
-export function revokeSiteGrant(origin: string) {
-  return run(() => revoke(origin));
+export function revokeSiteGrant(origin: string, incognito = privateContext()) {
+  return run(() => revoke(origin, incognito));
 }
 async function list() {
   const [local, session] = await Promise.all([
     chrome.storage.local.get(null),
     chrome.storage.session.get(null),
   ]);
-  const origins = [
-    ...new Set(
-      [...Object.keys(local), ...Object.keys(session)]
-        .filter((key) => key.startsWith(prefix))
-        .map((key) => key.slice(prefix.length))
-    ),
-  ];
+  const keys = new Set([...Object.keys(local), ...Object.keys(session)]);
   const result: Array<{ origin: string; grant: SiteGrant }> = [];
-  for (const origin of origins) {
-    const grant = await read(origin);
-    if (grant) result.push({ origin, grant });
+  for (const key of keys) {
+    const context = keyContext(key);
+    if (!context) continue;
+    const grant = await read(context.origin, context.incognito);
+    if (grant) result.push({ origin: context.origin, grant });
   }
   return result;
 }
@@ -141,37 +151,39 @@ export function listGrants() {
 export function revokeGrantsForAgent(agentId: string) {
   return run(async () => {
     for (const entry of await list())
-      if (entry.grant.agentId === agentId) await revoke(entry.origin);
+      if (entry.grant.agentId === agentId)
+        await revoke(entry.origin, entry.grant.incognito === true);
   });
 }
-export function touchGrant(origin: string) {
+export function touchGrant(origin: string, incognito = privateContext()) {
   return run(async () => {
-    const grant = await read(origin);
+    const grant = await read(origin, incognito);
     if (grant)
       await chrome.storage[grant.persist === 'session' ? 'session' : 'local'].set({
-        [siteConnectionKey(origin)]: { ...grant, lastUsedAt: Date.now() },
+        [siteConnectionKey(origin, incognito)]: { ...grant, lastUsedAt: Date.now() },
       });
   });
 }
 /** Resolve both areas after a mutation, including moves between session and local storage. */
 export function onGrantChanged(
-  listener: (origin: string, grant: SiteGrant | undefined) => void,
+  listener: (origin: string, grant: SiteGrant | undefined, incognito: boolean) => void,
   options: { signalOnly?: boolean } = {}
 ) {
   const changed = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
     if (area !== 'local' && area !== 'session') return;
     for (const key of Object.keys(changes)) {
-      if (!key.startsWith(prefix)) continue;
-      const origin = key.slice(prefix.length);
+      const context = keyContext(key);
+      if (!context) continue;
+      const { origin, incognito } = context;
       // Content scripts only request a status refresh from the worker. They must not
       // read session grants or perform lazy expiry under a page-origin Web Lock.
       if (options.signalOnly) {
-        listener(origin, undefined);
+        listener(origin, undefined, incognito);
         continue;
       }
-      void readSiteGrant(origin).then(
-        (grant) => listener(origin, grant),
-        () => listener(origin, undefined)
+      void readSiteGrant(origin, incognito).then(
+        (grant) => listener(origin, grant, incognito),
+        () => listener(origin, undefined, incognito)
       );
     }
   };

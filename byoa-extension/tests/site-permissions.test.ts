@@ -87,11 +87,15 @@ describe('persistent permissions', () => {
       await writeSiteGrant(origin, 'a', undefined, area === 'local' ? 'forever' : 'session');
       changed({ [key]: { newValue: (area === 'local' ? local : session)[key] } }, area);
       await vi.waitFor(() =>
-        expect(listener).toHaveBeenCalledWith(origin, expect.objectContaining({ agentId: 'a' }))
+        expect(listener).toHaveBeenCalledWith(
+          origin,
+          expect.objectContaining({ agentId: 'a' }),
+          false
+        )
       );
       await revokeSiteGrant(origin);
       changed({ [key]: { newValue: undefined } }, area);
-      await vi.waitFor(() => expect(listener).toHaveBeenLastCalledWith(origin, undefined));
+      await vi.waitFor(() => expect(listener).toHaveBeenLastCalledWith(origin, undefined, false));
       off();
       expect(chrome.storage.onChanged.removeListener).toHaveBeenCalledWith(changed);
     }
@@ -122,11 +126,83 @@ describe('persistent permissions', () => {
     await new ConfigStorage().deleteAgent('a');
     expect(await listGrants()).toEqual([]);
   });
+  it('does not write any local data for unapproved or repeated private disconnects', async () => {
+    await revokeSiteGrant(origin, true);
+    await writeSiteGrant(origin, 'a', undefined, 'forever', true);
+    await revokeSiteGrant(origin, true);
+    await revokeSiteGrant(origin, true);
+    expect(local).toEqual({});
+    expect(await listSiteActivity()).toEqual([]);
+  });
+  it.each(['session', 'days30', 'forever'] as const)(
+    'isolates private approval, use and revocation from regular %s grants',
+    async (duration) => {
+      await writeSiteGrant(origin, 'regular', { persona: true }, duration);
+      const regular = await readSiteGrant(origin);
+      const localBefore = structuredClone(local);
+      expect(await readSiteGrant(origin, true)).toBeUndefined();
+      await writeSiteGrant(origin, 'private', { memory: true }, 'forever', true);
+      await touchGrant(origin, true);
+      expect(await readSiteGrant(origin)).toEqual(regular);
+      expect(await readSiteGrant(origin, true)).toMatchObject({
+        agentId: 'private',
+        persist: 'session',
+        lastUsedAt: expect.any(Number),
+      });
+      expect(await listGrants()).toHaveLength(2);
+      await revokeSiteGrant(origin, true);
+      await revokeSiteGrant(origin, true);
+      expect(local).toEqual(localBefore);
+      expect(await readSiteGrant(origin)).toEqual(regular);
+      expect(await readSiteGrant(origin, true)).toBeUndefined();
+      if (duration !== 'session') {
+        for (const k of Object.keys(session)) delete session[k];
+        expect(await readSiteGrant(origin)).toEqual(regular);
+      }
+    }
+  );
+  it('regular revocation leaves the same-origin private approval intact', async () => {
+    await writeSiteGrant(origin, 'a', undefined, 'forever');
+    await writeSiteGrant(origin, 'b', undefined, 'session', true);
+    await revokeSiteGrant(origin);
+    expect(await readSiteGrant(origin)).toBeUndefined();
+    expect(await readSiteGrant(origin, true)).toMatchObject({ agentId: 'b' });
+  });
+  it('reports the private context even after its grant is removed', async () => {
+    const listener = vi.fn();
+    const off = onGrantChanged(listener);
+    const changed = vi.mocked(chrome.storage.onChanged.addListener).mock.calls.at(-1)![0];
+    await writeSiteGrant(origin, 'a', undefined, 'session', true);
+    const privateKey = siteConnectionKey(origin, true);
+    changed({ [privateKey]: { newValue: session[privateKey] } }, 'session');
+    await vi.waitFor(() =>
+      expect(listener).toHaveBeenLastCalledWith(
+        origin,
+        expect.objectContaining({ incognito: true }),
+        true
+      )
+    );
+    await revokeSiteGrant(origin, true);
+    changed({ [privateKey]: { newValue: false } }, 'session');
+    await vi.waitFor(() => expect(listener).toHaveBeenLastCalledWith(origin, undefined, true));
+    off();
+  });
+  it('profile deletion revokes both contexts without logging private origins', async () => {
+    await writeSiteGrant(origin, 'a', undefined, 'forever');
+    await writeSiteGrant('https://private-only.test', 'a', undefined, 'session', true);
+    await revokeGrantsForAgent('a');
+    expect(await listGrants()).toEqual([]);
+    expect(JSON.stringify(local)).not.toContain('private-only');
+  });
   it('forces incognito to session and does not record its origin in local activity', async () => {
     await writeSiteGrant(origin, 'a', undefined, 'forever', true);
     expect(local[key]).toBeUndefined();
-    expect(await readSiteGrant(origin)).toMatchObject({ persist: 'session', incognito: true });
-    await revokeSiteGrant(origin);
+    expect(await readSiteGrant(origin, true)).toMatchObject({
+      persist: 'session',
+      incognito: true,
+    });
+    expect(await readSiteGrant(origin)).toBeUndefined();
+    await revokeSiteGrant(origin, true);
     expect(await listSiteActivity()).toEqual([]);
   });
 });

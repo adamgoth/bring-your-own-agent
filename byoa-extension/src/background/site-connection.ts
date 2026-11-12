@@ -37,7 +37,7 @@ export async function siteConnectionStatus(
   origin: string,
   incognito = false
 ) {
-  const [agents, grant] = await Promise.all([config.getAgents(), readSiteGrant(origin)]);
+  const [agents, grant] = await Promise.all([config.getAgents(), readSiteGrant(origin, incognito)]);
   const agent =
     grant && typeof grant === 'object' && typeof grant.agentId === 'string'
       ? agents.find((agent) => agent.id === grant.agentId)

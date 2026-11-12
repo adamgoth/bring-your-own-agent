@@ -51,9 +51,10 @@ export function createSiteAgentHandler(
         /* Page closed. */
       }
     };
-    const unsubscribe = onGrantChanged((changedOrigin, grant) => {
+    const unsubscribe = onGrantChanged((changedOrigin, grant, incognito) => {
       if (
         changedOrigin === origin &&
+        incognito === (sender?.tab?.incognito === true) &&
         (!grant ||
           (authorizedAgentId && grant.agentId !== authorizedAgentId) ||
           (authorizedShare && JSON.stringify(grant.share) !== JSON.stringify(authorizedShare)))
@@ -175,13 +176,13 @@ export function createSiteAgentHandler(
             if (!finished) finish('error', 'Site access was revoked.');
             return;
           }
-          const grant = await readSiteGrant(origin);
+          const grant = await readSiteGrant(origin, sender?.tab?.incognito);
           if (!grant || grant.agentId !== agent.id || finished) {
             if (!finished) finish('error', 'Site access was revoked.');
             return;
           }
           authorizedShare = grant.share;
-          await touchGrant(origin);
+          await touchGrant(origin, sender?.tab?.incognito);
           await prepare();
           if (finished) return;
           publish('working', `${agent.name} is working…`, true);

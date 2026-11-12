@@ -346,7 +346,8 @@ chrome.runtime.onMessage.addListener((request: ExtensionMessage, sender, sendRes
           sendResponse({ success: true });
           return;
         }
-        if (request.type === 'SITE_DISCONNECT') await revokeSiteGrant(origin);
+        if (request.type === 'SITE_DISCONNECT')
+          await revokeSiteGrant(origin, sender.tab?.incognito);
         if (request.type === 'SITE_CONNECT') {
           sendResponse(await openConnectionPrompt(sender));
           return;

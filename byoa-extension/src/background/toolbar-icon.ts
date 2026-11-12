@@ -18,11 +18,15 @@ function originOf(url?: string): string | undefined {
   }
 }
 
-export async function refreshToolbarIcon(tabId: number, url?: string): Promise<void> {
+export async function refreshToolbarIcon(
+  tabId: number,
+  url?: string,
+  incognito = false
+): Promise<void> {
   const origin = originOf(url);
   let connected = false;
   if (origin) {
-    connected = !!(await readSiteGrant(origin));
+    connected = !!(await readSiteGrant(origin, incognito));
   }
   try {
     await chrome.action.setIcon({ tabId, path: connected ? ICONS.connected : ICONS.idle });
@@ -38,14 +42,17 @@ export async function refreshToolbarIcon(tabId: number, url?: string): Promise<v
 async function refreshAllTabs(): Promise<void> {
   const tabs = await chrome.tabs.query({});
   await Promise.all(
-    tabs.map((tab) => (tab.id === undefined ? undefined : refreshToolbarIcon(tab.id, tab.url)))
+    tabs.map((tab) =>
+      tab.id === undefined ? undefined : refreshToolbarIcon(tab.id, tab.url, tab.incognito)
+    )
   );
 }
 
 export function startToolbarIconSync(): void {
   if (!chrome.action?.setIcon) return;
   chrome.tabs.onUpdated?.addListener((tabId, change, tab) => {
-    if (change.url || change.status === 'complete') void refreshToolbarIcon(tabId, tab.url);
+    if (change.url || change.status === 'complete')
+      void refreshToolbarIcon(tabId, tab.url, tab.incognito);
   });
   onGrantChanged(() => void refreshAllTabs());
   void refreshAllTabs();
