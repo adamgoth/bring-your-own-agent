@@ -80,6 +80,7 @@ export default defineConfig({
         // but we can add manual chunks if needed
         // Manually include sidebar since we removed it from manifest
         sidebar: path.resolve(__dirname, 'src/sidebar/index.html'),
+        'voice-permission': path.resolve(__dirname, 'src/voice-permission/index.html'),
         connect: path.resolve(__dirname, 'src/connect/index.html'),
         // WebMCP content scripts
         'content-scripts/webmcp-polyfill': path.resolve(

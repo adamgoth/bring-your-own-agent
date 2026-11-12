@@ -36,7 +36,8 @@
     "test:browser:apps:built": "node tests/browser/app-provider.mjs",
     "test:browser:sidebar:built": "node tests/browser/sidebar-setup.mjs",
     "test:browser:images:built": "node tests/browser/markdown-image-privacy.mjs",
-    "test:browser:chat:built": "node tests/browser/chat-session.mjs"
+    "test:browser:chat:built": "node tests/browser/chat-session.mjs",
+    "test:browser:voice:built": "node tests/browser/local-voice.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "2.0.91",
