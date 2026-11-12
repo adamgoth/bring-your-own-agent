@@ -1,5 +1,7 @@
 export interface SiteChat {
   origin: string;
+  shared?: string[];
+  notice?: string;
   id: string;
   createdAt: number;
   agentName?: string;

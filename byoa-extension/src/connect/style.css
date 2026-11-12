@@ -286,3 +286,15 @@ input:focus-visible {
 [hidden] {
   display: none !important;
 }
+
+[hidden] {
+  display: none !important;
+}
+#sharing label {
+  display: flex;
+  gap: 10px;
+  margin: 12px 0;
+}
+#sharing small {
+  display: block;
+}

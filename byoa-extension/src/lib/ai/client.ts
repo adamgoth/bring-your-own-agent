@@ -1,3 +1,4 @@
+import { validateSiteShare, type SiteShare } from '../site-grant';
 /**
  * AI Client - Service Worker LLM integration using Vercel AI SDK
  *
@@ -315,7 +316,11 @@ export class AIClient {
     callbacks: StreamCallbacks,
     streamId: string = globalThis.crypto.randomUUID(),
     workspaceContext?: ConversationWorkspaceContext,
-    siteToolAllowlist?: readonly string[]
+    siteTask?: {
+      tools: readonly string[];
+      share?: SiteShare;
+      onContext?: (shared: string[], notice?: string) => void;
+    }
   ): Promise<void> {
     const requestSequence = ++this.streamRequestSequence;
     let abortController: AbortController | undefined;
@@ -355,14 +360,51 @@ export class AIClient {
       }
 
       const establishingWorkspaceContext = workspaceContext === undefined;
-      const memory: ResolvedMemory = siteToolAllowlist
-        ? { state: 'unmounted' }
-        : await raceWithAbort(
-            getMemoryManager().resolve(agentId, {
-              includeWorkspaceContext: establishingWorkspaceContext,
-            }),
-            pendingStream.controller.signal
+      const share = validateSiteShare(siteTask?.share);
+      const wantsShared = share.persona || share.user || share.memory;
+      let memory: ResolvedMemory =
+        siteTask && !wantsShared
+          ? { state: 'unmounted' }
+          : await raceWithAbort(
+              getMemoryManager().resolve(agentId, {
+                includeWorkspaceContext: establishingWorkspaceContext,
+              }),
+              pendingStream.controller.signal
+            );
+      if (siteTask) {
+        if (memory.state === 'available') {
+          const workspace = memory.workspace ?? {
+            identity: null,
+            soul: null,
+            user: null,
+            agents: null,
+            memory: '',
+          };
+          memory = {
+            ...memory,
+            workspace: {
+              identity: share.persona ? workspace.identity : null,
+              soul: share.persona ? workspace.soul : null,
+              user: share.user ? workspace.user : null,
+              agents: null,
+              memory: share.memory ? workspace.memory : '',
+            },
+          };
+          const filtered = memory.workspace ?? workspace;
+          siteTask.onContext?.([
+            ...(filtered.identity !== null ? ['IDENTITY.md'] : []),
+            ...(filtered.soul !== null ? ['SOUL.md'] : []),
+            ...(filtered.user !== null ? ['USER.md'] : []),
+            ...(filtered.memory ? ['MEMORY.md'] : []),
+          ]);
+        } else {
+          siteTask.onContext?.(
+            [],
+            wantsShared ? 'Running without shared context: workspace unavailable' : undefined
           );
+          memory = { state: 'unmounted' };
+        }
+      }
       let capturedWorkspaceContext: ConversationWorkspaceContext | undefined;
       if (establishingWorkspaceContext) {
         if (memory.state === 'unavailable') throw memory.error;
@@ -386,15 +428,16 @@ export class AIClient {
       const runtime = createModelRuntime(agent);
       const toolRegistry = getToolRegistry();
       const toolSnapshot = toolRegistry.captureToolSnapshot(tabId);
-      const memoryEnabled = memory.state === 'available';
-      const memoryTools = memoryEnabled
-        ? createMemoryTools(memory.filesystem, memory.authoritySignal)
-        : {};
-      const allTools = siteToolAllowlist
+      const memoryEnabled = !siteTask && memory.state === 'available';
+      const memoryTools =
+        memoryEnabled && memory.state === 'available'
+          ? createMemoryTools(memory.filesystem, memory.authoritySignal)
+          : {};
+      const allTools = siteTask
         ? Object.fromEntries(
             Object.entries(toolSnapshot.tools).filter(
               ([name]) =>
-                siteToolAllowlist.includes(name) && toolSnapshot.toolSources.get(name) === 'site'
+                siteTask.tools.includes(name) && toolSnapshot.toolSources.get(name) === 'site'
             )
           )
         : { ...toolSnapshot.tools, ...memoryTools };
@@ -409,13 +452,15 @@ export class AIClient {
       for (const name of Object.keys(memoryTools)) toolCallSources.set(name, 'agentboard');
       const mountedWorkspace =
         conversationWorkspaceContext.state === 'mounted' ? conversationWorkspaceContext : undefined;
-      const conversation = mountedWorkspace
-        ? attachMemoryContext(messages, mountedWorkspace.memory)
-        : messages;
+      const conversation =
+        mountedWorkspace && (!siteTask || share.memory)
+          ? attachMemoryContext(messages, mountedWorkspace.memory)
+          : messages;
       const systemPrompt = composeSystemPrompt({
-        mcpInstructions: siteToolAllowlist ? undefined : toolSnapshot.mcpInstructions,
+        mcpInstructions: siteTask ? undefined : toolSnapshot.mcpInstructions,
         ...(mountedWorkspace && { workspace: mountedWorkspace }),
-        memoryEnabled: memoryEnabled || mountedWorkspace !== undefined,
+        memoryEnabled: !siteTask && (memoryEnabled || mountedWorkspace !== undefined),
+        siteTask: !!siteTask,
       });
       const messagesWithSystem: CoreMessage[] = [
         { role: 'system', content: systemPrompt },
@@ -425,7 +470,7 @@ export class AIClient {
       // Register remote authority before ownership changes. Memory closures fail
       // their own calls after revocation; stale grounding does not cancel generation.
       const { remoteSession } = toolSnapshot;
-      if (!siteToolAllowlist && remoteSession.hasContext) {
+      if (!siteTask && remoteSession.hasContext) {
         const onRemoteRevoked = () => {
           (abortController ?? pendingStream.controller).abort();
           notifyAbort('remote-tools-changed');

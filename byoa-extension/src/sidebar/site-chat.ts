@@ -30,6 +30,16 @@ export function setupSiteChat(tabId: number | null, container: HTMLElement) {
           label.className = 'site-chat-label';
           label.textContent = `${chat.agentName ?? 'BYOA'} · ${chat.status}`;
           article.append(label);
+          const shared = document.createElement('p');
+          shared.textContent = chat.shared?.length
+            ? `Shared with this task: ${chat.shared.join(', ')}`
+            : 'Nothing shared from your workspace';
+          article.append(shared);
+          if (chat.notice) {
+            const notice = document.createElement('p');
+            notice.textContent = chat.notice;
+            article.append(notice);
+          }
           const user = document.createElement('div');
           user.className = 'message message-user';
           user.textContent = chat.prompt;

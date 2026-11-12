@@ -1,3 +1,4 @@
+import { IndexedDBMemoryBindingRepository } from '../src/lib/memory/bindings';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   openConnectionPrompt,
@@ -32,6 +33,8 @@ const popup = (id: string) =>
     url: `chrome-extension://fixture/src/connect/index.html#${id}`,
   }) as chrome.runtime.MessageSender;
 beforeEach(() => {
+  vi.spyOn(IndexedDBMemoryBindingRepository.prototype, 'list').mockResolvedValue([]);
+  vi.spyOn(IndexedDBMemoryBindingRepository.prototype, 'get').mockResolvedValue(undefined);
   data = {};
   vi.stubGlobal('chrome', {
     ...chrome,
@@ -94,6 +97,25 @@ describe('extension-owned profile approval', () => {
         agentName: 'My agent',
       },
     });
+  });
+  it.each([false, true])('stores sharing only for a mounted profile: %s', async (mounted) => {
+    if (mounted)
+      vi.mocked(IndexedDBMemoryBindingRepository.prototype.get).mockResolvedValue({
+        agentId: 'one',
+        handle: {},
+      } as never);
+    const { requestId } = await openConnectionPrompt(sender);
+    await decideConnectionPrompt(requestId, 'one', true, popup(requestId), config, {
+      persona: true,
+      user: 'true',
+      memory: false,
+    });
+    expect(data[siteConnectionKey(origin)]).toEqual({
+      agentId: 'one',
+      share: { persona: mounted, user: false, memory: false },
+    });
+    const result = await connectionPromptResult(requestId, sender, config);
+    expect(JSON.stringify(result)).not.toMatch(/share|workspace/i);
   });
   it('preserves the current connection when the user cancels a profile switch', async () => {
     data[siteConnectionKey(origin)] = { agentId: 'existing' };

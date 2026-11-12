@@ -1,10 +1,8 @@
+import { IndexedDBMemoryBindingRepository } from '../lib/memory/bindings';
+import { readSiteGrant, writeSiteGrant } from '../lib/site-grant';
+const bindings = new IndexedDBMemoryBindingRepository();
 import type { ConfigStorage } from '../lib/storage/config';
-import {
-  siteConnectionKey,
-  siteConnectionStatus,
-  siteOrigin,
-  siteProfiles,
-} from './site-connection';
+import { siteConnectionStatus, siteOrigin, siteProfiles } from './site-connection';
 
 type Prompt = {
   id: string;
@@ -143,14 +141,28 @@ export async function getConnectionPrompt(
     siteProfiles(config),
     siteConnectionStatus(config, prompt.origin),
   ]);
-  return { origin: prompt.origin, ...profiles, selectedAgentId: connection.agentId };
+  const [mounted, grant] = await Promise.all([
+    bindings.list().catch(() => []),
+    readSiteGrant(prompt.origin),
+  ]);
+  return {
+    origin: prompt.origin,
+    ...profiles,
+    profiles: profiles.profiles.map((profile) => ({
+      ...profile,
+      hasWorkspace: mounted.some((binding) => binding.agentId === profile.id),
+    })),
+    selectedAgentId: connection.agentId,
+    share: grant?.agentId === connection.agentId ? grant?.share : undefined,
+  };
 }
 export function decideConnectionPrompt(
   id: unknown,
   agentId: unknown,
   approve: boolean,
   sender: chrome.runtime.MessageSender,
-  config: ConfigStorage
+  config: ConfigStorage,
+  share?: unknown
 ) {
   return serialize(async () => {
     const prompt = await read(id);
@@ -162,9 +174,8 @@ export function decideConnectionPrompt(
       const agent = typeof agentId === 'string' ? await config.getAgent(agentId) : null;
       if (!agent || !(agent.apiKey || agent.endpoint))
         throw new Error('Choose a profile that is ready to connect.');
-      await chrome.storage.session.set({
-        [siteConnectionKey(prompt.origin)]: { agentId: agent.id },
-      });
+      const binding = await bindings.get(agent.id).catch(() => undefined);
+      await writeSiteGrant(prompt.origin, agent.id, binding ? share : undefined);
     }
     prompt.state = approve ? 'approved' : 'cancelled';
     await save(prompt);

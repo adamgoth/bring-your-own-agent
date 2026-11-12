@@ -1,4 +1,13 @@
+import type { SiteShare } from '../lib/site-grant';
 import type { ProfileList } from '../../sdk';
+const shareSection = document.querySelector<HTMLFieldSetElement>('#sharing');
+const shareInputs = Object.fromEntries(
+  ['persona', 'user', 'memory'].map((key) => [
+    key,
+    document.querySelector<HTMLInputElement>(`#share-${key}`),
+  ])
+);
+let updateSharing = () => {};
 const id = window.location.hash.slice(1);
 const form = document.querySelector<HTMLFormElement>('#connect-form');
 const list = document.querySelector<HTMLFieldSetElement>('#profiles');
@@ -11,7 +20,21 @@ function error(message: string) {
   }
 }
 async function send(type: string, agentId?: string) {
-  const result = await chrome.runtime.sendMessage({ type, requestId: id, agentId });
+  const result = await chrome.runtime.sendMessage({
+    type,
+    requestId: id,
+    agentId,
+    ...(type === 'CONNECTION_PROMPT_APPROVE'
+      ? {
+          share: Object.fromEntries(
+            Object.entries(shareInputs).map(([key, input]) => [
+              key,
+              !shareSection?.hidden && input?.checked === true,
+            ])
+          ),
+        }
+      : {}),
+  });
   if (result?.success === false) throw new Error(result.error || 'Could not connect.');
   return result;
 }
@@ -29,9 +52,11 @@ function selection() {
 }
 async function load() {
   try {
-    const result = (await send('CONNECTION_PROMPT_GET')) as ProfileList & {
+    const result = (await send('CONNECTION_PROMPT_GET')) as Omit<ProfileList, 'profiles'> & {
       origin: string;
       selectedAgentId?: string;
+      share?: SiteShare;
+      profiles: Array<ProfileList['profiles'][number] & { hasWorkspace: boolean }>;
     };
     const origin = document.querySelector('#origin');
     if (origin) origin.textContent = result.origin;
@@ -66,12 +91,24 @@ async function load() {
       text.textContent = 'No profiles yet. Add an API profile in BYOA settings, then return here.';
       list.append(text);
     }
+    updateSharing = () => {
+      const selectedProfile = result.profiles.find((profile) => profile.id === selection());
+      if (shareSection) shareSection.hidden = !selectedProfile?.hasWorkspace;
+      for (const [key, input] of Object.entries(shareInputs)) {
+        if (!input) continue;
+        input.checked =
+          selectedProfile?.id === result.selectedAgentId &&
+          result.share?.[key as keyof SiteShare] === true;
+      }
+    };
+    updateSharing();
     if (approve) approve.disabled = !selection();
   } catch (cause) {
     error(cause instanceof Error ? cause.message : String(cause));
   }
 }
-form?.addEventListener('change', () => {
+form?.addEventListener('change', (event) => {
+  if ((event.target as HTMLInputElement).name === 'profile') updateSharing();
   if (approve) approve.disabled = busy || !selection();
 });
 form?.addEventListener('submit', (event) => {

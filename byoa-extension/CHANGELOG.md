@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add optional per-origin, session-only sharing of persona, user, and memory snapshots with site tasks. Sharing defaults off, excludes file tools, and is recorded in extension transcripts.
+
 ## 0.1.1
 
 - Any HTTPS site, and `localhost`/`127.0.0.1` on any port, can request an agent connection. Each exact origin still needs approval, and tasks check it before any model request. Previously only the two bundled demo ports could connect.

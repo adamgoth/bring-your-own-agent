@@ -1,7 +1,7 @@
 // Toolbar icon status: the Dock symbol's dot is grey while the current tab's site has no
 // agent connected and orange once it does. The tooltip says the same in words, so the
 // state never depends on color alone.
-import { siteConnectionKey } from './site-connection';
+import { siteConnectionKey, readSiteGrant } from '../lib/site-grant';
 
 const ICONS = {
   connected: { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' },
@@ -22,9 +22,7 @@ export async function refreshToolbarIcon(tabId: number, url?: string): Promise<v
   const origin = originOf(url);
   let connected = false;
   if (origin) {
-    const key = siteConnectionKey(origin);
-    const stored = await chrome.storage.session.get(key);
-    connected = !!stored[key];
+    connected = !!(await readSiteGrant(origin));
   }
   try {
     await chrome.action.setIcon({ tabId, path: connected ? ICONS.connected : ICONS.idle });

@@ -1,4 +1,5 @@
 import { siteOrigin, siteConnectionKey, siteConnectionStatus } from './site-connection';
+import { readSiteGrant, validateSiteGrant, type SiteShare } from '../lib/site-grant';
 import { SiteTaskQueue } from './site-task-queue';
 import { siteChatPrefix, type SiteChat } from '../lib/site-chat';
 import type { AIClient } from '../lib/ai/client';
@@ -38,6 +39,7 @@ export function createSiteAgentHandler(
     let started = false;
     let finished = false;
     let ownsTab = false;
+    let authorizedShare: SiteShare | undefined;
     let authorizedAgentId: string | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const publish = (status: string, detail: string, busy = false) => {
@@ -55,7 +57,11 @@ export function createSiteAgentHandler(
         area === 'session' &&
         connectionKey in changes &&
         (changes[connectionKey].newValue === false ||
-          (authorizedAgentId && changes[connectionKey].newValue?.agentId !== authorizedAgentId))
+          (authorizedAgentId &&
+            validateSiteGrant(changes[connectionKey].newValue)?.agentId !== authorizedAgentId) ||
+          (authorizedShare &&
+            JSON.stringify(validateSiteGrant(changes[connectionKey].newValue)?.share) !==
+              JSON.stringify(authorizedShare)))
       )
         cancel('Agent disconnected from this site. Any existing suggestions remain for review.');
     };
@@ -164,6 +170,12 @@ export function createSiteAgentHandler(
             if (!finished) finish('error', 'Site access was revoked.');
             return;
           }
+          const grant = await readSiteGrant(origin);
+          if (!grant || grant.agentId !== agent.id || finished) {
+            if (!finished) finish('error', 'Site access was revoked.');
+            return;
+          }
+          authorizedShare = grant.share;
           await prepare();
           if (finished) return;
           publish('working', `${agent.name} is working…`, true);
@@ -240,7 +252,17 @@ export function createSiteAgentHandler(
             },
             streamId,
             undefined,
-            tools
+            {
+              tools,
+              share: authorizedShare,
+              onContext: (shared, notice) => {
+                if (finished || !chat) return;
+                chat.shared = shared;
+                chat.notice = notice;
+                // Keep context metadata inside the extension; page progress must not disclose it.
+                saveChat();
+              },
+            }
           );
         } finally {
           release();
