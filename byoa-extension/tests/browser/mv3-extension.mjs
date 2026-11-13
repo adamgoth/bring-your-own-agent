@@ -1332,9 +1332,10 @@ async function main() {
     await waitFor(
       () =>
         evaluateSecond(
-          `location.protocol === 'chrome-extension:' && document.readyState === 'complete' && !!document.querySelector('#log-level')`
+          `location.protocol === 'chrome-extension:' && document.readyState === 'complete' && !!document.querySelector('#log-level') && !!document.querySelector('#agents-list .card')`
         ),
-      'second options page'
+      // Agent cards render after setupEventListeners; DOM readiness alone precedes the handlers.
+      'second options page with settings handlers'
     );
     await waitFor(
       () =>
