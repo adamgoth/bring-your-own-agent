@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><title>BYOA local speech feasibility</title>
+  <body>
+    <h1>Local speech feasibility probe</h1>
+    <p>
+      This diagnostic never sends text to an agent. Close the BYOA sidebar before testing. Install
+      the English pack and grant microphone permission before testing. Automated runs use only a
+      fake microphone.
+    </p>
+    <button id="permission">Allow microphone (release immediately)</button>
+    <button id="install">Install local English pack</button>
+    <button id="check">Check both hosts</button>
+    <button id="offscreen">Start offscreen recognition</button>
+    <button id="visible">Start visible recognition</button>
+    <button id="results">Read results from both hosts</button>
+    <button id="stop">Stop and release both hosts</button>
+    <pre id="status" aria-live="polite"></pre>
+    <script src="host.js"></script>
+    <script src="setup.js"></script>
+  </body>
+</html>

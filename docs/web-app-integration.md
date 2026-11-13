@@ -206,3 +206,24 @@ Task events and recovery summaries carry cumulative `usage: { inputTokens, outpu
 Costs and profile prices remain extension-private. Dollar caps require configured prices or an explicitly reported provider cost; missing costs cannot enforce a dollar cap and are labelled incomplete in Connected sites. No price table is bundled. Keyless local profiles count tokens with zero cost. Provider metadata support varies; the bundled OpenAI-compatible adapter does not preserve arbitrary OpenRouter billing fields, so enter profile prices when needed.
 
 Regular daily ledgers are kept locally for 35 calendar days; each day holds up to 1,000 site buckets plus an overflow bucket for already-running steps. New sites are refused at capacity until the next day. Private browsing has a separate session-only ledger and daily aggregate; it never contributes to regular persistent accounting. Provider usage is written before waiting for outstanding page tools and before the next step is authorized. Cancellation before a usage report, and working tasks interrupted by a worker restart, are marked incomplete. A worker killed before usage is received cannot recover unreported provider usage; interrupted tasks are never retried automatically.
+
+
+## Optional floating site voice
+
+After registering page tools, explicitly opt in:
+
+```ts
+await byoa.configureVoice({
+  enabled: true,
+  tools: ['get_selection', 'propose_replacement'],
+  instructions: 'Propose changes for the person to review.',
+});
+// On disposal:
+await byoa.configureVoice({ enabled: false });
+```
+
+This declares a capability, not a grant. The person must still connect the exact origin. Names must refer to 1–32 registered page tools; optional page guidance is bounded to 2,000 characters. A connection without opt-in shows no microphone. The raw provider method is `agent_configureVoice`.
+
+The extension frame keeps transcripts/results outside the page DOM. Native speech uses `processLocally=true` in an extension offscreen document. Microphone permission and pack downloads happen in visible Voice setup. Finish shows an editable transcript; Send during recording waits for final words. No audio is stored or sent to a transcription service. Approved text goes to the configured agent under existing site tools, grants, sharing and budgets.
+
+Results quote the actual task response without another model call. Open conversation focuses that task in App agent chat, whose continuation input remains separate from general sidebar chat. Follow-ups use up to four successful prior turns from this site (6,000 characters per message). Navigation, grant/profile changes, tool replacement and worker restarts end the conversation boundary. Historical tasks remain reviewable; interrupted work never replays automatically. Unsent transcripts are ephemeral.

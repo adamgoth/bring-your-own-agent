@@ -1,3 +1,4 @@
+import { agentboard } from '@byoagent/browser';
 import type { Workspace, Action } from './engine';
 type Args = Record<string, unknown>;
 export type Tool = { name: string; description: string; inputSchema: object; annotations: { readOnlyHint: boolean }; execute: (args: Args) => Promise<unknown> };
@@ -66,8 +67,11 @@ export function connectTools(tools: Tool[], onStatus: (status: string) => void) 
         await context.registerTool(tool, { signal: abort.signal });
         registered.push(tool.name);
       }
-      if (!disposed) onStatus('WebMCP connected');
+      if (!disposed) {
+        onStatus('WebMCP connected');
+        void agentboard.configureVoice({ enabled: true, tools: ['get_selection', 'get_document_outline', 'find_text', 'propose_replacement', 'add_comment'], instructions: 'Help edit the current Margin document. Read the selection first. Propose replacements for review; never claim a proposal has been accepted.' }).catch(() => {});
+      }
     } catch (e) { if (!disposed) onStatus(`Registration failed: ${e instanceof Error ? e.message : String(e)}`); }
   })();
-  return () => { disposed = true; abort.abort(); if (context.unregisterTool) for (const name of registered) { try { context.unregisterTool(name); } catch { /* Already removed by abort in newer implementations. */ } } };
+  return () => { void agentboard.configureVoice({ enabled: false }).catch(() => {}); disposed = true; abort.abort(); if (context.unregisterTool) for (const name of registered) { try { context.unregisterTool(name); } catch { /* Already removed by abort in newer implementations. */ } } };
 }

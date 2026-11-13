@@ -9,7 +9,51 @@ export function setupSiteChat(tabId: number | null, container: HTMLElement) {
   const section = document.createElement('section');
   section.id = 'site-agent-chat';
   section.setAttribute('aria-label', 'App agent chat');
+  const history = document.createElement('div');
+  section.append(history);
   let pending = Promise.resolve();
+  let conversationId: string | undefined;
+  const form = document.createElement('form');
+  const draft = document.createElement('textarea');
+  draft.setAttribute('aria-label', 'Continue this site conversation');
+  draft.placeholder = 'Continue this site conversation…';
+  draft.maxLength = 30000;
+  const send = document.createElement('button');
+  send.type = 'submit';
+  send.textContent = 'Send to this site';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.textContent = 'Cancel site task';
+  const notice = document.createElement('p');
+  notice.setAttribute('role', 'status');
+  form.append(draft, send, cancel, notice);
+  form.hidden = true;
+  section.append(form);
+  let submitting = false;
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (submitting || !draft.value.trim() || !conversationId) return;
+    submitting = true;
+    send.disabled = true;
+    void chrome.runtime
+      .sendMessage({ type: 'SITE_VOICE_CONTINUE', tabId, conversationId, text: draft.value })
+      .then((result) => {
+        if (result?.success) {
+          draft.value = '';
+          notice.textContent = 'Working with this site’s approved tools…';
+        } else notice.textContent = result?.error || 'Could not continue this conversation.';
+      })
+      .catch(() => {
+        notice.textContent = 'Reload BYOA to continue.';
+      })
+      .finally(() => {
+        submitting = false;
+        send.disabled = false;
+      });
+  });
+  cancel.addEventListener('click', () => {
+    void chrome.runtime.sendMessage({ type: 'SITE_VOICE_CANCEL', tabId, conversationId });
+  });
   const refresh = (focus = false) => {
     pending = pending
       .then(async () => {
@@ -19,10 +63,10 @@ export function setupSiteChat(tabId: number | null, container: HTMLElement) {
           .map(([, value]) => value as SiteChat)
           .sort((a, b) => a.createdAt - b.createdAt);
         if (!chats.length) return;
-        section.replaceChildren();
+        history.replaceChildren();
         const heading = document.createElement('h3');
         heading.textContent = 'App agent chat';
-        section.append(heading);
+        history.append(heading);
         for (const chat of chats) {
           const article = document.createElement('article');
           article.dataset.taskId = chat.id;
@@ -73,7 +117,14 @@ export function setupSiteChat(tabId: number | null, container: HTMLElement) {
           status.className = 'site-chat-label';
           status.textContent = chat.detail;
           article.append(status);
-          section.append(article);
+          history.append(article);
+        }
+        const latest = chats.filter((chat) => chat.conversationId).at(-1);
+        conversationId = latest?.conversationId;
+        form.hidden = !conversationId;
+        if (conversationId) {
+          send.disabled = submitting || latest?.status === 'queued' || latest?.status === 'working';
+          cancel.hidden = latest?.status !== 'queued' && latest?.status !== 'working';
         }
         if (!section.isConnected) container.prepend(section);
         if (focus) {

@@ -24,6 +24,12 @@ if (window === window.top) {
         async request({ method, params }: { method: string; params?: unknown }) {
           const p = (params || {}) as Record<string, unknown>;
           switch (method) {
+            case 'agent_configureVoice':
+              return transport.configureVoice({
+                enabled: p.enabled as boolean,
+                tools: p.tools as string[],
+                instructions: p.instructions as string | undefined,
+              });
             case 'agent_status':
               return transport.getStatus();
             case 'agent_connect':

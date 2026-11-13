@@ -3,6 +3,7 @@ import { crx } from '@crxjs/vite-plugin';
 import manifest from './manifest.json' with { type: 'json' };
 import pkg from './package.json' with { type: 'json' };
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import { webmcpCompilerPlugin } from './scripts/vite-plugin-webmcp-compiler';
 import {
   HTML_READER_HOST_FILE,
@@ -12,11 +13,12 @@ import {
 import { PDF_DOCUMENT_HOST_FILE } from './src/lib/webmcp/tools/read_page/pdf/protocol';
 
 // Single source of truth: inject version from package.json into manifest
+const isReleaseBuild = process.env.RELEASE === '1';
 const manifestWithVersion = {
   ...manifest,
+  permissions: manifest.permissions,
   version: pkg.version,
 };
-const isReleaseBuild = process.env.RELEASE === '1';
 
 /** Wrap configured file-injected entries so their minified top-level bindings cannot collide. */
 function classicScriptIifePlugin(entries: Readonly<Record<string, string | undefined>>): Plugin {
@@ -41,7 +43,24 @@ function classicScriptIifePlugin(entries: Readonly<Record<string, string | undef
 }
 
 export default defineConfig({
+  define: { 'import.meta.env.BYOA_VOICE_PROBE': JSON.stringify(!isReleaseBuild) },
   plugins: [
+    {
+      name: 'development-voice-probe',
+      generateBundle() {
+        if (isReleaseBuild) return;
+        for (const file of ['setup.html', 'setup.js', 'host.html', 'host.js']) {
+          this.emitFile({
+            type: 'asset',
+            fileName: `voice-probe/${file}`,
+            source: readFileSync(
+              path.resolve(__dirname, 'tests/browser/fixtures/voice-host', file),
+              'utf8'
+            ),
+          });
+        }
+      },
+    },
     webmcpCompilerPlugin(), // Compile WebMCP tools first
     crx({ manifest: manifestWithVersion }),
     classicScriptIifePlugin({
@@ -79,6 +98,8 @@ export default defineConfig({
         // These will be auto-detected from manifest.json by crx plugin
         // but we can add manual chunks if needed
         // Manually include sidebar since we removed it from manifest
+        'voice-host': path.resolve(__dirname, 'src/voice-host/index.html'),
+        'site-voice': path.resolve(__dirname, 'src/site-voice/index.html'),
         sidebar: path.resolve(__dirname, 'src/sidebar/index.html'),
         'voice-permission': path.resolve(__dirname, 'src/voice-permission/index.html'),
         connect: path.resolve(__dirname, 'src/connect/index.html'),
