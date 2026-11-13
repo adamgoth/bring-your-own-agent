@@ -205,8 +205,10 @@ function connectionDialogClass() {
         this.#requestClose();
       });
       // A close the element did not ask for (for example a browser close request).
+      // `close` is queued, so after close() then show() a stale event can arrive while
+      // the dialog is open again; only a dialog that is really closed counts.
       dialog.addEventListener('close', () => {
-        if (this.open) this.#requestClose();
+        if (this.open && !dialog.open) this.#requestClose();
       });
       this.#dialog = dialog;
       this.append(dialog);

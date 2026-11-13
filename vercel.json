@@ -1,0 +1,5 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm ci --prefix packages/browser --ignore-scripts --no-audit --no-fund && npm run build --prefix packages/browser && npx --yes pnpm@10.28.0 --dir packages/react install --frozen-lockfile --ignore-scripts && npx --yes pnpm@10.28.0 --dir packages/react run build && npm ci --prefix demos/margin",
+  "buildCommand": "npm run build --prefix demos/margin"
+}

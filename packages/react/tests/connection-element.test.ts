@@ -101,6 +101,29 @@ describe("<byoa-connection-dialog>", () => {
     expect(document.activeElement).toBe(opener);
   });
 
+  it("ignores a stale native close event that arrives after a quick reopen", async () => {
+    const f = fixture();
+    const element = await mount(f.session);
+    const changes: boolean[] = [];
+    element.addEventListener("openchange", (event) => changes.push(event.detail.open));
+    element.open = true;
+    element.close();
+    element.show();
+    const dialog = element.querySelector("dialog")!;
+    // The browser delivers the first close's queued event only now.
+    dialog.dispatchEvent(new Event("close"));
+    expect(element.open).toBe(true);
+    expect(dialog.open).toBe(true);
+    expect(changes).toEqual([]);
+
+    // Remove and reinsert while open: the same stale event must not dismiss it either.
+    element.remove();
+    document.body.append(element);
+    dialog.dispatchEvent(new Event("close"));
+    expect(element.open).toBe(true);
+    expect(dialog.open).toBe(true);
+  });
+
   it("shows waiting while BYOA asks, then the approval error, and keeps focus inside", async () => {
     const f = fixture();
     const element = await mount(f.session);
