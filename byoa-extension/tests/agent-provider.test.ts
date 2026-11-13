@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { createClient } from '../sdk/index';
+import { createClient } from '../../packages/browser/index';
 const mock = vi.hoisted(() => ({
   getStatus: vi.fn(),
   connect: vi.fn(),
@@ -11,7 +11,7 @@ const mock = vi.hoisted(() => ({
   subscribe: vi.fn(),
   request: vi.fn(),
 }));
-vi.mock('../sdk/transport', () => ({ createTransport: () => mock }));
+vi.mock('../../packages/browser/transport', () => ({ createTransport: () => mock }));
 it('announces only on request with stable identity; routes the complete API and isolates event listeners', async () => {
   const announced = vi.fn();
   window.addEventListener('agent:announceProvider', announced);

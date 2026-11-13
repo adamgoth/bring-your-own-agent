@@ -1,68 +1,50 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
-import { agentboard, type AgentTask, type Connection, type TaskEvent } from '@byoagent/browser';
+import { useSyncExternalStore } from 'react';
+import { byoa as agentboard, createAgentSession, type TaskEvent } from '@byoagent/browser';
+import { useConnection, useAgentTask } from '@byoagent/react';
 export { agentboard };
-let activeTask: AgentTask | undefined;
-let taskController: AbortController | undefined;
-let requesting = false;
+export const agentSession = createAgentSession(agentboard);
 const recoveryKey = 'margin-agent-request';
 let recovery: TaskEvent | null = null;
 let recoveryAttempt = 0;
 const recoveryListeners = new Set<() => void>();
 const notifyRecovery = () => recoveryListeners.forEach(listener => listener());
-let latestTask: TaskEvent | null = null;
-const requestListeners = new Set<() => void>();
-agentboard.subscribeTasks(task => { latestTask = task; });
-export const isAgentBusy = () => requesting || !!latestTask?.busy;
-const subscribeRequests = (listener: () => void) => { requestListeners.add(listener); return () => { requestListeners.delete(listener); }; };
+export const isAgentBusy = () => { const state = agentSession.getSnapshot(); return state.pending || !!state.task?.busy; };
 const pageTools = ['get_selection', 'get_document_outline', 'find_text', 'propose_replacement', 'add_comment'];
 export async function requestAgent(prompt: string, tools: readonly string[] = pageTools) {
   if (isAgentBusy()) throw new Error('An agent task is already running.');
-  requesting = true;
   recoveryAttempt++;
-  taskController = new AbortController();
-  requestListeners.forEach(listener => listener());
+  // Recovery inputs stay app-owned; the shared package never stores prompts.
+  let savedId = '';
+  const unsubscribe = agentSession.subscribe(() => {
+    const { activeTaskId, pending } = agentSession.getSnapshot();
+    if (pending && activeTaskId && activeTaskId !== savedId) {
+      savedId = activeTaskId;
+      sessionStorage.setItem(recoveryKey, JSON.stringify({ id: activeTaskId, prompt, tools }));
+      recovery = null; notifyRecovery();
+    }
+  });
   try {
-    const task = await agentboard.request({ prompt, tools, signal: taskController.signal });
-    activeTask = task;
-    sessionStorage.setItem(recoveryKey, JSON.stringify({ id: task.id, prompt, tools }));
-    recovery = null; notifyRecovery();
-    let result: TaskEvent | undefined;
-    for await (const event of task.events) { result = event; }
+    const result = await agentSession.run({ prompt, tools });
     if (result?.code === 'timeout' || result?.code === 'interrupted') { recovery = result; notifyRecovery(); }
     else sessionStorage.removeItem(recoveryKey);
     return result;
-  } finally {
-    activeTask = undefined;
-    taskController = undefined;
-    requesting = false;
-    requestListeners.forEach(listener => listener());
-  }
+  } finally { unsubscribe(); }
 }
-export const cancelAgent = () => { if (taskController) taskController.abort(); else activeTask?.cancel(); };
+export const cancelAgent = agentSession.cancel;
 export function useAgentBoardTask() {
-  const pending = useSyncExternalStore(subscribeRequests, () => requesting);
-  const [task, setTask] = useState<TaskEvent | null>(null);
-  useEffect(() => agentboard.subscribeTasks(setTask), []);
+  const { task, pending } = useAgentTask();
   return pending && !task?.busy ? { taskId: '', status: 'queued' as const, detail: 'Starting agent…', busy: true } : task;
 }
-export function useAgentBoardConnection() {
-  const [connection, setConnection] = useState<Connection>({ available: false, configured: false, connected: false });
-  useEffect(() => {
-    const unsubscribe = agentboard.subscribe(setConnection);
-    void agentboard.getStatus().then(setConnection);
-    return unsubscribe;
-  }, []);
-  return connection;
-}
+export function useAgentBoardConnection() { return useConnection().connection; }
 
 // Lookup is read-only. A reload cannot resume a model stream or repeat proposals.
 async function lookupRecovery() {
   const attempt = recoveryAttempt;
   try {
     const stored = JSON.parse(sessionStorage.getItem(recoveryKey) || 'null');
-    if (!stored?.id || activeTask || requesting) return;
+    if (!stored?.id || isAgentBusy()) return;
     const summary = await agentboard.getTask(stored.id);
-    if (attempt !== recoveryAttempt || activeTask || requesting) return;
+    if (attempt !== recoveryAttempt || isAgentBusy()) return;
     if (summary?.busy) { setTimeout(() => void lookupRecovery(), 1000); return; }
     if (summary?.retryable) { recovery = summary; notifyRecovery(); }
     else sessionStorage.removeItem(recoveryKey);

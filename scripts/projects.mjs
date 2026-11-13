@@ -6,6 +6,10 @@ const projects = [
   { dir: "demos/margin", manager: "npm" },
   { dir: "demos/boardwalk", manager: "pnpm" },
 ];
+const packages = [
+  { dir: "packages/browser", manager: "npm" },
+  { dir: "packages/react", manager: "pnpm" },
+];
 const root = new URL("../", import.meta.url);
 const children = new Set();
 const windows = process.platform === "win32";
@@ -50,7 +54,9 @@ function run(project, args) {
 }
 const action = process.argv[2];
 try {
-  if (["dev", "check", "build", "test"].includes(action)) await run({dir:"byoa-extension/sdk", manager:"pnpm"}, ["run", "build"]);
+  if (["dev", "check", "build", "test"].includes(action)) {
+    for (const project of packages) await run(project, ["run", "build"]);
+  }
   if (action === "dev") {
     console.log(
       "Margin: http://localhost:5183/\nBoardwalk: http://localhost:5184/\nPress Ctrl+C to stop both demo servers.",
@@ -61,24 +67,40 @@ try {
     await Promise.race(jobs);
     stop();
     await Promise.all(jobs);
-  } else if (action === "setup") {
-    for (const project of projects) {
+  } else if (action === "setup-sdk") {
+    // Just enough to build and pack the SDK for another app; skips the extension and demos.
+    for (const project of packages) {
       await run(
         project,
         project.manager === "npm"
           ? ["ci", "--ignore-scripts", "--no-audit", "--no-fund"]
           : ["install", "--frozen-lockfile", "--ignore-scripts"],
       );
+      await run(project, ["run", "build"]);
+    }
+  } else if (action === "setup") {
+    for (const project of [...packages, ...projects]) {
+      await run(
+        project,
+        project.manager === "npm"
+          ? ["ci", "--ignore-scripts", "--no-audit", "--no-fund"]
+          : ["install", "--frozen-lockfile", "--ignore-scripts"],
+      );
+      if (packages.includes(project)) await run(project, ["run", "build"]);
     }
   } else if (action === "check") {
+    await run({ dir: ".", manager: "pnpm" }, ["run", "test:packaging"]);
+    for (const project of packages) await run(project, ["run", "test"]);
     await run(projects[0], ["run", "check"]);
     for (const project of projects.slice(1)) {
       await run(project, ["run", "test"]);
       await run(project, ["run", "build"]);
     }
   } else if (action === "build" || action === "test") {
+    if (action === "test")
+      for (const project of packages) await run(project, ["run", "test"]);
     for (const project of projects) await run(project, ["run", action]);
-  } else throw new Error("Use setup, dev, build, test, or check.");
+  } else throw new Error("Use setup, setup-sdk, dev, build, test, or check.");
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   stop();

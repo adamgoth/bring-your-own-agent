@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc -p ../../byoa-extension/sdk/tsconfig.json && tsc -b && vite build",
+    "build": "tsc -b && vite build",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "preview": "vite preview --host 127.0.0.1"
@@ -20,7 +20,9 @@
     "marked": "^15.0.12",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "turndown": "^7.2.5"
+    "turndown": "^7.2.5",
+    "@byoagent/browser": "file:../../packages/browser",
+    "@byoagent/react": "file:../../packages/react"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",

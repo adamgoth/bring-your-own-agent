@@ -169,12 +169,55 @@ export function createClient(provider?: AgentProvider) {
       let wake: (() => void) | undefined;
       const early: TaskEvent[] = [];
       const buffer: TaskEvent[] = [];
+      let cancelTimer: ReturnType<typeof setTimeout> | undefined;
+      let abortRequested = false;
+      let abandonedAcknowledgment = false;
+      let cancelSent = false;
+      let rejectAcknowledgment: ((reason: unknown) => void) | undefined;
+      const cancelledBeforeAcknowledgment = new Promise<never>((_, reject) => {
+        rejectAcknowledgment = reject;
+      });
+      const sendCancel = (taskId: string) => {
+        if (cancelSent) return;
+        cancelSent = true;
+        try {
+          void p.request({ method: 'agent_cancelTask', params: { taskId } }).catch(() => {});
+        } catch {
+          /* The local cancellation deadline still applies. */
+        }
+      };
       const abort = () => {
-        if (id)
-          void p.request({ method: 'agent_cancelTask', params: { taskId: id } }).catch(() => {});
+        if (terminal) return;
+        abortRequested = true;
+        // Allow a prompt acknowledgment/terminal event to retain normal cancellation
+        // behavior, but never wait indefinitely for an orphaned provider.
+        if (cancelTimer === undefined)
+          cancelTimer = setTimeout(() => {
+            if (terminal) return;
+            if (!id) {
+              abandonedAcknowledgment = true;
+              rejectAcknowledgment?.(
+                signal?.reason || new ProviderError(4001, 'Cancelled before task acknowledgment.')
+              );
+            } else
+              task({
+                taskId: id,
+                status: 'error',
+                code: 'interrupted',
+                busy: false,
+                local: true,
+                seq: (last?.seq ?? -1) + 1,
+                detail:
+                  'Cancellation was not confirmed by the provider. Work may still be running. Review existing results before retrying.',
+                ...(last?.usage ? { usage: { ...last.usage, usageKnown: false } } : {}),
+              });
+          }, 1000);
+        if (id) sendCancel(id);
       };
       const cleanup = () => {
+        if (cancelTimer !== undefined) clearTimeout(cancelTimer);
         sinks.delete(receive);
+        early.length = 0;
         signal?.removeEventListener('abort', abort);
       };
       const receive = (event: TaskEvent) => {
@@ -200,15 +243,24 @@ export function createClient(provider?: AgentProvider) {
       sinks.add(receive);
       signal?.addEventListener('abort', abort, { once: true });
       try {
-        const result = (await p.request({
-          method: 'agent_requestTask',
-          params: { prompt, tools, timeoutMs },
-        })) as { taskId: string };
+        const acknowledgment = p
+          .request({
+            method: 'agent_requestTask',
+            params: { prompt, tools, timeoutMs },
+          })
+          .then((result) => {
+            const value = result as { taskId: string };
+            // A late acknowledgment still needs cancellation, even after request() rejected.
+            if (abandonedAcknowledgment && typeof value?.taskId === 'string' && value.taskId)
+              sendCancel(value.taskId);
+            return value;
+          });
+        const result = await Promise.race([acknowledgment, cancelledBeforeAcknowledgment]);
         if (typeof result?.taskId !== 'string' || !result.taskId)
           throw new ProviderError(-32603, 'Provider returned an invalid task ID.');
         id = result.taskId;
-        for (const event of early) receive(event);
-        if (signal?.aborted) abort();
+        for (const event of early.splice(0)) receive(event);
+        if (abortRequested || signal?.aborted) abort();
       } catch (error) {
         cleanup();
         throw error;
@@ -242,3 +294,7 @@ export function createClient(provider?: AgentProvider) {
 export const byoa = createClient();
 /** @deprecated Use byoa instead. */
 export const agentboard = byoa;
+
+export type AgentClient = ReturnType<typeof createClient>;
+export type AgentRequest = Parameters<AgentClient['request']>[0];
+export { createAgentSession, type AgentSession, type AgentSnapshot } from './session.js';

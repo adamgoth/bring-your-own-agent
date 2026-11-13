@@ -1,0 +1,54 @@
+{
+  "name": "@byoagent/react",
+  "version": "0.1.0",
+  "description": "React hooks and optional UI for Bring Your Own Agent",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adamgoth/bring-your-own-agent.git",
+    "directory": "packages/react"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node -e \"require('node:fs').copyFileSync('../browser/styles.css','dist/styles.css')\"",
+    "prepack": "npm run build",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@byoagent/browser": "^0.1.0",
+    "react": "^18.3.0 || ^19.0.0",
+    "react-dom": "^18.3.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@byoagent/browser": "link:../browser",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.12",
+    "jsdom": "^26.1.0",
+    "@testing-library/react": "^16.3.0"
+  },
+  "main": "./dist/index.js"
+}

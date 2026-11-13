@@ -9,17 +9,26 @@ async function setup(page: Page) {
     } });
     const state = window as any;
     state.draftRequests = [];
-    const post = (data: any) => window.postMessage({ source: 'agentboard:extension', version: 1, ...data }, location.origin);
-    window.addEventListener('message', event => {
-      const data = event.data;
-      if (data?.source !== 'agentboard:page') return;
-      if (data.method === 'status') post({ kind: 'response', id: data.id, ok: true, value: { available: true, configured: true, connected: true, agentName: 'Test agent' } });
-      if (data.method === 'request') {
-        state.draftRequests.push(data);
-        post({ kind: 'task', id: data.id, event: { taskId: data.id, status: 'working', busy: true, detail: 'Drafting' } });
-      }
-      if (data.method === 'cancel') post({ kind: 'task', id: data.id, event: { taskId: data.id, status: 'cancelled', busy: false, detail: 'Cancelled' } });
-    });
+    const listeners = new Set<(event: unknown) => void>();
+    const post = (data: any) => listeners.forEach(listener => listener({ ...data.event, seq: data.event.busy ? 0 : 1 }));
+    let count = 0;
+    const provider = {
+      on(name: string, listener: (event: unknown) => void) { if (name === 'task') listeners.add(listener); },
+      removeListener(name: string, listener: (event: unknown) => void) { if (name === 'task') listeners.delete(listener); },
+      async request({ method, params }: { method: string; params: any }) {
+        if (method === 'agent_status') return { available: true, configured: true, connected: true, agentName: 'Test agent' };
+        if (method === 'agent_requestTask') {
+          const id = `draft-${++count}`;
+          state.draftRequests.push({ id, params });
+          post({ event: { taskId: id, status: 'working', busy: true, detail: 'Drafting' } });
+          return { taskId: id };
+        }
+        if (method === 'agent_cancelTask') post({ event: { taskId: params.taskId, status: 'cancelled', busy: false, detail: 'Cancelled' } });
+      },
+    };
+    window.addEventListener('agent:requestProvider', () => window.dispatchEvent(new CustomEvent('agent:announceProvider', {
+      detail: { info: { uuid: 'draft-fixture', name: 'Test agent', icon: '', rdns: 'test.local' }, provider },
+    })));
     state.failDraft = (detail: string) => {
       const request = state.draftRequests.at(-1);
       post({ kind: 'task', id: request.id, event: { taskId: request.id, status: 'error', busy: false, detail } });

@@ -237,4 +237,4 @@ BYOA does not send telemetry to an BYOA-operated service. It stores your setting
 
 ## Experimental app provider demo
 
-The local browser client in [sdk/README.md](sdk/README.md) lets an app request background agent work using its existing WebMCP tools. Margin and Boardwalk use the same interface; the extension contains no per-app tool names or DOM handlers. This is a local prototype with explicit origin restrictions, not a public WebMCP standard or production permission system. See [LOCAL_TESTING.md](LOCAL_TESTING.md#connect-and-try-the-demos) for setup and checks.
+The local browser client in [sdk/README.md](../packages/browser/README.md) lets an app request background agent work using its existing WebMCP tools. Margin and Boardwalk use the same interface; the extension contains no per-app tool names or DOM handlers. This is a local prototype with explicit origin restrictions, not a public WebMCP standard or production permission system. See [LOCAL_TESTING.md](LOCAL_TESTING.md#connect-and-try-the-demos) for setup and checks.

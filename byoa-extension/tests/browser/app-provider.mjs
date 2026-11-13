@@ -279,7 +279,7 @@ try {
     return catalog.success && catalog.data.some((t) => t.name === 'propose_board_changes');
   }, 'Boardwalk tools in the extension catalog');
   await board.click('#agent-indicator');
-  await board.click('[data-action="connect"]');
+  await board.click('#connection-menu .byoa-primary');
   const firstPromptTarget = await waitFor(
     async () =>
       (await send('Target.getTargets')).targetInfos.find((target) =>
@@ -298,7 +298,7 @@ try {
   );
   assert.ok(
     await board.evaluate(
-      `!document.querySelector('input[name="agent-profile"]') && document.querySelector('#agent-indicator').textContent.includes('Not connected')`
+      `!document.querySelector('input[name="agent-profile"]') && document.querySelector('#agent-indicator').textContent.includes('Connect Agent')`
     )
   );
   assert.ok(await firstPrompt.evaluate(`document.querySelector('#sharing').hidden`), 'Sharing hidden without a workspace');
@@ -348,13 +348,13 @@ try {
     )
   );
   // Cancelling the extension-owned picker leaves the existing connection untouched.
-  await board.evaluate(`document.querySelector('#connection-menu').hidden=true`);
+  await board.evaluate(`document.querySelector('#connection-menu').open=false`);
   await board.click('#agent-indicator');
   await waitFor(
-    () => board.evaluate(`!document.querySelector('[data-action="connect"]').disabled`),
+    () => board.evaluate(`!!document.querySelector('#connection-menu [aria-label="Change profile"]')`),
     'connection request settled'
   );
-  await board.click('[data-action="connect"]');
+  await board.click('#connection-menu [aria-label="Change profile"]');
   const cancelTarget = await waitFor(
     async () =>
       (await send('Target.getTargets')).targetInfos.find((target) =>
@@ -370,7 +370,7 @@ try {
   assert.equal(await cancelPrompt.evaluate(`document.querySelector('#persist').value`), 'days30');
   await cancelPrompt.click('#cancel');
   await waitFor(
-    () => board.evaluate(`document.querySelector('#toast')?.textContent.includes('cancelled')`),
+    () => board.evaluate(`document.querySelector('#connection-menu [role="alert"]')?.textContent.toLowerCase().includes('cancel')`),
     'cancelled connection result'
   );
   assert.ok(
@@ -378,7 +378,7 @@ try {
       `document.querySelector('#agent-indicator').textContent.includes('Demo deepseek')`
     )
   );
-  await board.click('#agent-indicator');
+  await board.evaluate(`document.querySelector('#connection-menu').open=false`);
   console.log(
     'PASS extension-owned picker approval and cancellation; the app never renders a profile list.'
   );
@@ -501,7 +501,7 @@ try {
       ),
     'Margin SDK'
   );
-  await margin.click('#agent-connection-menu .primary');
+  await margin.click('#agent-connection-menu .byoa-primary');
   const secondTarget = await waitFor(
     async () =>
       (await send('Target.getTargets')).targetInfos.find((target) =>
@@ -531,7 +531,7 @@ try {
       ),
     'Margin connected independently'
   );
-  await margin.click('.agent-connection-button');
+  await margin.click('#agent-connection-menu button[aria-label="Close"]');
   const selectMargin = async () => {
     await send('Page.bringToFront', {}, margin.sessionId);
     // Let ProseMirror settle its focus selection before selecting the passage.
@@ -620,7 +620,9 @@ try {
   // Revoking only the board origin stops its held request, while Margin remains connected.
   await board.click('#agent-indicator');
   await ext.click(`[data-origin="${boardOrigin}"] [data-action="disconnect"]`);
-  await waitFor(() => board.evaluate(`document.querySelector('#agent-indicator').textContent.includes('Not connected')`), 'Options disconnect reaches app');
+  await waitFor(() => board.evaluate(`document.querySelector('#agent-indicator').textContent.includes('Connect Agent')`), 'Options disconnect reaches app');
+  await waitFor(() => board.evaluate(`document.querySelector('#connection-menu .byoa-status')?.dataset.state==='disconnected'`), 'open connection dialog reflects revocation');
+  await board.evaluate(`document.querySelector('#connection-menu').open=false`);
   await waitFor(
     () =>
       board.evaluate(`document.querySelector('#task-status').textContent.includes('Task stopped')`),
@@ -683,7 +685,7 @@ try {
     { width: 390, height: 844, deviceScaleFactor: 1, mobile: true },
     board.sessionId
   );
-  await board.evaluate(`document.querySelector('#connection-menu').hidden=true`);
+  await board.evaluate(`document.querySelector('#connection-menu').open=false`);
   assert.ok(await board.evaluate(`document.documentElement.scrollWidth<=innerWidth`));
   writeFileSync(
     join(tmpdir(), 'boardwalk-mobile.png'),

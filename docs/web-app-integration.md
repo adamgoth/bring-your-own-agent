@@ -14,15 +14,18 @@ This guide describes the experimental implementation in this repository. **Top-l
 
 There are two parts to an integration: expose app capabilities through WebMCP, then use the BYOA client to request work with those capabilities. Exposing WebMCP tools alone does not add the BYOA connection flow. The connection and task APIs are specific to this prototype, not part of WebMCP.
 
+For a coding-agent workflow, start with the [integration recipe](../packages/browser/prompts/add-byoa.md). React apps can use [the optional components and hooks](../packages/react/README.md); other apps can use the same connection dialog as a [custom element](../packages/browser/README.md#connection-dialog-without-react). Existing WebMCP tools remain app-owned.
+
 ## 1. Expose app capabilities
 
 Choose a small set of useful operations over your app's data. Prefer explicit actions such as `get_selected_cards` and `propose_board_changes`, with stable IDs and structured arguments.
 
-Register tools after your app state is ready. BYOA preserves the browser's native `document.modelContext` when available or installs its polyfill at document start. The client itself does not provide WebMCP. This JavaScript example registers a read-only tool; `getSelectedCards()` is an app function you supply:
+Register tools after your app state is ready. BYOA preserves the browser's native WebMCP implementation (`document.modelContext` or `navigator.modelContext`, depending on the browser) or installs its polyfill at document start. The client itself does not provide WebMCP. This JavaScript example registers a read-only tool; `getSelectedCards()` is an app function you supply:
 
 ```js
 async function registerAppTools(getSelectedCards) {
-  const context = document.modelContext;
+  // Native browsers may expose navigator.modelContext; BYOA's polyfill provides document.modelContext.
+  const context = document.modelContext ?? navigator.modelContext;
   if (!context?.registerTool) {
     throw new Error('Page tools unavailable. Enable BYOA and reload the page.');
   }
@@ -54,13 +57,13 @@ For tools that accept arguments, describe them with an `inputSchema` and validat
 
 ## 2. Connect the user's agent
 
-Build and pack the SDK from this repository with `pnpm pack:sdk`, then install the printed tarball using `npm install /path/to/byoagent-browser-0.1.0.tgz`. Once separately published, use `npm install @byoagent/browser`.
+Build the packages from a clone of this repository with `pnpm sdk:vendor --out /absolute/path/to/app/vendor/byoa`, then install from the app root using `npm install ./vendor/byoa/byoagent-browser-0.1.0.tgz`. Commit the archive with the app lockfile. Once separately published, use `npm install @byoagent/browser`.
 
 ```ts
 import { byoa } from '@byoagent/browser';
 ```
 
-The demos resolve the package's built ESM/declarations through aliases, with independent lockfiles. `byoa` discovers providers lazily; `agentboard` is a deprecated compatibility alias. Use `discoverProviders()` or `byoa.providers()` and `createClient(chosen.provider)` to present a provider picker. Imports are SSR-safe; call browser methods only in the browser. The [provider specification](provider-spec.md) includes a without-SDK example and security model.
+The demos install the packages as local dependencies, with independent lockfiles. `byoa` discovers providers lazily; `agentboard` is a deprecated compatibility alias. Use `discoverProviders()` or `byoa.providers()` and `createClient(chosen.provider)` to present a provider picker. Imports are SSR-safe; call browser methods only in the browser. The [provider specification](provider-spec.md) includes a without-SDK example and security model.
 
 Use `getStatus()` on startup and `subscribe()` to keep connection UI current. The following snippets use app-provided rendering functions and button references:
 
@@ -96,7 +99,7 @@ Offer **Change profile** by calling `connect()` again. Cancelling preserves the 
 Send a prompt and the names of already registered WebMCP tools. BYOA resolves their definitions and execution routes. Do not pass executable tool definitions to `request()` or add app-specific handlers to the extension.
 
 ```ts
-import type { AgentTask } from '../../../byoa-extension/sdk';
+import type { AgentTask } from '@byoagent/browser';
 
 let activeTask: AgentTask | undefined;
 let lastTask: AgentTask | undefined;
@@ -143,7 +146,7 @@ This read-only example produces a summary in the task transcript. For results to
 
 Task events contain `taskId`, `status`, `detail`, `busy`, monotonic `seq`, and optional `code`. `timeout` and `interrupted` are retryable; the SDK exposes `task.retryable`. Render `queued`, `working`, `done`, `cancelled`, and `error` states. A terminal event has `busy: false`; inspect its status because the iterator also ends after cancellation or failure. A `done` event does not guarantee that the agent created a proposal.
 
-Consume `task.events` once. `subscribeTasks()` is available for shared progress UI. You can also pass an `AbortSignal` to `request()`. Open chat or settings only from explicit user actions. Each request starts without prior conversational history; **View chat** opens a transcript, not a resumable conversation.
+Consume `task.events` once. `subscribeTasks()` is available for shared progress UI. You can also pass an `AbortSignal` to `request()`. Open chat or settings only from explicit user actions. Each request starts without prior conversational history; **Open in sidebar** opens a transcript, not a resumable conversation.
 
 ## 4. Make changes reviewable
 
@@ -188,7 +191,7 @@ App tasks receive only the requested site-provenance WebMCP tools; Workspace sha
 
 Credentials stay in the extension, but prompts, tool definitions, and tool results go to the configured model endpoint. API billing applies; this does not use a consumer ChatGPT or Claude subscription. Use sample content for development.
 
-See the [SDK contract](../byoa-extension/sdk/README.md) for the full prototype boundaries and client behavior. Spending budgets, SDK distribution and provider discovery still need implementation before this becomes a general hosted-app integration.
+See the [SDK contract](../packages/browser/README.md) for the full prototype boundaries and client behavior. Packages are locally distributed until a separate npm release; spending budgets and provider discovery are already implemented.
 
 
 ### Connection duration and activity

@@ -12,7 +12,9 @@ import {
   type Change,
   type Column,
 } from "./board";
+import { defineAgentElements } from "@byoagent/browser/elements";
 import { registerTools } from "./tools";
+import "@byoagent/browser/styles.css";
 import "./style.css";
 
 const icons = {
@@ -45,7 +47,6 @@ let connection: Connection = {
   configured: false,
   connected: false,
 };
-let connecting = false;
 let task: TaskEvent | null = null;
 let activeTask: AgentTask | undefined;
 let taskDismissed = false;
@@ -74,6 +75,8 @@ const save = () => {
 store = new BoardStore(initial, save);
 let toolsStatus = "Checking page tools…";
 
+// The shared BYOA connection dialog (same design as the React SDK component).
+defineAgentElements();
 document.querySelector("#app")!.innerHTML = `
   <aside class="sidebar"><a class="brand" href="#" aria-label="Boardwalk home"><span class="brand-mark">${icon("grid")}</span>boardwalk<span class="brand-period">.</span></a>
     <div class="workspace-picker"><span class="workspace-avatar">S</span><span>Studio workspace<small>Personal space</small></span>${icon("chevron")}</div>
@@ -82,7 +85,7 @@ document.querySelector("#app")!.innerHTML = `
     <div class="sidebar-note"><span class="note-symbol">✳</span><strong>Your board.<br>Your agent.</strong><p>Bring the agent you already use. Keep the work here.</p><button data-action="connect-menu">Connect an agent <span>↗</span></button></div>
     <div class="sidebar-bottom"><span class="small-dot"></span> DEMO 02 <span>WEBMCP</span></div>
   </aside>
-  <div class="main-shell"><header class="topbar"><div class="breadcrumb">Studio <span>/</span> Projects <span>/</span> <strong>Summer launch</strong></div><div class="top-actions"><div class="connection-wrap"><button id="agent-indicator" class="connection-button" data-action="connect-menu" aria-expanded="false" aria-controls="connection-menu"></button><div id="connection-menu" class="connection-menu" hidden></div></div><span class="user-avatar" title="Sample workspace">S</span></div></header>
+  <div class="main-shell"><header class="topbar"><div class="breadcrumb">Studio <span>/</span> Projects <span>/</span> <strong>Summer launch</strong></div><div class="top-actions"><div class="connection-wrap"><button id="agent-indicator" class="connection-button" data-action="connect-menu" aria-haspopup="dialog" aria-expanded="false" aria-controls="connection-menu"></button><byoa-connection-dialog id="connection-menu"></byoa-connection-dialog></div><span class="user-avatar" title="Sample workspace">S</span></div></header>
   <main><div class="page-heading"><div><div class="eyebrow">THE SUMMER LAUNCH</div><h1>A little more momentum.</h1><p>A home for the next good idea. And the small steps that get it there.</p></div><div class="heading-actions"><button class="button secondary" data-action="new">${icon("plus")} New card</button><button class="button primary" data-action="ask">${icon("sparkle")} Ask agent</button></div></div>
   <div class="board-toolbar"><div class="board-tab">${icon("grid")} Board <span class="tab-count" id="total-count"></span></div><div class="board-progress" id="board-progress"></div><div class="toolbar-end"><button class="quiet" id="undo-button" data-action="undo">${icon("undo")} Undo</button><span class="toolbar-divider"></span><span id="selection-count">All cards</span></div></div>
   <div id="board" class="board" aria-label="Project board"></div>
@@ -171,14 +174,22 @@ function renderReview() {
         .join("")
     : `<div class="empty-review">${icon("sparkle")}<h3>A fresh perspective is welcome.</h3><p>Ask your agent to help. Its proposals will appear here for your review.</p><button class="button secondary" data-action="ask">Ask agent</button></div>`;
 }
+const connectionDialog = document.querySelector("byoa-connection-dialog")!;
+connectionDialog.returnFocusElement = $("#agent-indicator");
+connectionDialog.addEventListener("openchange", () =>
+  $("#agent-indicator").setAttribute("aria-expanded", "false"),
+);
+function openConnection() {
+  connectionDialog.open = true;
+  $("#agent-indicator").setAttribute("aria-expanded", "true");
+}
 function renderConnection() {
   const label = connection.connected
     ? `${connection.agentName || "Agent connected"}${task?.busy ? " · Working…" : ""}`
-    : "Not connected";
+    : "Connect Agent";
   $("#agent-indicator").innerHTML =
     `<span class="status-dot ${connection.connected ? "connected" : ""}"></span><span class="profile-name">${esc(label)}</span>${icon("chevron")}`;
   $("#agent-indicator").title = label;
-  $("#connection-menu").innerHTML = `<strong>${connection.connected?esc(connection.agentName || "Your agent"):"Connect your agent"}</strong>${!connection.available?'<p>Enable BYOA, then reload this page.</p>':`<p>${connecting?'Choose a profile in the BYOA window.':connection.connected?'Your agent is connected. Change profiles in BYOA whenever you like.':'BYOA will ask you to choose a profile and approve this site.'}</p><button class="button primary" data-action="connect" ${connecting?'disabled':''}>${connecting?'Waiting for BYOA…':connection.connected?'Change profile':'Connect agent'}</button><div class="connection-actions"><button data-action="agent-settings">Agent settings</button>${connection.connected?'<button data-action="chat">View agent chat</button><button data-action="disconnect">Disconnect</button>':''}</div>`}`;
   $("#send-button").toggleAttribute(
     "disabled",
     !connection.connected || !!task?.busy,
@@ -202,7 +213,7 @@ function renderTask() {
     task.status === "done"
       ? "Review proposals on the board, or open the agent chat for details."
       : task.detail;
-  status.innerHTML = `<span class="task-symbol ${task.busy ? "spinning" : ""}">${icon("sparkle")}</span><div><strong>${title}</strong><p>${esc(detail)}${task.usage ? ` · ${task.usage.totalTokens.toLocaleString()} tokens${task.usage.usageKnown ? "" : " (usage incomplete; step limit applies)"}` : ""}</p></div><div class="task-buttons">${task.busy ? '<button data-action="cancel">Cancel</button>' : '<button data-action="review">Review</button>'}<button data-action="chat">View chat</button>${!task.busy ? `<button class="icon-button" data-action="dismiss-task" aria-label="Dismiss task status">${icon("close")}</button>` : ""}</div>`;
+  status.innerHTML = `<span class="task-symbol ${task.busy ? "spinning" : ""}">${icon("sparkle")}</span><div><strong>${title}</strong><p>${esc(detail)}${task.usage ? ` · ${task.usage.totalTokens.toLocaleString()} tokens${task.usage.usageKnown ? "" : " (usage incomplete; step limit applies)"}` : ""}</p></div><div class="task-buttons">${task.busy ? '<button data-action="cancel">Cancel</button>' : '<button data-action="review">Review</button>'}<button data-action="chat">Open in sidebar</button>${!task.busy ? `<button class="icon-button" data-action="dismiss-task" aria-label="Dismiss task status">${icon("close")}</button>` : ""}</div>`;
 }
 function openAsk() {
   const selected = store.state.cards.filter((c) => store.selected.has(c.id));
@@ -303,22 +314,8 @@ document.addEventListener("click", (event) => {
           ($("#card-dialog") as HTMLDialogElement).close();
           break;
         case "connect-menu":
-          $("#connection-menu").hidden = !$("#connection-menu").hidden;
-          $("#agent-indicator").setAttribute(
-            "aria-expanded",
-            String(!$("#connection-menu").hidden),
-          );
+          openConnection();
           break;
-        case "connect":
-          connecting = true; renderConnection();
-          return agentboard.connect().then(value=>{connection=value;}).finally(()=>{connecting=false;renderConnection();});
-        case "disconnect":
-          return agentboard.disconnect().then((value) => {
-            connection = value;
-            renderConnection();
-          });
-        case "agent-settings":
-          return agentboard.openSettings();
         case "chat":
           return agentboard.openChat(task?.taskId);
         case "cancel":
@@ -352,9 +349,6 @@ document.addEventListener("click", (event) => {
           break;
       }
     });
-  } else if (!target.closest(".connection-wrap")) {
-    $("#connection-menu").hidden = true;
-    $("#agent-indicator").setAttribute("aria-expanded", "false");
   }
   const article = target.closest<HTMLElement>("[data-card]");
   if (article && !target.closest("button,select,input"))
@@ -362,8 +356,6 @@ document.addEventListener("click", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
-    $("#connection-menu").hidden = true;
-    $("#agent-indicator").setAttribute("aria-expanded", "false");
     $("#review-panel").hidden = true;
   }
   const target = event.target as HTMLElement;

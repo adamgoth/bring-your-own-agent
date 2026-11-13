@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createClient, byoa, agentboard } from '../sdk/index';
+import { createClient, byoa, agentboard } from '../../packages/browser/index';
 import {
   discoverProviders,
   type AgentProvider,
   type ProviderDetail,
   type ProviderEvent,
-} from '../sdk/provider';
-import { createTransport } from '../sdk/transport';
+} from '../../packages/browser/provider';
+import { createTransport } from '../../packages/browser/transport';
 
 const status = { available: true, configured: true, connected: true };
 const terminal = { taskId: 'synthetic', status: 'done', detail: 'Done', busy: false, seq: 2 };

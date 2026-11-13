@@ -1,6 +1,6 @@
 # Boardwalk — WebMCP Kanban demo
 
-A second bring-your-own-agent demo alongside Margin. Select cards, ask your configured BYOA API agent for help, and review a batch of proposed changes inside the board. BYOA works in the background; View chat opens its transcript only when requested.
+A second bring-your-own-agent demo alongside Margin. Select cards, ask your configured BYOA API agent for help, and review a batch of proposed changes inside the board. BYOA works in the background; Open in sidebar shows its transcript only when requested.
 
 ## Run locally
 
@@ -8,20 +8,21 @@ From the BYOA repository root, the source layout is:
 
 ```
 bring-your-own-agent/
-  byoa-extension/       # modified extension and shared sdk/
+  byoa-extension/       # modified extension
+  packages/             # browser and React SDKs
   demos/
     margin/        # Margin, port 5183
     boardwalk/     # Boardwalk, port 5184
 ```
 
 ```sh
-pnpm setup
+pnpm run setup
 pnpm dev
 ```
 
 Open **http://localhost:5184/**. The server binds to loopback. Manual card creation, editing, moving (drag or Move menu), selection, and undo work without an extension. Accepted board state is saved in this browser's local storage. Pending proposals are session-only. This is a single-browser demo; avoid editing the same board in multiple tabs.
 
-Build BYOA with `pnpm build`, then reload the unpacked extension from `byoa-extension/dist` in `chrome://extensions`. Reload both app tabs after the extension reload. Configure an API agent in its Options and choose it in the connection picker. Connect separately in each app using **Not connected → Connect agent**. The header shows your connected profile name.
+Build BYOA with `pnpm build`, then reload the unpacked extension from `byoa-extension/dist` in `chrome://extensions`. Reload both app tabs after the extension reload. Configure an API agent in its Options and choose it in the connection picker. Connect separately in each app using the header’s **Connect Agent** button and the dialog’s **Connect Agent** action. The header shows your connected profile name.
 
 ## Try it
 
@@ -30,13 +31,13 @@ Build BYOA with `pnpm build`, then reload the unpacked extension from `byoa-exte
 3. Watch compact progress on the board. The sidebar stays closed.
 4. Review the proposed card changes and click **Accept changes** or **Dismiss**. Nothing changes until acceptance.
 5. Try **Undo**, or manually edit a card while a proposal is pending. Old proposals become stale and cannot overwrite your work.
-6. **View chat** opens BYOA's transcript for this task. **Cancel** stops further work; **Disconnect** stops this site's tasks without disconnecting Margin.
+6. **Open in sidebar** opens BYOA's transcript for this task. **Cancel** stops further work; **Disconnect** stops this site's tasks without disconnecting Margin.
 
 Use sample content: your configured model provider receives your instruction, tool definitions, and tool results. API billing applies; this demo does not use a consumer chat subscription.
 
 ## Shared integration
 
-Both demos import `@byoagent/browser` through aliases to the package build output. Run root `pnpm build` before starting a demo directly. BYOA's page bridge has no Boardwalk-specific DOM selectors, tool schemas, or prompt logic. The app owns its interface, data validation, revision checks, and review workflow. WebMCP owns the tool registry and execution:
+Boardwalk installs `@byoagent/browser` as a local package dependency and uses its `<byoa-connection-dialog>` custom element for the connection UI, themed through `--byoa-*` variables in `src/style.css`; Margin uses the matching React component from `@byoagent/react`. Run root `pnpm build` before starting a demo directly. BYOA's page bridge has no Boardwalk-specific DOM selectors, tool schemas, or prompt logic. The app owns its interface, data validation, revision checks, and review workflow. WebMCP owns the tool registry and execution:
 
 - `get_board_snapshot`: cards, columns, and current revision.
 - `get_selected_cards`: selected cards and revision.
@@ -44,7 +45,7 @@ Both demos import `@byoagent/browser` through aliases to the package build outpu
 
 Only those three site tools are available to a Boardwalk task. Workspace files and remote-MCP context are excluded. Margin requests its own five tools through the same interface.
 
-See `../../byoa-extension/sdk/README.md` for the experimental client contract and limits. Any HTTPS site or loopback port can ask to connect; each origin needs separate approval. BYOA queues page tasks independently of sidebar chats, owns the connection/profile approval popup, supports persistent site approvals and person-controlled spending budgets, and retains summary-only task recovery. Keep the page open; interrupted tasks do not resume or retry automatically.
+See `../../packages/browser/README.md` for the experimental client contract and limits. Any HTTPS site or loopback port can ask to connect; each origin needs separate approval. BYOA queues page tasks independently of sidebar chats, owns the connection/profile approval popup, supports persistent site approvals and person-controlled spending budgets, and retains summary-only task recovery. Keep the page open; interrupted tasks do not resume or retry automatically.
 
 ## Checks
 

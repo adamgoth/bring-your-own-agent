@@ -1,0 +1,63 @@
+{
+  "name": "@byoagent/browser",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./ui": {
+      "types": "./dist/ui.d.ts",
+      "import": "./dist/ui.js",
+      "default": "./dist/ui.js"
+    },
+    "./elements": {
+      "types": "./dist/elements.d.ts",
+      "import": "./dist/elements.js",
+      "default": "./dist/elements.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "types": "./dist/index.d.ts",
+  "license": "MIT",
+  "description": "Browser client for request-only Agent Provider discovery and tasks, with optional framework-neutral UI",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "prompts"
+  ],
+  "sideEffects": [
+    "*.css",
+    "**/*.css"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node -e \"require('node:fs').copyFileSync('styles.css','dist/styles.css')\"",
+    "prepack": "npm run build",
+    "test": "npm run build && node --test tests/*.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adamgoth/bring-your-own-agent.git",
+    "directory": "packages/browser"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "typesVersions": {
+    "*": {
+      "ui": [
+        "./dist/ui.d.ts"
+      ],
+      "elements": [
+        "./dist/elements.d.ts"
+      ]
+    }
+  }
+}

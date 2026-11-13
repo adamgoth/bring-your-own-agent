@@ -1,1 +1,1 @@
-export type { TaskCode, TaskEvent, TaskUsage } from '../../sdk/task-event';
+export type { TaskCode, TaskEvent, TaskUsage } from '../../../packages/browser/task-event';

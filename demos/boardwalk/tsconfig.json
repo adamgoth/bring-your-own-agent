@@ -14,12 +14,7 @@
     "types": [
       "vite/client",
       "node"
-    ],
-    "paths": {
-      "@byoagent/browser": [
-        "../../byoa-extension/sdk/dist/index.d.ts"
-      ]
-    }
+    ]
   },
   "include": [
     "src",

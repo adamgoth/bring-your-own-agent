@@ -1,0 +1,450 @@
+/*
+ * Optional default styles for @byoagent/react components and the
+ * <byoa-connection-dialog> custom element (@byoagent/browser/elements).
+ *
+ * Theme with --byoa-* variables. The header indicator lives in @layer byoa so a
+ * host's own header styles win. Dialog and task-status controls are scoped to
+ * their surfaces (two-class selectors plus a reset), so global element rules
+ * such as `button { background: none }` cannot strip them. Override them with a
+ * more specific selector through `className`, or with the variables below.
+ */
+
+.byoa-indicator,
+.byoa-dialog,
+.byoa-task-status {
+  --_accent: var(--byoa-color-accent, #276b43);
+  --_on-accent: var(--byoa-color-on-accent, #fff);
+  --_surface: var(--byoa-color-surface, #fff);
+  --_text: var(--byoa-color-text, #1d2620);
+  --_muted: var(--byoa-color-muted, color-mix(in srgb, var(--_text) 64%, var(--_surface)));
+  --_border: var(--byoa-color-border, color-mix(in srgb, var(--_text) 13%, var(--_surface)));
+  --_sunk: var(--byoa-color-sunk, color-mix(in srgb, var(--_text) 4.5%, var(--_surface)));
+  --_hover: color-mix(in srgb, var(--_text) 7%, var(--_surface));
+  --_error: var(--byoa-color-error, #b42318);
+  --_radius: var(--byoa-radius, 12px);
+  --_control-radius: calc(var(--_radius) * 0.67);
+  --_font: var(--byoa-font-family, inherit);
+}
+
+@layer byoa {
+  .byoa-indicator {
+    font: inherit;
+    font-family: var(--_font);
+    color: var(--_text);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--_border);
+    border-radius: 999px;
+    padding: 0.45rem 0.85rem;
+    background: var(--_surface);
+  }
+  .byoa-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.45;
+  }
+  .byoa-indicator[data-state="connected"] .byoa-dot {
+    background: var(--_accent);
+    opacity: 1;
+  }
+  .byoa-indicator:focus-visible {
+    outline: 2px solid var(--_accent);
+    outline-offset: 3px;
+  }
+}
+
+/* ---- Surface ---------------------------------------------------------- */
+
+/* The custom element only hosts its <dialog>; it takes no space in the page. */
+byoa-connection-dialog {
+  display: contents;
+}
+
+.byoa-dialog.byoa-dialog {
+  box-sizing: border-box;
+  width: min(24rem, calc(100vw - 2rem));
+  max-width: none;
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  margin: auto;
+  padding: 1.1rem 1.25rem 1rem;
+  border: 1px solid var(--_border);
+  border-radius: var(--_radius);
+  background: var(--_surface);
+  color: var(--_text);
+  font-family: var(--_font);
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.06),
+    0 18px 48px -12px rgb(0 0 0 / 0.28);
+}
+.byoa-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  animation: byoa-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.byoa-dialog::backdrop {
+  background: rgb(15 20 18 / 0.32);
+}
+.byoa-dialog :where(p, h2) {
+  margin: 0;
+}
+.byoa-dialog .byoa-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 -0.35rem -0.2rem 0;
+}
+.byoa-dialog .byoa-dialog-header h2 {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--_muted);
+}
+
+/* ---- Buttons ---------------------------------------------------------- */
+
+:is(.byoa-dialog, .byoa-task-status) .byoa-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--_font);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--_text);
+  border-radius: var(--_control-radius);
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+}
+:is(.byoa-dialog, .byoa-task-status) .byoa-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+:is(.byoa-dialog, .byoa-task-status) .byoa-btn:focus-visible {
+  outline: 2px solid var(--_accent);
+  outline-offset: 2px;
+}
+:is(.byoa-dialog, .byoa-task-status) .byoa-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+:is(.byoa-dialog, .byoa-task-status) .byoa-icon {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+}
+
+.byoa-dialog .byoa-icon-button {
+  width: 2rem;
+  height: 2rem;
+  color: var(--_muted);
+}
+.byoa-dialog .byoa-icon-button:hover {
+  background: var(--_hover);
+  color: var(--_text);
+}
+
+:is(.byoa-dialog, .byoa-task-status) .byoa-primary {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  background: var(--_accent);
+  color: var(--_on-accent);
+  text-decoration: none;
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 0.12);
+}
+:is(.byoa-dialog, .byoa-task-status) .byoa-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--_accent) 88%, #000);
+}
+
+:is(.byoa-dialog, .byoa-task-status) .byoa-secondary {
+  min-height: 2.25rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--_border);
+  background: var(--_surface);
+  font-weight: 500;
+}
+:is(.byoa-dialog, .byoa-task-status) .byoa-secondary:hover:not(:disabled) {
+  background: var(--_hover);
+}
+
+.byoa-dialog .byoa-text-button {
+  align-self: center;
+  padding: 0.4rem 0.6rem;
+  margin: 0 -0.35rem 0 0;
+  color: var(--_accent);
+  font-size: 0.8125rem;
+}
+.byoa-dialog .byoa-text-button:hover {
+  background: color-mix(in srgb, var(--_accent) 10%, transparent);
+}
+
+.byoa-dialog .byoa-danger-button {
+  padding: 0.45rem 0.6rem;
+  margin-left: -0.6rem;
+  color: var(--_error);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.byoa-dialog .byoa-danger-button .byoa-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.byoa-dialog .byoa-danger-button:hover {
+  background: color-mix(in srgb, var(--_error) 9%, transparent);
+}
+
+/* ---- Connection status card -------------------------------------------- */
+
+.byoa-dialog .byoa-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-height: 4.25rem;
+  box-sizing: border-box;
+  padding: 0.85rem 0.95rem;
+  border-radius: var(--_control-radius);
+  background: var(--_sunk);
+}
+.byoa-dialog .byoa-status-dot {
+  position: relative;
+  flex: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  margin-top: 0.35rem;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid var(--_muted);
+  opacity: 0.7;
+}
+.byoa-dialog .byoa-status[data-state="connected"] .byoa-status-dot {
+  border: 0;
+  opacity: 1;
+  background: var(--_accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--_accent) 18%, transparent);
+}
+.byoa-dialog .byoa-status[data-state="waiting"] .byoa-status-dot,
+.byoa-dialog .byoa-status[data-state="detecting"] .byoa-status-dot {
+  border-color: var(--_accent);
+  opacity: 1;
+  animation: byoa-pulse 1.4s ease-in-out infinite;
+}
+.byoa-dialog .byoa-status-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.byoa-dialog .byoa-status-name {
+  font-size: 1.0625rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.byoa-dialog .byoa-status-detail {
+  font-size: 0.8125rem;
+  color: var(--_muted);
+}
+
+/* ---- Action list ------------------------------------------------------- */
+
+.byoa-dialog .byoa-menu {
+  display: flex;
+  flex-direction: column;
+  margin: -0.2rem -0.5rem;
+}
+.byoa-dialog .byoa-row {
+  justify-content: flex-start;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0 0.6rem;
+  font-weight: 500;
+}
+.byoa-dialog .byoa-row > .byoa-icon:first-child {
+  color: var(--_muted);
+}
+.byoa-dialog .byoa-row:hover {
+  background: var(--_hover);
+}
+.byoa-dialog .byoa-row:hover > .byoa-icon:first-child {
+  color: var(--_text);
+}
+.byoa-dialog .byoa-row-label {
+  flex: 1;
+  text-align: left;
+}
+.byoa-dialog .byoa-row-trail {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--_muted);
+}
+
+/* ---- Footer, errors ---------------------------------------------------- */
+
+.byoa-dialog .byoa-dialog-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--_border);
+}
+.byoa-dialog .byoa-privacy {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--_muted);
+}
+.byoa-dialog .byoa-privacy .byoa-icon {
+  width: 0.8125rem;
+  height: 0.8125rem;
+  margin-top: 0.1rem;
+}
+.byoa-dialog .byoa-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2rem;
+}
+.byoa-dialog .byoa-attribution {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--_muted);
+}
+.byoa-dialog .byoa-mark {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+:is(.byoa-dialog, .byoa-task-status) .byoa-error {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--_control-radius);
+  background: color-mix(in srgb, var(--_error) 8%, var(--_surface));
+  color: var(--_error);
+  font-size: 0.8125rem;
+}
+
+.byoa-dialog .byoa-spinner {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-top-color: currentColor;
+  animation: byoa-spin 0.8s linear infinite;
+}
+
+/* ---- Request popover and task status ---------------------------------- */
+
+.byoa-dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.byoa-dialog label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.byoa-dialog textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 6rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--_border);
+  border-radius: var(--_control-radius);
+  font: inherit;
+  color: inherit;
+  background: var(--_surface);
+  resize: vertical;
+}
+.byoa-dialog textarea:focus-visible {
+  outline: 2px solid var(--_accent);
+  outline-offset: 1px;
+}
+.byoa-task-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--_font);
+  color: var(--_text);
+}
+.byoa-task-status > p {
+  margin: 0;
+  flex-basis: 100%;
+}
+.byoa-task-status > p:empty {
+  display: none;
+}
+
+/* ---- Motion and small screens ----------------------------------------- */
+
+@keyframes byoa-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+@keyframes byoa-pulse {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+}
+@keyframes byoa-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes byoa-sheet {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+@media (max-width: 480px) {
+  /* A bottom sheet keeps actions within thumb reach. */
+  .byoa-dialog.byoa-dialog {
+    width: 100%;
+    max-height: calc(100dvh - 1.5rem);
+    margin: auto 0 0;
+    border-width: 1px 0 0;
+    border-radius: var(--_radius) var(--_radius) 0 0;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .byoa-dialog[open] {
+    animation-name: byoa-sheet;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .byoa-indicator,
+  .byoa-dialog,
+  .byoa-dialog *,
+  .byoa-task-status * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

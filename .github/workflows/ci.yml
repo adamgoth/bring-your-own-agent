@@ -32,13 +32,14 @@ jobs:
           cache-dependency-path: |
             byoa-extension/pnpm-lock.yaml
             demos/boardwalk/pnpm-lock.yaml
+            packages/react/pnpm-lock.yaml
       - name: Install all projects from lockfiles
         run: pnpm run setup
       - name: Check extension and demos
         run: pnpm run check
       - name: Build extension and demos
         run: pnpm run build
-      - name: Pack SDK and verify installed consumer and SSR import
+      - name: Pack both SDKs and verify installed consumer types and SSR render
         run: pnpm run check:sdk
       - name: Build release extension
         if: matrix.node-version == '24.x'
@@ -73,6 +74,7 @@ jobs:
           pnpm --dir byoa-extension run test:browser:images:built
           pnpm run test:browser
           BYOA_DEMO_HOST=127.0.0.1 pnpm run test:browser
+          npm --prefix demos/margin run test:e2e
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
           CHROME_FOR_TESTING_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
