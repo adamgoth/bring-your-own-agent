@@ -1,6 +1,6 @@
 import { budgetInputs } from '../lib/budget-inputs';
 import type { SiteShare } from '../lib/site-grant';
-import type { ProfileList } from '../../sdk';
+import type { ProfileList } from '../../../packages/browser/index';
 const shareSection = document.querySelector<HTMLFieldSetElement>('#sharing');
 const shareInputs = Object.fromEntries(
   ['persona', 'user', 'memory'].map((key) => [

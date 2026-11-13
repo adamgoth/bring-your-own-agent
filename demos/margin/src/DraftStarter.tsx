@@ -49,7 +49,7 @@ export function DraftStarter({ workspace: w }: { workspace: Workspace }) {
         <label htmlFor="draft-description">What are you writing?</label>
         <textarea id="draft-description" placeholder="Describe the document…" value={instruction} maxLength={4000} rows={3} disabled={running} onChange={event => setInstruction(event.target.value)} onKeyDown={submitOnShortcut}/>
         <div className="agent-buttons">
-          {connection.connected ? <button className="draft-use" type="submit" aria-keyshortcuts="Meta+Enter Control+Enter" disabled={!instruction.trim() || !!task?.busy}>{running ? 'Drafting…' : 'Draft with your agent'}{!running && <SubmitShortcut/>}</button> : <button type="button" onClick={() => window.dispatchEvent(new Event('margin:connect-agent'))}>Connect your agent</button>}
+          {connection.connected ? <button className="draft-use" type="submit" aria-keyshortcuts="Meta+Enter Control+Enter" disabled={!instruction.trim() || !!task?.busy}>{running ? 'Drafting…' : 'Draft with your agent'}{!running && <SubmitShortcut/>}</button> : <button type="button" onClick={() => window.dispatchEvent(new Event('margin:connect-agent'))}>Connect Agent</button>}
         </div>
       </form>}
       {running && <div className="agent-buttons"><span role="status">Drafting a preview…</span><button onClick={() => { w.endDraft(); cancelAgent(); }}>Cancel</button></div>}

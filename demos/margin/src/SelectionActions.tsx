@@ -64,8 +64,8 @@ function Composer({ workspace, anchorId, onComplete }: { workspace: Workspace; a
         {connection.connected ? <>
           <button type="submit" className="agent-send" aria-keyshortcuts="Meta+Enter Control+Enter" disabled={task?.busy}>{task?.busy ? actions[action].working : actions[action].submit}{!task?.busy && <SubmitShortcut/>}</button>
           {task?.busy && <button type="button" onClick={cancelAgent}>Cancel</button>}
-          {submitted && <button type="button" className="composer-chat" onClick={() => void agentboard.openChat(task?.taskId || undefined).catch(error => setError(error instanceof Error ? error.message : String(error)))}>View agent chat</button>}
-        </> : <button type="button" onClick={() => window.dispatchEvent(new Event('margin:connect-agent'))}>Connect agent</button>}
+          {submitted && <button type="button" className="composer-chat" onClick={() => void agentboard.openChat(task?.taskId || undefined).catch(error => setError(error instanceof Error ? error.message : String(error)))}>Open in sidebar</button>}
+        </> : <button type="button" onClick={() => window.dispatchEvent(new Event('margin:connect-agent'))}>Connect Agent</button>}
       </div>
     </form>}
     {error && <ErrorNotice title="Agent request failed" message={error}/>}

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-test.use({ launchOptions: { args: ['--enable-features=WebMCP', '--enable-blink-features=WebMCP'] } });
+test.use({ launchOptions: { executablePath: process.env.CHROME_FOR_TESTING_BIN, args: ['--enable-features=WebMCP', '--enable-blink-features=WebMCP'] } });
 async function selectText(page: Page, text: string) {
   await page.locator('.tiptap').evaluate((el, wanted) => {
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); let node;
@@ -78,12 +78,44 @@ test('renders without errors and fits mobile', async ({page}) => {
 });
 
 test.describe('native WebMCP', () => {
+  test('registers callable editing tools through the native browser API', async ({ page }) => {
+    await page.addInitScript(() => {
+      const context = (document as any).modelContext ?? (navigator as any).modelContext;
+      if (!context?.registerTool) return;
+      const register = context.registerTool.bind(context);
+      (window as any).nativeToolRegistrations = new Map();
+      context.registerTool = (tool: any, options: any) => {
+        const result = register(tool, options);
+        (window as any).nativeToolRegistrations.set(tool.name, tool);
+        return result;
+      };
+    });
+    await page.goto('/');
+    test.skip(!await page.evaluate(() => !!((document as any).modelContext ?? (navigator as any).modelContext)?.registerTool), 'This Chrome build does not expose native WebMCP registration.');
+    await expect(page.locator('.mode-box')).toContainText('WebMCP connected');
+    await expect.poll(() => page.evaluate(() => (window as any).nativeToolRegistrations.size)).toBe(7);
+    await selectText(page, 'The reading group will meet once a month.');
+    const result = await page.evaluate(async () => {
+      const tools = (window as any).nativeToolRegistrations;
+      const selection = JSON.parse((await tools.get('get_selection').execute({})).content[0].text);
+      return tools.get('propose_replacement').execute({ selectionId: selection.selectionId, replacement: 'Writing improves through revision.', reason: 'Native registration callback test.' });
+    });
+    expect(result.isError).not.toBe(true);
+    await expect(page.locator('.suggestion-insertion')).toHaveText('Writing improves through revision.');
+    await page.getByRole('button', { name: 'Accept', exact: true }).click();
+    await expect(page.locator('.tiptap')).toContainText('Writing improves through revision.');
+  });
+
   test('discovers and invokes registered tools through the browser API', async ({page}) => {
     await page.goto('/');
+    test.skip(!await page.evaluate(() => {
+      const context = (document as any).modelContext ?? (navigator as any).modelContext;
+      return typeof context?.getTools === 'function' && typeof context?.executeTool === 'function';
+    }), 'This Chrome build exposes native registration but not the experimental getTools/executeTool API. The extension suite covers discovery and execution through the shipped polyfill.');
     await expect(page.locator('.mode-box')).toContainText('WebMCP connected');
     await selectText(page, 'The reading group will meet once a month.');
     const result = await page.evaluate(async () => {
-      const context = (document as any).modelContext;
+      const context = (document as any).modelContext ?? (navigator as any).modelContext;
       const tools = await context.getTools();
       const selectionResult = JSON.parse(await context.executeTool(tools.find((t: any) => t.name === 'get_selection'), {}));
       const selection = JSON.parse(selectionResult.content[0].text);
@@ -102,16 +134,16 @@ test.describe('native WebMCP', () => {
 
 test('agent connection is distinct from tool registration and has no companion setup', async ({page}) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Connect your agent', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Agent connection' })).toContainText('Install or enable the BYOA extension');
+  await page.getByRole('button', { name: 'Connect Agent', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Agent connection' })).toContainText('Install or enable BYOA');
   await expect(page.getByText('Pairing token', {exact:true})).toHaveCount(0);
   await expect(page.getByText('Connect local agent', {exact:true})).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('region', { name: 'Agent connection' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Agent connection' })).toHaveCount(0);
   await selectText(page, 'The reading group will meet once a month.');
   await page.getByRole('button', { name: 'Improve this', exact: true }).click();
-  await page.locator('.margin-selection-popup').getByRole('button', {name:'Connect agent',exact:true}).click();
-  await expect(page.getByRole('region', { name: 'Agent connection' })).toBeVisible();
+  await page.locator('.margin-selection-popup').getByRole('button', {name:'Connect Agent',exact:true}).click();
+  await expect(page.getByRole('dialog', { name: 'Agent connection' })).toBeVisible();
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.locator('[data-agentboard-send]')).toHaveCount(0);
@@ -120,16 +152,25 @@ test('agent connection is distinct from tool registration and has no companion s
 async function mockConnectedAgent(page: Page) {
   await page.addInitScript(() => {
     (window as any).agentRequests = [];
-    window.addEventListener('message', event => {
-      const data = event.data;
-      if (data?.source !== 'agentboard:page') return;
-      if (data.method === 'status') window.postMessage({ source: 'agentboard:extension', version: 1, kind: 'response', id: data.id, ok: true, value: { available: true, configured: true, connected: true, agentName: 'Test agent' } }, location.origin);
-      if (data.method === 'request') {
-        (window as any).agentRequests.push(data.params);
-        window.postMessage({ source: 'agentboard:extension', version: 1, kind: 'task', id: data.id, event: { taskId: data.id, status: 'working', busy: true, detail: 'Working' } }, location.origin);
-      }
-      if (data.method === 'cancel') window.postMessage({ source: 'agentboard:extension', version: 1, kind: 'task', id: data.id, event: { taskId: data.id, status: 'cancelled', busy: false, detail: 'Cancelled' } }, location.origin);
-    });
+    const taskListeners = new Set<(event: unknown) => void>();
+    let count = 0;
+    const provider = {
+      on(name: string, listener: (event: unknown) => void) { if (name === 'task') taskListeners.add(listener); },
+      removeListener(name: string, listener: (event: unknown) => void) { if (name === 'task') taskListeners.delete(listener); },
+      async request({ method, params }: { method: string; params: any }) {
+        if (method === 'agent_status') return { available: true, configured: true, connected: true, agentName: 'Test agent' };
+        if (method === 'agent_requestTask') {
+          (window as any).agentRequests.push(params);
+          const taskId = `fixture-${++count}`;
+          taskListeners.forEach(listener => listener({ taskId, status: 'working', busy: true, detail: 'Working', seq: 0 }));
+          return { taskId };
+        }
+        if (method === 'agent_cancelTask') taskListeners.forEach(listener => listener({ taskId: params.taskId, status: 'cancelled', busy: false, detail: 'Cancelled', seq: 1 }));
+      },
+    };
+    window.addEventListener('agent:requestProvider', () => window.dispatchEvent(new CustomEvent('agent:announceProvider', {
+      detail: { info: { uuid: 'editor-fixture', name: 'Test agent', icon: '', rdns: 'test.local' }, provider },
+    })));
   });
 }
 

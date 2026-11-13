@@ -15,12 +15,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "strict": true,
-    "paths": {
-      "@byoagent/browser": [
-        "../../byoa-extension/sdk/dist/index.d.ts"
-      ]
-    }
+    "strict": true
   },
   "include": [
     "src",

@@ -1,6 +1,10 @@
-import { createTransport } from '../../sdk/transport';
-import { ProviderError, type AgentProvider, type ProviderEvent } from '../../sdk/provider';
-import type { AgentTask } from '../../sdk/types';
+import { createTransport } from '../../../packages/browser/transport';
+import {
+  ProviderError,
+  type AgentProvider,
+  type ProviderEvent,
+} from '../../../packages/browser/provider';
+import type { AgentTask } from '../../../packages/browser/types';
 
 // MAIN world has no secrets or authority. The isolated bridge and worker enforce all permissions.
 if (window === window.top) {

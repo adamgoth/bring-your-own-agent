@@ -13,6 +13,8 @@ export type TaskUsage = {
   usageKnown: boolean;
 };
 export type TaskEvent = {
+  /** The client stopped waiting; provider cancellation was not confirmed. */
+  local?: true;
   usage?: TaskUsage;
   taskId: string;
   status: 'queued' | 'working' | 'done' | 'cancelled' | 'error';
