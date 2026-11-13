@@ -742,9 +742,14 @@ try {
   await new Promise(resolve=>setTimeout(resolve, 500));
   assert.equal(requests.length, taskCountAfterReload, 'Reload lookup must not automatically retry');
   heldResponses.shift()();
+  holdNext = true;
   await margin.click('.task-recovery button:first-of-type');
   await waitFor(() => requests.length === taskCountAfterReload + 1, 'trusted explicit retry request');
-  await waitFor(() => margin.evaluate(`!document.querySelector('.task-recovery')`), 'retry completes and clears recovery');
+  await waitFor(() => margin.evaluate(`!document.querySelector('.task-recovery')`), 'retry acknowledgement clears recovery');
+  assert.equal(await margin.evaluate(`import('/src/agentboard.ts').then(api=>api.isAgentBusy())`), true,
+    'The recovery banner clears while the acknowledged retry is still running');
+  heldResponses.shift()();
+  await waitFor(() => margin.evaluate(`import('/src/agentboard.ts').then(api=>!api.isAgentBusy())`), 'retry completes before the next task');
   console.log('PASS reload stops the old run, SDK returns only a retryable terminal summary, and only the trusted Retry click sends a fresh request.');
 
   // Fixture-only budgets: one step overshoots a tiny task cap, then daily cap refuses without HTTP.
