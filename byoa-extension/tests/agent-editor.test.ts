@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AgentConfig } from '../src/lib/storage/config';
 import {
+  SUGGESTED_MODELS,
   agentToEditorState,
   defaultAgentEditorState,
   initializeAgentEditor,
@@ -235,7 +236,9 @@ describe('provider presets', () => {
       expect(document.getElementById('openai-api-mode-group')?.classList.contains('hidden')).toBe(
         provider !== 'openrouter'
       );
-      expect(input('agent-model').placeholder).toBe('Enter the exact model ID');
+      expect(input('agent-model').placeholder).toBe(
+        provider === 'openrouter' ? 'Enter a custom model ID' : 'Enter the exact model ID'
+      );
     }
   );
 
@@ -333,4 +336,99 @@ it('keeps OpenRouter selected when opting into Chat Completions and preserves th
   expect(document.getElementById('openai-api-mode-group')?.classList.contains('hidden')).toBe(
     false
   );
+});
+
+describe('suggested models', () => {
+  function modelPreset(): HTMLSelectElement {
+    return document.getElementById('agent-model-preset') as HTMLSelectElement;
+  }
+
+  function choosePreset(value: string): void {
+    modelPreset().value = value;
+    modelPreset().dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  const hidden = (element: HTMLElement) => element.classList.contains('hidden');
+
+  it('lists every suggestion followed by a custom option', () => {
+    expect([...modelPreset().options].map((option) => option.value)).toEqual([
+      ...SUGGESTED_MODELS,
+      '__custom__',
+    ]);
+  });
+
+  it('offers suggestions only for OpenRouter and Custom connections', () => {
+    renderAgentEditor(form(), defaultAgentEditorState());
+    for (const [provider, offered] of [
+      ['openai', false],
+      ['anthropic', false],
+      ['google', false],
+      ['openrouter', true],
+      ['custom', true],
+    ] as const) {
+      chooseProvider(provider);
+      expect(hidden(modelPreset())).toBe(!offered);
+      expect(hidden(input('agent-model'))).toBe(false);
+    }
+  });
+
+  it('writes a chosen suggestion into the model ID and hides the text field', () => {
+    renderAgentEditor(form(), defaultAgentEditorState());
+    chooseProvider('openrouter');
+    choosePreset('openai/gpt-6-luna');
+    expect(hidden(input('agent-model'))).toBe(true);
+    expect(readAgentDraft(form()).model).toBe('openai/gpt-6-luna');
+  });
+
+  it('clears a suggestion when switching to a custom model ID', () => {
+    renderAgentEditor(form(), defaultAgentEditorState());
+    chooseProvider('openrouter');
+    choosePreset('meta/muse-ember');
+    choosePreset('__custom__');
+    expect(hidden(input('agent-model'))).toBe(false);
+    expect(input('agent-model').value).toBe('');
+    input('agent-model').value = 'vendor/my-model';
+    expect(readAgentDraft(form()).model).toBe('vendor/my-model');
+  });
+
+  it('restores a saved agent to its suggestion or to the custom field', () => {
+    const openrouter = { endpoint: 'https://openrouter.ai/api/v1' };
+    renderAgentEditor(
+      form(),
+      agentToEditorState(agent({ ...openrouter, model: 'anthropic/claude-haiku-5.5' }))
+    );
+    expect(modelPreset().value).toBe('anthropic/claude-haiku-5.5');
+    expect(hidden(input('agent-model'))).toBe(true);
+
+    renderAgentEditor(form(), agentToEditorState(agent({ ...openrouter, model: 'other/model' })));
+    expect(modelPreset().value).toBe('__custom__');
+    expect(hidden(input('agent-model'))).toBe(false);
+    expect(readAgentDraft(form()).model).toBe('other/model');
+  });
+
+  it('resyncs after the model ID is edited under a direct provider', () => {
+    renderAgentEditor(form(), defaultAgentEditorState());
+    chooseProvider('openrouter');
+    choosePreset('openai/gpt-6-luna');
+    chooseProvider('openai');
+    input('agent-model').value = 'gpt-direct';
+    chooseProvider('openrouter');
+    expect(modelPreset().value).toBe('__custom__');
+    expect(hidden(input('agent-model'))).toBe(false);
+    expect(readAgentDraft(form()).model).toBe('gpt-direct');
+  });
+});
+
+describe('cost tracking disclosure', () => {
+  const costTracking = () => document.getElementById('agent-cost-tracking') as HTMLDetailsElement;
+
+  it('stays collapsed for agents without prices and opens for agents with them', () => {
+    costTracking().open = true;
+    renderAgentEditor(form(), agentToEditorState(agent()));
+    expect(costTracking().open).toBe(false);
+
+    renderAgentEditor(form(), agentToEditorState(agent({ prices: { input: 1.5, output: 6 } })));
+    expect(costTracking().open).toBe(true);
+    expect(readAgentDraft(form()).prices).toEqual({ input: 1.5, output: 6 });
+  });
 });

@@ -1,5 +1,6 @@
 import { setupLocalVoice } from './local-voice';
 import { setupSiteChat } from './site-chat';
+import { setupAvailableActions } from './available-actions';
 /**
  * Sidebar main entry point
  * Handles chat UI, message management, AI streaming, and provider switching
@@ -259,6 +260,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   setupSiteChat(attachedTabId, messagesContainer);
+  setupAvailableActions(attachedTabId, messageInput);
 
   // Set up scroll tracking
   messagesContainer.addEventListener('scroll', () => {
@@ -542,8 +544,8 @@ function setupEventListeners() {
     }
     // If content is less than current height, shrink by resetting
     else if (messageInput.scrollHeight < currentHeight) {
-      messageInput.style.height = '88px'; // Reset to base height
-      if (messageInput.scrollHeight > 88) {
+      messageInput.style.height = '62px'; // Reset to base height
+      if (messageInput.scrollHeight > 62) {
         messageInput.style.height = `${Math.min(messageInput.scrollHeight, 140)}px`;
       }
     }
@@ -581,7 +583,7 @@ async function handleSendMessage() {
 
   // Clear input immediately for better UX
   messageInput.value = '';
-  messageInput.style.height = '88px';
+  messageInput.style.height = '62px';
 
   // Process slash commands (only if there's text)
   if (text) {

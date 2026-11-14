@@ -119,20 +119,111 @@ export interface SettingRowOptions {
   title: string;
   hint?: string;
   control: Node;
+  /** Render the title as a `<label for>` pointing at this control id, so clicking it focuses the control. */
+  labelFor?: string;
+  /** Id for the hint, so the control can reference it with `aria-describedby`. */
+  hintId?: string;
 }
 
 /** A labelled setting: title and hint on the left, its controls on the right (stacked when narrow). */
-export function settingRow({ title, hint, control }: SettingRowOptions): HTMLElement {
+export function settingRow({
+  title,
+  hint,
+  control,
+  labelFor,
+  hintId,
+}: SettingRowOptions): HTMLElement {
+  const titleEl = labelFor
+    ? el('label', { className: 'ui-setting-title', text: title, attrs: { for: labelFor } })
+    : el('h4', { text: title });
   return el(
     'div',
     { className: 'ui-setting' },
     el(
       'div',
       { className: 'ui-setting-text' },
-      el('h4', { text: title }),
-      hint && el('p', { text: hint })
+      titleEl,
+      hint && el('p', { text: hint, attrs: hintId ? { id: hintId } : {} })
     ),
     el('div', { className: 'ui-setting-control' }, control)
+  );
+}
+
+export interface ToggleRowOptions {
+  /** Id of the checkbox; keep it stable for code and tests that read the setting. */
+  id: string;
+  title: string;
+  hint?: string;
+  checked?: boolean;
+  /** Short tag after the title, e.g. "Beta". */
+  badge?: string;
+  name?: string;
+  onChange?: (checked: boolean) => void;
+}
+
+/**
+ * An on/off setting: title and hint on the left, a switch in the control column (at the end of
+ * the title line on narrow screens). The control is a real checkbox with `role="switch"`, so `.checked`,
+ * `change` events and form submission work as usual.
+ */
+export function toggleRow({
+  id,
+  title,
+  hint,
+  checked = false,
+  badge,
+  name,
+  onChange,
+}: ToggleRowOptions): HTMLElement {
+  const hintId = `${id}-hint`;
+  const input = el('input', {
+    className: 'ui-switch',
+    attrs: {
+      type: 'checkbox',
+      role: 'switch',
+      id,
+      ...(name ? { name } : {}),
+      ...(hint ? { 'aria-describedby': hintId } : {}),
+    },
+  });
+  input.checked = checked;
+  if (onChange) input.addEventListener('change', () => onChange(input.checked));
+  return el(
+    'div',
+    { className: 'ui-setting ui-setting-toggle' },
+    el(
+      'div',
+      { className: 'ui-setting-text' },
+      el(
+        'label',
+        { className: 'ui-setting-title', attrs: { for: id } },
+        title,
+        badge && statusPill(badge)
+      ),
+      hint && el('p', { text: hint, attrs: { id: hintId } })
+    ),
+    el('div', { className: 'ui-setting-control' }, input)
+  );
+}
+
+export type CalloutTone = 'warning' | 'danger' | 'neutral';
+
+export interface CalloutOptions {
+  title: string;
+  body?: string;
+  tone?: CalloutTone;
+  /** A quieter last line for side notes. */
+  meta?: string;
+}
+
+/** A boxed note for cautions next to a setting. Calmer than a banner; it isn't a status. */
+export function callout({ title, body, tone = 'warning', meta }: CalloutOptions): HTMLElement {
+  return el(
+    'div',
+    { className: 'ui-callout', data: { tone } },
+    el('p', { className: 'ui-callout-title', text: title }),
+    body && el('p', { text: body }),
+    meta && el('p', { className: 'ui-callout-meta', text: meta })
   );
 }
 

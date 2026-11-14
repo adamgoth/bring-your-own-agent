@@ -783,169 +783,6 @@ textarea {
   }
 }
 
-/* Keep the composer in flow so it cannot cover voice controls. */
-.input-container {
-  position: relative;
-  flex-shrink: 0;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 10px 6px 2px 6px; /* Minimal padding for more input space */
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    var(--bg-primary) 18px,
-    var(--bg-primary) 100%
-  );
-  pointer-events: none; /* Allow clicks through transparent areas */
-  z-index: 10;
-}
-
-/* Attachment indicator */
-.attachment-indicator {
-  padding: 6px 12px;
-  background: var(--byoa-surface-sunk);
-  border: 1px solid var(--byoa-line);
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--accent-teal);
-  margin-bottom: 8px;
-  pointer-events: auto;
-}
-
-#message-input {
-  width: 100%;
-  padding: 10px 118px 10px 14px; /* Space for attachment, mic and send controls */
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  resize: none;
-  font-family: inherit;
-  font-size: 14px;
-  line-height: 1.5;
-  height: 88px; /* Fixed comfortable height - roughly 3 lines */
-  max-height: 140px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  box-sizing: border-box;
-  position: relative;
-  z-index: 2;
-  transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease;
-  pointer-events: auto;
-}
-
-#message-input:focus {
-  outline: none;
-  border-color: var(--accent-teal);
-  background: var(--bg-primary);
-}
-
-/* Attach button - positioned next to send button */
-#attach-button {
-  position: absolute;
-  right: 92px; /* Leave space for mic and send buttons */
-  bottom: 16px;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  color: var(--text-primary);
-  font-size: 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 3;
-  pointer-events: auto;
-}
-
-#attach-button:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--accent-teal);
-  transform: scale(1.05);
-}
-
-#attach-button:active {
-  transform: scale(0.95);
-}
-
-#attach-button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  transform: none;
-}
-
-#send-button {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  background: var(--byoa-ink);
-  color: var(--byoa-ink-inverse);
-  border: 1px solid transparent;
-  border-radius: 8px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 17px;
-  z-index: 3;
-  pointer-events: auto;
-}
-
-#send-button:hover:not(:disabled) {
-  background: var(--byoa-ink-hover);
-  color: var(--byoa-ink-inverse);
-  transform: scale(1.05);
-}
-
-#send-button:active:not(:disabled) {
-  transform: scale(0.98);
-  background: var(--byoa-ink-hover);
-}
-
-#send-button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  color: var(--text-secondary);
-  background: var(--byoa-surface-sunk);
-}
-
-#send-button:focus-visible {
-  outline: 2px solid var(--accent-teal);
-  outline-offset: 2px;
-}
-
-#send-button.stop-mode {
-  color: var(--error-color);
-  background: var(--byoa-danger-surface);
-  border-color: transparent;
-  font-size: 14px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-#send-button.stop-mode:hover {
-  background: var(--byoa-danger-line);
-  color: var(--error-color);
-  transform: scale(1.05);
-}
-
-#send-button.stop-mode:active {
-  transform: scale(0.98);
-  background: var(--byoa-danger-line);
-}
-
 /* Scrollbar styling */
 .messages::-webkit-scrollbar {
   width: 6px;
@@ -1837,172 +1674,566 @@ textarea {
   outline-offset: 2px;
 }
 
-.local-voice {
-  padding: 12px 16px;
-  border-top: 1px solid var(--byoa-line);
-  max-height: 55vh;
-  overflow: auto;
+/* ---------------------------------------------------------------------------
+   Composer: one card holding the draft and its toolbar.
+   Popovers (actions, voice) anchor to the card so they share width and edge.
+   --------------------------------------------------------------------------- */
+.input-container {
+  position: relative;
+  z-index: 10;
   flex-shrink: 0;
-  font-size: 13px;
-}
-.local-voice summary {
-  cursor: pointer;
-  font-weight: 600;
-}
-.local-voice p {
-  margin: 10px 0;
-  color: var(--byoa-ink-muted);
-}
-.local-voice label {
-  display: block;
-  margin: 8px 0 4px;
-}
-.local-voice select {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 8px;
-  border: 1px solid var(--byoa-line-strong);
-  border-radius: 8px;
-  font: inherit;
-  background: var(--byoa-surface);
-  color: var(--byoa-ink);
-}
-.local-voice button {
-  padding: 8px 12px;
-  border: 1px solid var(--byoa-line-strong);
-  border-radius: 8px;
-  background: var(--byoa-surface);
-  color: var(--byoa-ink);
-  font: inherit;
-  cursor: pointer;
-}
-.local-voice button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.local-voice button[hidden] {
-  display: none;
-}
-.local-voice button[aria-pressed='true'] {
-  border-color: var(--byoa-danger);
-  color: var(--byoa-danger);
-}
-.voice-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
+  padding: var(--byoa-space-2) 10px 10px;
+  background: var(--bg-primary);
 }
 
-#voice-button {
-  position: absolute;
-  right: 54px;
-  bottom: 16px;
-  width: 30px;
-  height: 30px;
-  padding: 5px;
+.composer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--byoa-line);
+  border-radius: var(--byoa-radius-lg);
+  background: var(--byoa-paper);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.composer:has(#message-input:focus) {
+  border-color: var(--byoa-ink);
+  background: var(--byoa-surface);
+  box-shadow: 0 0 0 3px var(--byoa-focus-ring);
+}
+
+#message-input {
+  display: block;
+  width: 100%;
+  height: 62px; /* Base height; index.ts grows it with the draft. */
+  min-height: 62px;
+  max-height: 140px;
+  padding: 12px 14px 6px;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--byoa-ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#message-input::placeholder {
+  color: var(--byoa-ink-muted);
+}
+
+.attachment-indicator {
+  margin: var(--byoa-space-2) var(--byoa-space-2) 0;
+  padding: 6px 10px;
+  border-radius: var(--byoa-radius-sm);
+  background: var(--byoa-surface-sunk);
+  color: var(--byoa-ink-muted);
+  font-size: 12px;
+}
+
+.composer-toolbar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  cursor: pointer;
-  z-index: 3;
-  pointer-events: auto;
+  gap: 2px;
+  min-height: 44px;
+  padding: 4px 8px 8px 6px;
 }
-#voice-button svg {
+
+.composer-spacer {
+  flex: 1 1 auto;
+}
+
+/* Quiet icon buttons: attach, mic, voice settings. Ink is reserved for Send. */
+.composer-icon-button,
+#voice-button,
+.local-voice > summary {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--byoa-ink-muted);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.composer-icon-button svg,
+#voice-button svg,
+.local-voice > summary svg,
+.composer-chip svg,
+#voice-cancel svg {
   width: 18px;
   height: 18px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
   stroke-linecap: round;
+  stroke-linejoin: round;
 }
-#voice-button:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--accent-teal);
+
+.composer-icon-button:hover:not(:disabled),
+#voice-button:hover:not(:disabled),
+.local-voice > summary:hover,
+.local-voice[open] > summary {
+  background: var(--byoa-surface-sunk);
+  color: var(--byoa-ink);
 }
+
+.composer-icon-button:disabled,
+#voice-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Mic + settings caret read as one split control. */
+.voice-control {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 4px;
+}
+
+#voice-button {
+  border-radius: 8px 0 0 8px;
+}
+
+.local-voice > summary {
+  width: 20px;
+  border-radius: 0 8px 8px 0;
+  list-style: none;
+}
+
+.local-voice > summary svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+  transition: transform 0.15s ease;
+}
+
+.local-voice[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+.local-voice > summary::-webkit-details-marker,
+.available-actions > summary::-webkit-details-marker {
+  display: none;
+}
+
 #voice-button[aria-pressed='true'] {
-  color: var(--byoa-danger);
-  border-color: var(--byoa-danger);
+  border-radius: 8px;
   background: var(--byoa-danger-surface);
+  color: var(--byoa-danger);
 }
+
+/* Send stays the one ink control in the composer. */
+#send-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: var(--byoa-ink);
+  color: var(--byoa-ink-inverse);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+#send-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#send-button:hover:not(:disabled) {
+  background: var(--byoa-ink-hover);
+}
+
+#send-button:disabled {
+  background: var(--byoa-surface-sunk);
+  color: var(--byoa-dot-idle);
+  cursor: not-allowed;
+}
+
+#send-button.stop-mode {
+  background: var(--byoa-danger-surface);
+  color: var(--byoa-danger);
+}
+
+#send-button.stop-mode svg {
+  fill: currentColor;
+  stroke: none;
+}
+
+#send-button.stop-mode:hover {
+  background: var(--byoa-danger-line);
+  color: var(--byoa-danger);
+}
+
+/* Actions chip */
+.available-actions {
+  flex: none;
+}
+
+.composer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin-left: 2px;
+  padding: 0 6px 0 8px;
+  border: 1px solid var(--byoa-line);
+  border-radius: var(--byoa-radius-pill);
+  background: var(--byoa-surface);
+  color: var(--byoa-ink-muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.composer-chip svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.9;
+}
+
+.composer-chip:hover,
+.available-actions[open] > .composer-chip {
+  border-color: var(--byoa-line-strong);
+  background: var(--byoa-surface-sunk);
+  color: var(--byoa-ink);
+}
+
+.composer-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--byoa-radius-pill);
+  background: var(--byoa-surface-sunk);
+  color: var(--byoa-ink);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.composer-chip:hover .composer-count,
+.available-actions[open] .composer-count {
+  background: var(--byoa-line);
+}
+
+/* Shared popover surface for actions and voice settings. */
+.composer-popover {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + var(--byoa-space-2));
+  max-height: min(440px, 60vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--byoa-line) transparent;
+  padding: var(--byoa-space-4);
+  border: 1px solid var(--byoa-line);
+  border-radius: var(--byoa-radius-lg);
+  background: var(--byoa-surface);
+  box-shadow: var(--byoa-shadow-popover);
+  color: var(--byoa-ink);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.composer-popover-header {
+  margin-bottom: var(--byoa-space-3);
+}
+
+.composer-popover-header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.composer-popover-header p,
+.composer-popover-meta {
+  margin-top: 2px;
+  color: var(--byoa-ink-muted);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.composer-popover :focus-visible,
+.composer-chip:focus-visible,
+.composer-icon-button:focus-visible,
 #voice-button:focus-visible,
-.local-voice button:focus-visible {
+.local-voice > summary:focus-visible,
+#send-button:focus-visible,
+#voice-cancel:focus-visible {
   outline: 2px solid var(--byoa-focus);
   outline-offset: 2px;
 }
-.voice-permission-help {
-  padding: 10px;
-  background: var(--byoa-surface-sunk);
+
+#actions-search,
+.voice-panel select {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--byoa-line);
   border-radius: 8px;
+  background: var(--byoa-paper);
+  color: var(--byoa-ink);
+  font: inherit;
+  font-size: 13px;
 }
+
+#actions-search:focus,
+.voice-panel select:focus {
+  outline: none;
+  border-color: var(--byoa-ink);
+  box-shadow: 0 0 0 3px var(--byoa-focus-ring);
+}
+
+#actions-status {
+  margin: var(--byoa-space-2) 0 var(--byoa-space-1);
+}
+
+.actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 calc(var(--byoa-space-2) * -1);
+}
+
+.action-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: var(--byoa-space-2);
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--byoa-ink);
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.action-option strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.action-option span {
+  color: var(--byoa-ink-muted);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.action-option:hover {
+  background: var(--byoa-surface-sunk);
+}
+
+/* Voice settings */
+.voice-status {
+  padding: var(--byoa-space-2) 10px;
+  border-radius: 8px;
+  background: var(--byoa-surface-sunk);
+  color: var(--byoa-ink);
+}
+
+.voice-panel label {
+  display: block;
+  margin: var(--byoa-space-3) 0 6px;
+  color: var(--byoa-ink-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.voice-permission-help {
+  margin-top: var(--byoa-space-2);
+  padding: 10px 12px;
+  border: 1px solid var(--byoa-warning-line);
+  border-radius: 8px;
+  background: var(--byoa-warning-surface);
+  color: var(--byoa-warning);
+}
+
+.voice-permission-help p {
+  margin-bottom: var(--byoa-space-2);
+}
+
 .voice-permission-help[hidden] {
   display: none;
 }
 
-.voice-recording {
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  bottom: 54px;
-  height: 32px;
+.voice-actions {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  z-index: 4;
-  pointer-events: auto;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border-radius: 6px;
+  flex-wrap: wrap;
+  gap: var(--byoa-space-2);
+  margin: var(--byoa-space-3) 0 var(--byoa-space-2);
 }
-.voice-recording[hidden] {
-  display: none;
-}
-#voice-recording-status {
-  font-size: 12px;
-  white-space: nowrap;
-}
-#voice-waveform {
-  min-width: 0;
-  flex: 1;
+
+.voice-panel button {
   height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--byoa-line-strong);
+  border-radius: 8px;
+  background: var(--byoa-surface);
+  color: var(--byoa-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.voice-panel button:hover:not(:disabled) {
+  background: var(--byoa-surface-sunk);
+}
+
+.voice-panel .voice-primary,
+#voice-install {
+  border-color: transparent;
+  background: var(--byoa-ink);
+  color: var(--byoa-ink-inverse);
+}
+
+.voice-panel .voice-primary:hover:not(:disabled),
+#voice-install:hover:not(:disabled) {
+  background: var(--byoa-ink-hover);
+}
+
+.voice-panel .voice-primary:disabled {
+  border-color: var(--byoa-line);
+  background: var(--byoa-surface-sunk);
   color: var(--byoa-ink-muted);
 }
-#voice-cancel {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-primary);
-  cursor: pointer;
-  font-size: 20px;
-}
-#voice-cancel:hover {
-  background: var(--bg-tertiary);
-}
-#voice-button:disabled {
-  opacity: 0.5;
+
+.voice-panel button:disabled {
+  opacity: 0.6;
   cursor: default;
 }
 
-/* Keep the draft's layout and value, but give recording its own clear surface. */
+.voice-panel button[hidden] {
+  display: none;
+}
+
+.voice-panel button[aria-pressed='true'] {
+  border-color: var(--byoa-danger-line);
+  background: var(--byoa-danger-surface);
+  color: var(--byoa-danger);
+}
+
+/* Recording replaces the draft area with a live meter; the draft value is kept. */
+.voice-recording {
+  position: absolute;
+  z-index: 2;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: var(--byoa-space-2);
+  padding: 0 4px 0 12px;
+  border-radius: 8px;
+  background: var(--byoa-surface-sunk);
+  color: var(--byoa-ink);
+}
+
+.voice-recording[hidden] {
+  display: none;
+}
+
+.voice-recording-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--byoa-danger);
+}
+
+#voice-recording-status {
+  color: var(--byoa-ink-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+#voice-waveform {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  color: var(--byoa-ink-muted);
+}
+
+#voice-cancel {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--byoa-ink-muted);
+  cursor: pointer;
+}
+
+#voice-cancel svg {
+  width: 16px;
+  height: 16px;
+}
+
+#voice-cancel:hover {
+  background: var(--byoa-line);
+  color: var(--byoa-ink);
+}
+
 #message-input.is-recording,
 #message-input.is-recording:focus {
   color: transparent;
   caret-color: transparent;
-  background: var(--bg-secondary);
   text-shadow: none;
 }
+
 #message-input.is-recording::placeholder {
   color: transparent;
   opacity: 0;
 }
+
 #message-input.is-recording::selection {
   color: transparent;
   background: transparent;

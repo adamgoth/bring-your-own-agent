@@ -1,6 +1,6 @@
 # Floating site voice: feasibility gate
 
-Status: **manual native offscreen transcription passed on November 12, 2026**. Adam tested the main BYOA build with the sidebar closed: offscreen events included speechstart/speechend/end, final text was “Okay make the heading shorter”, and final=true, active=false, released=true. Browser version and offline network-isolation were not supplied; do not infer a compatibility range or network trace. This passed the feasibility gate; the floating widget, site conversation contract, and shared capture host are now implemented. The sidebar has a development-only link to the diagnostic; its dictation behavior is unchanged.
+Status: **manual native offscreen transcription passed on November 12, 2026**. Manual testing used the main BYOA build with the sidebar closed: offscreen events included speechstart/speechend/end, final text was “Okay make the heading shorter”, and final=true, active=false, released=true. Browser version and offline network-isolation were not supplied; do not infer a compatibility range or network trace. This passed the feasibility gate; the floating widget, site conversation contract, and shared capture host are now implemented. The sidebar has a development-only link to the diagnostic; its dictation behavior is unchanged.
 
 ## Probe
 

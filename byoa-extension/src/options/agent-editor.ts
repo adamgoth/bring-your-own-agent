@@ -14,6 +14,20 @@ import {
 
 export type AgentDraft = Omit<AgentConfig, 'id' | 'provider'>;
 
+/**
+ * Gateway-style model IDs we know work well. They use `vendor/model` naming, so
+ * they are only offered for OpenRouter and Custom connections; direct provider
+ * presets keep the free-text field.
+ */
+export const SUGGESTED_MODELS = [
+  'deepseek/deepseek-v4.1-flash-1017',
+  'openai/gpt-6-luna',
+  'anthropic/claude-haiku-5.5',
+  'meta/muse-ember',
+] as const;
+
+const CUSTOM_MODEL_OPTION = '__custom__';
+
 export interface AgentEditorState {
   name: string;
   description: string;
@@ -242,9 +256,13 @@ function updateDerivedVisibility(form: HTMLFormElement): void {
   requiredControl<HTMLElement>(form, 'agent-endpoint-hint').textContent = custom
     ? 'Leave blank to use the selected API’s default endpoint. Custom endpoints must support that API.'
     : 'Filled in for this provider. Editing the endpoint switches to Custom.';
-  requiredControl<HTMLElement>(form, 'agent-model-hint').textContent = isConnectionPreset(provider)
-    ? `Enter the exact model ID from ${CONNECTION_PRESETS[provider].label}.`
-    : 'Enter the exact model ID accepted by your endpoint.';
+  requiredControl<HTMLElement>(form, 'agent-model-hint').textContent =
+    provider === 'openrouter'
+      ? 'Pick a suggested model or enter any model ID from OpenRouter.'
+      : isConnectionPreset(provider)
+        ? `Enter the exact model ID from ${CONNECTION_PRESETS[provider].label}.`
+        : 'Pick a suggested model or enter the exact model ID accepted by your endpoint.';
+  updateModelControls(form);
 
   requiredControl<HTMLElement>(form, 'openai-api-mode-group').classList.toggle(
     'hidden',
@@ -286,6 +304,10 @@ export function renderAgentEditor(form: HTMLFormElement, state: AgentEditorState
   setValue(form, 'agent-temperature', state.temperature.toString());
   setValue(form, 'agent-price-input', state.priceInput);
   setValue(form, 'agent-price-output', state.priceOutput);
+  // form.reset() leaves <details> alone; show saved prices instead of hiding them.
+  requiredControl<HTMLDetailsElement>(form, 'agent-cost-tracking').open = Boolean(
+    state.priceInput || state.priceOutput
+  );
   setValue(form, 'agent-max-steps', state.maxSteps.toString());
   requiredControl<HTMLInputElement>(form, 'agent-is-default').checked = state.isDefault;
 
@@ -299,10 +321,62 @@ export function renderAgentEditor(form: HTMLFormElement, state: AgentEditorState
   requiredControl<HTMLInputElement>(form, 'reasoning-auto-expand').checked =
     state.reasoning.autoExpand;
 
+  syncModelPreset(form);
   refreshAgentEditor(form);
 }
 
+function suggestsModels(form: HTMLFormElement): boolean {
+  const provider = requiredControl<HTMLSelectElement>(form, 'agent-provider').value;
+  return provider === 'openrouter' || provider === 'custom';
+}
+
+function isSuggestedModel(model: string): boolean {
+  return (SUGGESTED_MODELS as readonly string[]).includes(model);
+}
+
+/** Point the suggestion dropdown at the current model ID, or at Custom when it is not listed. */
+function syncModelPreset(form: HTMLFormElement): void {
+  const model = requiredControl<HTMLInputElement>(form, 'agent-model').value.trim();
+  setValue(form, 'agent-model-preset', isSuggestedModel(model) ? model : CUSTOM_MODEL_OPTION);
+}
+
+function updateModelControls(form: HTMLFormElement): void {
+  const preset = requiredControl<HTMLSelectElement>(form, 'agent-model-preset');
+  const input = requiredControl<HTMLInputElement>(form, 'agent-model');
+  const suggest = suggestsModels(form);
+  preset.classList.toggle('hidden', !suggest);
+  // The text input stays the canonical `model` field; it is only hidden while a
+  // suggestion is chosen, and always has a value then, so `required` never trips
+  // on an unfocusable control.
+  input.classList.toggle('hidden', suggest && preset.value !== CUSTOM_MODEL_OPTION);
+  input.placeholder = suggest ? 'Enter a custom model ID' : 'Enter the exact model ID';
+}
+
 export function initializeAgentEditor(form: HTMLFormElement): void {
+  const modelPreset = requiredControl<HTMLSelectElement>(form, 'agent-model-preset');
+  const modelInput = requiredControl<HTMLInputElement>(form, 'agent-model');
+  const option = (label: string, value: string) => {
+    const element = form.ownerDocument.createElement('option');
+    element.value = value;
+    element.textContent = label;
+    return element;
+  };
+  modelPreset.replaceChildren(
+    ...SUGGESTED_MODELS.map((model) => option(model, model)),
+    option('Custom model ID…', CUSTOM_MODEL_OPTION)
+  );
+  modelPreset.addEventListener('change', () => {
+    if (modelPreset.value === CUSTOM_MODEL_OPTION) {
+      // Start the custom entry blank rather than editing the suggestion in place.
+      if (isSuggestedModel(modelInput.value.trim())) modelInput.value = '';
+      updateModelControls(form);
+      modelInput.focus();
+    } else {
+      modelInput.value = modelPreset.value;
+      updateModelControls(form);
+    }
+  });
+
   requiredControl<HTMLSelectElement>(form, 'agent-provider').addEventListener('change', () => {
     const provider = requiredControl<HTMLSelectElement>(form, 'agent-provider').value;
     if (isConnectionPreset(provider)) {
@@ -319,6 +393,8 @@ export function initializeAgentEditor(form: HTMLFormElement): void {
       // A key for the previous provider must not follow a new destination.
       setValue(form, 'agent-api-key', '');
     }
+    // The model ID may have been edited while the dropdown was hidden.
+    syncModelPreset(form);
     refreshAgentEditor(form);
   });
   const useCustomConnection = () => {

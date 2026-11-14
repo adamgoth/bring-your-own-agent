@@ -260,6 +260,18 @@ export function setupLocalVoice(options: { changed?: () => void; canStart?: () =
     options.changed?.();
   });
   panel.addEventListener('toggle', render);
+  // Behave like the actions popover: Escape or a click elsewhere closes it.
+  // The mic is excluded because it opens this panel when voice isn't ready yet.
+  panel.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !panel.open) return;
+    panel.open = false;
+    panel.querySelector<HTMLElement>('summary')?.focus();
+    event.preventDefault();
+  });
+  document.addEventListener('click', (event) => {
+    const target = event.target as Node;
+    if (panel.open && !panel.contains(target) && !mic.contains(target)) panel.open = false;
+  });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && recognition) {
       abort();

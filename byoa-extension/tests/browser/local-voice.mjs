@@ -106,7 +106,7 @@ try {
   for (const open of [false, true]) {
     await evaluate(`document.querySelector('#local-voice').open=${open}`);
     const layout = await evaluate(
-      `(() => {const summary=document.querySelector('#local-voice summary');const a=summary.getBoundingClientRect();const panel=document.querySelector('#local-voice').getBoundingClientRect();const composer=document.querySelector('.input-container').getBoundingClientRect();return {visible:a.top>=0&&a.bottom<=innerHeight,uncovered:summary.contains(document.elementFromPoint(a.x+a.width/2,a.y+a.height/2)),separate:panel.bottom<=composer.top+1,composerFits:composer.bottom<=innerHeight+1};})()`
+      `(() => {const summary=document.querySelector('#local-voice summary');const a=summary.getBoundingClientRect();const popover=document.querySelector('#local-voice .voice-panel').getBoundingClientRect();const composer=document.querySelector('.composer').getBoundingClientRect();const open=document.querySelector('#local-voice').open;return {visible:a.top>=0&&a.bottom<=innerHeight,uncovered:summary.contains(document.elementFromPoint(a.x+a.width/2,a.y+a.height/2)),separate:!open||(popover.top>=0&&popover.bottom<=composer.top+1),composerFits:composer.bottom<=innerHeight+1};})()`
     );
     assert.deepEqual(layout, {
       visible: true,
@@ -116,7 +116,7 @@ try {
     });
   }
   console.log(
-    'PASS voice control is visible and clickable above the composer, collapsed and expanded at 360×640.'
+    'PASS voice settings toggle stays clickable and its popover sits above the composer, collapsed and expanded at 360×640.'
   );
   // Deterministic recognizer tests the shipped composer; audio meter uses Chrome's fake device.
   await cdp.send(

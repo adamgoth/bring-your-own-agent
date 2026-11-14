@@ -122,7 +122,7 @@ import { redactDiagnosticString } from '../lib/logger/redaction?relay-inline';
         this.port = null;
       }
       this.pendingMessages = [];
-      logger.warn('[WebMCP Relay] Shut down - extension context invalidated');
+      logger.log('[WebMCP Relay] Shut down');
     }
 
     /**
@@ -164,7 +164,7 @@ import { redactDiagnosticString } from '../lib/logger/redaction?relay-inline';
         // Handle port disconnection (navigation, SW restart, etc)
         this.port.onDisconnect.addListener(() => {
           const error = chrome.runtime.lastError;
-          logger.warn('[WebMCP Relay] Port disconnected:', error?.message || 'No error');
+          if (this.isShutdown) return;
 
           this.port = null;
 
@@ -172,6 +172,13 @@ import { redactDiagnosticString } from '../lib/logger/redaction?relay-inline';
           if (isContextInvalidated(error)) {
             this.shutdown();
             return;
+          }
+
+          // A clean disconnect is routine lifecycle activity, not a warning.
+          if (error) {
+            logger.warn('[WebMCP Relay] Port disconnected:', error.message);
+          } else {
+            logger.log('[WebMCP Relay] Port disconnected; reconnecting');
           }
 
           // Otherwise, attempt reconnect
@@ -254,7 +261,7 @@ import { redactDiagnosticString } from '../lib/logger/redaction?relay-inline';
     sendToBackground(message) {
       // Don't send if we've been shut down
       if (this.isShutdown) {
-        logger.warn('[WebMCP Relay] Cannot send - relay is shut down');
+        logger.log('[WebMCP Relay] Cannot send - relay is shut down');
         return;
       }
 

@@ -1,4 +1,5 @@
 import { budgetInputs } from '../lib/budget-inputs';
+import { button, el } from './ui';
 import { validateSpending } from '../lib/usage';
 /**
  * Options page logic
@@ -69,29 +70,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         voiceMode.disabled = false;
       }
     });
-    const spending = document.createElement('fieldset');
-    spending.append(
-      Object.assign(document.createElement('legend'), {
-        textContent: 'App spending limits (sidebar chats excluded)',
-      })
+    const spending = el(
+      'fieldset',
+      {},
+      el('legend', { className: 'visually-hidden', text: 'App spending limits' })
     );
     const readSpending = budgetInputs(
       spending,
       validateSpending((await configStorage.get()).spending)
     );
-    const saveSpending = document.createElement('button');
-    saveSpending.className = 'button button-secondary';
-    saveSpending.textContent = 'Save app spending limits';
-    saveSpending.onclick = async () => {
-      try {
-        await configStorage.set({ spending: validateSpending(readSpending()) });
-        showStatus('Spending limits saved.', 'success');
-      } catch {
-        showStatus('Enter valid positive limits.', 'error');
-      }
-    };
-    spending.append(saveSpending);
-    document.getElementById('site-task-timeout')?.parentElement?.append(spending);
+    const saveSpending = button({
+      label: 'Save limits',
+      small: true,
+      action: 'save-app-spending',
+      onClick: () =>
+        // Validation throws synchronously, so start inside a promise to report it as a status.
+        void Promise.resolve()
+          .then(() => configStorage.set({ spending: validateSpending(readSpending()) }))
+          .then(
+            () => showStatus('Spending limits saved.', 'success'),
+            () => showStatus('Enter valid positive limits.', 'error')
+          ),
+    });
+    document.getElementById('app-spending-limits')?.append(spending, saveSpending);
     agentMemoryControls = new AgentMemoryControls(document);
     setupEventListeners();
     await renderAgents();

@@ -157,57 +157,153 @@
         </section>
 
         <!-- Settings Section -->
-        <section class="settings-section">
-          <h2>Settings</h2>
-          <div class="form-group">
-            <label><input id="voice-mode" type="checkbox" /> Voice mode (beta)</label>
-            <p>Show the floating voice pane on connected apps that support it. Off by default.</p>
+        <section class="settings-section general-settings" id="general-settings">
+          <div class="section-header">
+            <div>
+              <h2>Settings</h2>
+              <p class="section-description">
+                Voice, limits and logging for every agent and connected app.
+              </p>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="site-task-timeout">App task run limit (minutes)</label>
-            <input id="site-task-timeout" type="number" min="1" max="10" step="1" value="2" />
-            <p>
-              1–10 minutes, starting after queue wait. Apps can request a shorter limit. Inactive
-              tasks stop after 60 seconds.
-            </p>
-            <label for="log-level">Log Level</label>
-            <select id="log-level">
-              <option value="trace">TRACE - All application events</option>
-              <option value="debug">DEBUG - Debug application events</option>
-              <option value="info">INFO - Information events</option>
-              <option value="warn" selected>WARN - Warning events (default)</option>
-              <option value="error">ERROR - Failure events</option>
-              <option value="silent">SILENT - No application or relay logs</option>
-            </select>
-            <span class="field-hint"
-              >DEBUG and TRACE include local context that may contain sensitive application, page,
-              and tool data. Basic credential sanitization is applied, but review logs before
-              sharing them externally. Other levels discard caller values. Generated page-tool
-              wrappers and browser/provider code log independently.</span
-            >
+          <div class="ui-setting ui-setting-toggle">
+            <div class="ui-setting-text">
+              <label class="ui-setting-title" for="voice-mode">
+                Voice mode <span class="ui-pill" data-tone="neutral">Beta</span>
+              </label>
+              <p id="voice-mode-hint">
+                Show the floating voice pane on connected apps that support it. Off by default.
+              </p>
+            </div>
+            <div class="ui-setting-control">
+              <input
+                id="voice-mode"
+                class="ui-switch"
+                type="checkbox"
+                role="switch"
+                aria-describedby="voice-mode-hint"
+              />
+            </div>
+          </div>
+
+          <div class="ui-setting">
+            <div class="ui-setting-text">
+              <label class="ui-setting-title" for="site-task-timeout">App task run limit</label>
+              <p id="site-task-timeout-hint">
+                How long an app’s task can run. Apps can ask for less. Tasks that go quiet for 60
+                seconds stop on their own.
+              </p>
+            </div>
+            <div class="ui-setting-control">
+              <div class="ui-inline">
+                <input
+                  id="site-task-timeout"
+                  class="ui-input ui-input-number"
+                  type="number"
+                  min="1"
+                  max="10"
+                  step="1"
+                  value="2"
+                  aria-describedby="site-task-timeout-hint site-task-timeout-range"
+                />
+                <span class="ui-unit">minutes</span>
+              </div>
+              <p class="ui-control-note" id="site-task-timeout-range">
+                1 to 10 minutes. The clock starts once the task leaves the queue.
+              </p>
+            </div>
+          </div>
+
+          <div class="ui-setting">
+            <div class="ui-setting-text">
+              <label class="ui-setting-title" for="log-level">Log level</label>
+              <p id="log-level-hint">How much BYOA writes to the browser console.</p>
+            </div>
+            <div class="ui-setting-control ui-stack">
+              <select
+                id="log-level"
+                class="ui-select"
+                aria-describedby="log-level-hint log-level-note"
+              >
+                <option value="trace">Trace: everything</option>
+                <option value="debug">Debug: detailed events</option>
+                <option value="info">Info: general events</option>
+                <option value="warn" selected>Warn: warnings and errors (default)</option>
+                <option value="error">Error: errors only</option>
+                <option value="silent">Silent: no app or relay logs</option>
+              </select>
+              <div class="ui-callout" data-tone="neutral" id="log-level-note">
+                <p class="ui-callout-title">Debug and Trace logs can include private data</p>
+                <p>
+                  They may contain page content, app data and tool inputs. BYOA strips common
+                  credentials, but read the logs before you share them. Other levels leave these
+                  values out.
+                </p>
+                <p class="ui-callout-meta">
+                  Page-tool wrappers and browser or provider code keep their own log settings.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="ui-setting">
+            <div class="ui-setting-text">
+              <h4>App spending limits</h4>
+              <p>
+                Caps for tasks that connected apps run. Sidebar chats don’t count. Leave a field
+                blank for no limit.
+              </p>
+            </div>
+            <div class="ui-setting-control ui-stack" id="app-spending-limits"></div>
           </div>
 
           <!-- Backup & Restore -->
           <div class="settings-subsection">
-            <h3>Backup & Restore</h3>
+            <h3>Backup &amp; restore</h3>
             <p class="section-description">
-              Backup files are plaintext and can contain API keys, authentication tokens, endpoints,
-              model IDs, executable user scripts, and commands. Store them as secrets. Exports never
-              include Local Workspace connections or files.
+              Save your agents, commands and scripts to a file, or load them from one.
             </p>
-            <p class="section-description">
-              Importing settings removes every Local Workspace connection on this device before the
-              imported agents become active. It never deletes folders or files; reconnect them
-              afterward.
-            </p>
+            <div class="ui-callout" data-tone="warning">
+              <p class="ui-callout-title">Keep backup files private</p>
+              <p>
+                Backups are plain text and can include API keys, sign-in tokens, endpoints, model
+                IDs, user scripts and commands.
+              </p>
+            </div>
+            <ul class="ui-notes">
+              <li>Local Workspace connections and files are never included in a backup.</li>
+              <li>
+                Importing removes this device’s Local Workspace connections before the imported
+                agents turn on. Your folders and files stay where they are; reconnect them
+                afterward.
+              </li>
+            </ul>
 
             <div class="backup-actions">
-              <button id="export-settings" class="button button-secondary">
-                📥 Export Settings
+              <button id="export-settings" class="button button-secondary" type="button">
+                <svg
+                  class="button-icon"
+                  viewBox="0 0 16 16"
+                  width="16"
+                  height="16"
+                  aria-hidden="true"
+                >
+                  <path d="M8 2.5v7.5M4.75 6.75 8 10l3.25-3.25M3 13h10" />
+                </svg>
+                Export settings
               </button>
-              <button id="import-settings" class="button button-secondary">
-                📤 Import Settings
+              <button id="import-settings" class="button button-secondary" type="button">
+                <svg
+                  class="button-icon"
+                  viewBox="0 0 16 16"
+                  width="16"
+                  height="16"
+                  aria-hidden="true"
+                >
+                  <path d="M8 10.5V3M4.75 6.25 8 3l3.25 3.25M3 13h10" />
+                </svg>
+                Import settings
               </button>
             </div>
           </div>
@@ -257,92 +353,6 @@
                 Set as default agent
               </label>
             </div>
-
-            <fieldset
-              id="agent-memory-section"
-              class="agent-config-section agent-memory-section hidden"
-              aria-busy="false"
-            >
-              <legend>Local Workspace <span class="field-label-qualifier">Optional</span></legend>
-              <p class="field-hint" id="agent-memory-description">
-                Without a workspace, this agent uses BYOA’s built-in behavior. Connect a folder to
-                bootstrap each new chat from <code>IDENTITY.md</code>, <code>SOUL.md</code>,
-                <code>USER.md</code>, <code>AGENTS.md</code>, and <code>MEMORY.md</code>.
-              </p>
-
-              <details class="agent-memory-details">
-                <summary>File access and sharing</summary>
-                <ul>
-                  <li>
-                    Their contents are sent to this agent’s configured AI service. Switching agents
-                    keeps the chat history and loads the selected agent’s workspace.
-                  </li>
-                  <li>
-                    The agent can list and read other bounded UTF-8 files in this folder through
-                    visible tool calls, and read contents may be sent to its configured AI service.
-                  </li>
-                  <li>
-                    <code>IDENTITY.md</code>, <code>SOUL.md</code>, <code>USER.md</code>, and
-                    <code>AGENTS.md</code> are model-read-only.
-                  </li>
-                  <li>
-                    Visible tool calls can create or update <code>MEMORY.md</code> and files under
-                    <code>memory/</code>, and delete individual files under
-                    <code>memory/</code> after reading their current version. Connecting creates
-                    <code>MEMORY.md</code> and <code>memory/</code> when missing; chats are never
-                    saved automatically.
-                  </li>
-                  <li>
-                    Connecting the same folder to multiple agents shares live file changes across
-                    their configured services. Parent and child folder overlaps are rejected.
-                  </li>
-                  <li>
-                    The chat bootstrap is limited to 128 KiB, including a 64 KiB
-                    <code>MEMORY.md</code> limit. Other reads are limited to 256 KiB and listings to
-                    200 matching entries.
-                  </li>
-                  <li>
-                    Disconnecting or deleting the agent removes the connection, not your files.
-                    Connections stay on this device, are excluded from settings backups, and are
-                    removed by settings imports.
-                  </li>
-                </ul>
-              </details>
-
-              <div
-                id="agent-memory-status"
-                class="agent-memory-status"
-                role="status"
-                aria-live="polite"
-                aria-atomic="true"
-              >
-                <strong id="agent-memory-state">Not connected</strong>
-                <span id="agent-memory-detail">Save this agent before connecting a folder.</span>
-              </div>
-              <div
-                class="agent-memory-actions"
-                role="group"
-                aria-label="Local Workspace actions"
-                aria-describedby="agent-memory-description"
-              >
-                <button
-                  id="agent-memory-connect"
-                  type="button"
-                  class="button button-secondary"
-                  disabled
-                >
-                  Connect folder
-                </button>
-                <button
-                  id="agent-memory-disconnect"
-                  type="button"
-                  class="button button-danger hidden"
-                  disabled
-                >
-                  Disconnect
-                </button>
-              </div>
-            </fieldset>
 
             <fieldset class="agent-config-section">
               <legend>Model & Connection</legend>
@@ -398,7 +408,15 @@
               </div>
 
               <div class="form-group">
-                <label for="agent-model">Model ID *</label>
+                <label for="agent-model" id="agent-model-label">Model ID *</label>
+                <select
+                  id="agent-model-preset"
+                  class="hidden"
+                  aria-labelledby="agent-model-label"
+                  aria-describedby="agent-model-hint"
+                >
+                  <!-- Options are rendered from SUGGESTED_MODELS in agent-editor.ts. -->
+                </select>
                 <input
                   type="text"
                   id="agent-model"
@@ -552,22 +570,6 @@
                 </div>
 
                 <div class="form-group">
-                  <label
-                    >Input price ($ per million tokens, optional)<input
-                      id="agent-price-input"
-                      name="priceInput"
-                      type="number"
-                      min="0"
-                      step="any"
-                  /></label>
-                  <label
-                    >Output price ($ per million tokens, optional)<input
-                      id="agent-price-output"
-                      name="priceOutput"
-                      type="number"
-                      min="0"
-                      step="any"
-                  /></label>
                   <label for="agent-max-steps">Max Steps</label>
                   <input
                     type="number"
@@ -580,6 +582,123 @@
                   />
                   <span class="field-hint">Tool calls per turn (1-50)</span>
                 </div>
+              </div>
+
+              <details id="agent-cost-tracking" class="ui-disclosure agent-cost-tracking">
+                <summary>Cost tracking <span class="field-label-qualifier">Optional</span></summary>
+                <p class="field-hint">
+                  Prices let BYOA estimate what connected sites spend and enforce their dollar
+                  limits. OpenRouter reports its own costs, so you can usually leave these blank.
+                  Enter both prices or neither.
+                </p>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="agent-price-input">Input price ($ per million tokens)</label>
+                    <input
+                      id="agent-price-input"
+                      name="priceInput"
+                      type="number"
+                      min="0"
+                      step="any"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="agent-price-output">Output price ($ per million tokens)</label>
+                    <input
+                      id="agent-price-output"
+                      name="priceOutput"
+                      type="number"
+                      min="0"
+                      step="any"
+                    />
+                  </div>
+                </div>
+              </details>
+            </fieldset>
+
+            <fieldset
+              id="agent-memory-section"
+              class="agent-config-section agent-memory-section hidden"
+              aria-busy="false"
+            >
+              <legend>Local Workspace <span class="field-label-qualifier">Optional</span></legend>
+              <p class="field-hint" id="agent-memory-description">
+                Without a workspace, this agent uses BYOA’s built-in behavior. Connect a folder to
+                bootstrap each new chat from <code>IDENTITY.md</code>, <code>SOUL.md</code>,
+                <code>USER.md</code>, <code>AGENTS.md</code>, and <code>MEMORY.md</code>.
+              </p>
+
+              <details class="agent-memory-details">
+                <summary>File access and sharing</summary>
+                <ul>
+                  <li>
+                    Their contents are sent to this agent’s configured AI service. Switching agents
+                    keeps the chat history and loads the selected agent’s workspace.
+                  </li>
+                  <li>
+                    The agent can list and read other bounded UTF-8 files in this folder through
+                    visible tool calls, and read contents may be sent to its configured AI service.
+                  </li>
+                  <li>
+                    <code>IDENTITY.md</code>, <code>SOUL.md</code>, <code>USER.md</code>, and
+                    <code>AGENTS.md</code> are model-read-only.
+                  </li>
+                  <li>
+                    Visible tool calls can create or update <code>MEMORY.md</code> and files under
+                    <code>memory/</code>, and delete individual files under
+                    <code>memory/</code> after reading their current version. Connecting creates
+                    <code>MEMORY.md</code> and <code>memory/</code> when missing; chats are never
+                    saved automatically.
+                  </li>
+                  <li>
+                    Connecting the same folder to multiple agents shares live file changes across
+                    their configured services. Parent and child folder overlaps are rejected.
+                  </li>
+                  <li>
+                    The chat bootstrap is limited to 128 KiB, including a 64 KiB
+                    <code>MEMORY.md</code> limit. Other reads are limited to 256 KiB and listings to
+                    200 matching entries.
+                  </li>
+                  <li>
+                    Disconnecting or deleting the agent removes the connection, not your files.
+                    Connections stay on this device, are excluded from settings backups, and are
+                    removed by settings imports.
+                  </li>
+                </ul>
+              </details>
+
+              <div
+                id="agent-memory-status"
+                class="agent-memory-status"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                <strong id="agent-memory-state">Not connected</strong>
+                <span id="agent-memory-detail">Save this agent before connecting a folder.</span>
+              </div>
+              <div
+                class="agent-memory-actions"
+                role="group"
+                aria-label="Local Workspace actions"
+                aria-describedby="agent-memory-description"
+              >
+                <button
+                  id="agent-memory-connect"
+                  type="button"
+                  class="button button-secondary"
+                  disabled
+                >
+                  Connect folder
+                </button>
+                <button
+                  id="agent-memory-disconnect"
+                  type="button"
+                  class="button button-danger hidden"
+                  disabled
+                >
+                  Disconnect
+                </button>
               </div>
             </fieldset>
           </form>

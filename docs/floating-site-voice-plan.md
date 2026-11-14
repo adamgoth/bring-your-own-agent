@@ -2,7 +2,7 @@
 
 Status: implemented on `codex/floating-site-voice`; repository checks and browser regressions passed. Native offscreen recognition was manually confirmed.
 
-Implementation started on `codex/floating-site-voice`. The first-stage probe and evidence are in [floating-site-voice-feasibility.md](floating-site-voice-feasibility.md). Adam confirmed final native offscreen transcription and cleanup in the main build with the sidebar closed. Production implementation is complete in the main build.
+Implementation started on `codex/floating-site-voice`. The first-stage probe and evidence are in [floating-site-voice-feasibility.md](floating-site-voice-feasibility.md). Manual testing confirmed final native offscreen transcription and cleanup in the main build with the sidebar closed. Production implementation is complete in the main build.
 
 ## Product behavior
 

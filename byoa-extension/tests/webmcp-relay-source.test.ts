@@ -102,6 +102,7 @@ describe('real WebMCP relay source', () => {
   });
 
   it('queues page messages across a disconnect and flushes them after reconnecting', () => {
+    const consoleWarn = vi.spyOn(harness.window.console, 'warn').mockImplementation(() => {});
     let reconnect: (() => void) | undefined;
     const setTimeout = vi
       .spyOn(harness.window as unknown as Window, 'setTimeout')
@@ -113,6 +114,7 @@ describe('real WebMCP relay source', () => {
     const bridge = harness.window.__webmcpRelayBridge!;
     const [disconnect] = harness.portDisconnects.listeners;
     disconnect();
+    expect(consoleWarn).not.toHaveBeenCalled();
 
     bridge.onPageMessage({
       source: harness.window,
@@ -267,6 +269,7 @@ describe('real WebMCP relay source', () => {
     // Chrome surfaces content-script console.error on the extensions page, so an
     // orphaned script logging a red error turns every reload into user-visible noise.
     const consoleError = vi.spyOn(harness.window.console, 'error').mockImplementation(() => {});
+    const consoleWarn = vi.spyOn(harness.window.console, 'warn').mockImplementation(() => {});
     harness.chromeHarness.runtime.connect.mockImplementation(() => {
       throw new Error('Extension context invalidated');
     });
@@ -275,6 +278,39 @@ describe('real WebMCP relay source', () => {
 
     expect(harness.window.__webmcpRelayBridge?.isShutdown).toBe(true);
     expect(consoleError).not.toHaveBeenCalled();
+    expect(consoleWarn).not.toHaveBeenCalled();
+  });
+
+  it('shuts down quietly when a disconnect invalidates the extension context', () => {
+    const consoleWarn = vi.spyOn(harness.window.console, 'warn').mockImplementation(() => {});
+    const setTimeout = vi.spyOn(harness.window, 'setTimeout');
+    inject(harness.window);
+    Object.assign(harness.chromeHarness.runtime, {
+      lastError: { message: 'Extension context invalidated' },
+    });
+
+    const [disconnect] = harness.portDisconnects.listeners;
+    disconnect();
+
+    expect(harness.window.__webmcpRelayBridge?.isShutdown).toBe(true);
+    expect(consoleWarn).not.toHaveBeenCalled();
+    expect(setTimeout).not.toHaveBeenCalled();
+  });
+
+  it('warns and retries when a disconnect reports an unexpected error', () => {
+    const consoleWarn = vi.spyOn(harness.window.console, 'warn').mockImplementation(() => {});
+    const setTimeout = vi.spyOn(harness.window, 'setTimeout');
+    inject(harness.window);
+    Object.assign(harness.chromeHarness.runtime, {
+      lastError: { message: 'Unexpected connection failure' },
+    });
+
+    const [disconnect] = harness.portDisconnects.listeners;
+    disconnect();
+
+    expect(consoleWarn).toHaveBeenCalledWith('[BYOA] Relay warning');
+    expect(harness.window.__webmcpRelayBridge?.isShutdown).toBe(false);
+    expect(setTimeout).toHaveBeenCalledWith(expect.any(Function), 100);
   });
 
   it('still reports a genuine connection failure as an error', () => {
