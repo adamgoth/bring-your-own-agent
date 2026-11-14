@@ -149,6 +149,8 @@ test('shows a readable draft error and retries without losing the prompt', async
 
 test('draft keyboard shortcut respects empty prompts and submits once', async ({ page }) => {
   await setup(page);
+  // Provider detection is asynchronous; the shortcut needs the connected submit button.
+  await expect(page.getByRole('button', { name: 'Draft with your agent', exact: true })).toBeVisible();
   const input = page.getByLabel('What are you writing?');
   await input.fill('');
   await input.press('Meta+Enter');

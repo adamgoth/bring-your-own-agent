@@ -324,13 +324,15 @@ export async function initializeConnectedSites() {
             },
             {
               label: 'Cost',
-              value: formatUsd(overall.global.usd, overall.global.unknownCost),
+              // With no priced usage at all, the label already says what's unknown.
+              value:
+                overall.global.unknownCost && overall.global.usd === 0
+                  ? 'Unknown'
+                  : formatUsd(overall.global.usd, overall.global.unknownCost),
               note:
                 overall.global.unknownCost && overall.global.usd > 0
                   ? 'Some models have no known price'
-                  : overall.global.unknownCost
-                    ? 'This model has no known price'
-                    : undefined,
+                  : undefined,
             },
             { label: 'Connected sites', value: String(entries.length) },
           ],

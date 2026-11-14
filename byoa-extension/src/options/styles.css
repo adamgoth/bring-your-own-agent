@@ -239,16 +239,18 @@ header h1 {
 
 /* Backup & Restore */
 .settings-subsection {
-  margin-top: 32px;
-  padding-top: 24px;
-  border-top: 1px solid var(--byoa-surface-sunk);
+  margin-top: var(--byoa-space-5);
+  padding-top: var(--byoa-space-5);
+  border-top: 1px solid var(--byoa-line);
 }
 
 .settings-subsection h3 {
-  font-size: 18px;
-  font-weight: 600;
+  font-family: var(--byoa-font-display);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 24px;
   color: var(--byoa-ink);
-  margin: 0 0 12px 0;
+  margin: 0 0 var(--byoa-space-1) 0;
 }
 
 .section-description {
@@ -308,12 +310,33 @@ header h1 {
   transition: border-color 0.2s ease;
 }
 
+/* Replace the native arrow, which sits flush against the border, with an inset chevron drawn
+   from theme tokens so it follows dark mode. */
+.form-group select {
+  appearance: none;
+  padding-right: 40px;
+  background-color: var(--byoa-surface);
+  color: var(--byoa-ink);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--byoa-ink-muted) 50%),
+    linear-gradient(135deg, var(--byoa-ink-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 21px) calc(50% + 1px),
+    calc(100% - 16px) calc(50% + 1px);
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
   border-color: var(--byoa-ink);
   box-shadow: 0 0 0 3px var(--byoa-focus-ring);
+}
+
+#agent-model-preset:not(.hidden) + #agent-model:not(.hidden) {
+  margin-top: 8px;
 }
 
 .form-group textarea {
@@ -362,6 +385,19 @@ header h1 {
 }
 
 .agent-config-section > .form-row:last-child {
+  margin-bottom: 0;
+}
+
+.agent-cost-tracking {
+  margin-top: 4px;
+}
+
+.agent-cost-tracking > .field-hint {
+  display: block;
+  margin: 4px 0 12px;
+}
+
+.agent-cost-tracking .form-row {
   margin-bottom: 0;
 }
 
@@ -1770,6 +1806,198 @@ select:user-invalid:focus {
   font-size: 13px;
 }
 
+/* Setting titles can be a <label> (static markup, settingRow labelFor) or an <h4>. */
+.ui-setting-title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--byoa-space-2);
+  color: var(--byoa-ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+label.ui-setting-title {
+  cursor: pointer;
+}
+
+.section-header + .ui-setting {
+  padding-top: 0;
+}
+
+/* Text and number inputs in settings rows */
+.ui-input {
+  width: 100%;
+  max-width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--byoa-line-strong);
+  border-radius: var(--byoa-radius-md);
+  background: var(--byoa-surface);
+  color: var(--byoa-ink);
+  font-size: 14px;
+}
+
+.ui-input-number {
+  width: 88px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-input:focus {
+  outline: none;
+  border-color: var(--byoa-ink);
+  box-shadow: 0 0 0 3px var(--byoa-focus-ring);
+}
+
+.ui-input:user-invalid {
+  border-color: var(--byoa-danger);
+}
+
+.ui-unit {
+  color: var(--byoa-ink-muted);
+  font-size: 14px;
+}
+
+.ui-control-note {
+  margin-top: var(--byoa-space-2);
+  color: var(--byoa-ink-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.ui-select {
+  max-width: 100%;
+}
+
+/* On/off settings (toggleRow in ui.ts): the switch sits in the control column, level with the
+   title. When the row stacks on narrow screens it moves to the end of the title line instead. */
+.ui-setting-toggle .ui-setting-control {
+  display: flex;
+  align-items: flex-start;
+}
+
+/* Beats `.form-group input { width: 100% }` if a toggle lands inside an older form group. */
+input[type='checkbox'].ui-switch {
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--byoa-line-strong);
+  border-radius: var(--byoa-radius-pill);
+  background: var(--byoa-surface-sunk);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+input[type='checkbox'].ui-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--byoa-line-strong);
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+
+input[type='checkbox'].ui-switch:checked {
+  border-color: var(--byoa-ink);
+  background: var(--byoa-ink);
+}
+
+input[type='checkbox'].ui-switch:checked::after {
+  background: var(--byoa-ink-inverse);
+  transform: translateX(16px);
+}
+
+input[type='checkbox'].ui-switch:focus-visible {
+  outline: 2px solid var(--byoa-focus);
+  outline-offset: 2px;
+}
+
+input[type='checkbox'].ui-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Cautions next to a setting (callout in ui.ts) */
+.ui-callout {
+  max-width: 60ch;
+  padding: var(--byoa-space-3) var(--byoa-space-4);
+  border: 1px solid var(--byoa-line);
+  border-radius: var(--byoa-radius-md);
+  background: var(--byoa-surface-sunk);
+  color: var(--byoa-ink);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.ui-callout[data-tone='warning'] {
+  border-color: var(--byoa-warning-line);
+  background: var(--byoa-warning-surface);
+}
+
+.ui-callout[data-tone='danger'] {
+  border-color: var(--byoa-danger-line);
+  background: var(--byoa-danger-surface);
+}
+
+.ui-callout > p + p {
+  margin-top: var(--byoa-space-1);
+}
+
+.ui-callout .ui-callout-title {
+  font-weight: 600;
+}
+
+.ui-callout[data-tone='warning'] .ui-callout-title {
+  color: var(--byoa-warning);
+}
+
+.ui-callout[data-tone='danger'] .ui-callout-title {
+  color: var(--byoa-danger);
+}
+
+.ui-callout .ui-callout-meta {
+  color: var(--byoa-ink-muted);
+}
+
+/* Short bulleted notes in muted meta type */
+.ui-notes {
+  display: grid;
+  gap: var(--byoa-space-1);
+  margin: var(--byoa-space-3) 0 0;
+  padding-left: var(--byoa-space-5);
+  color: var(--byoa-ink-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* Buttons with a leading line icon */
+.button:has(> .button-icon) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--byoa-space-2);
+}
+
+.button-icon {
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* Spending limit inputs (lib/budget-inputs.ts), used by site cards and app limits */
 .budget-fields {
   display: grid;
@@ -1808,6 +2036,15 @@ select:user-invalid:focus {
   outline: none;
   border-color: var(--byoa-ink);
   box-shadow: 0 0 0 3px var(--byoa-focus-ring);
+}
+
+/* ===== General settings ===== */
+.general-settings .settings-subsection .section-description {
+  margin-bottom: var(--byoa-space-4);
+}
+
+.general-settings .backup-actions {
+  margin-top: var(--byoa-space-5);
 }
 
 /* ===== Connected sites ===== */
@@ -1953,6 +2190,11 @@ select:user-invalid:focus {
   .ui-setting,
   .activity-item {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ui-setting.ui-setting-toggle {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
   }
 
   .ui-disclosure-actions {

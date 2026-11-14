@@ -136,7 +136,10 @@ describe('connected sites section', () => {
     await initializeConnectedSites();
 
     const summary = document.getElementById('site-usage-summary')!;
-    expect(summary.textContent).toContain('Cost unknown');
+    const cost = [...summary.querySelectorAll('.ui-stat')].find(
+      (stat) => stat.querySelector('dt')?.textContent === 'Cost'
+    )!;
+    expect([...cost.querySelectorAll('dd')].map((dd) => dd.textContent)).toEqual(['Unknown']);
     expect(summary.textContent).not.toContain('$0.000000');
 
     const card = document.querySelector<HTMLElement>(`[data-origin="${origin}"]`)!;
