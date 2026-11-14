@@ -8,6 +8,11 @@ export const CONNECTION_PRESETS = {
     endpoint: PROVIDER_ENDPOINTS.openrouter,
     apiProtocol: 'openai-responses',
   },
+  ollama: {
+    label: 'Ollama',
+    endpoint: 'http://localhost:11434/v1',
+    apiProtocol: 'openai-chat-completions',
+  },
   anthropic: {
     label: 'Anthropic',
     endpoint: PROVIDER_ENDPOINTS.anthropic,
@@ -37,7 +42,7 @@ export function inferConnectionPreset(
         (preset.apiProtocol === protocol ||
           (id === 'openrouter' && protocol === 'openai-chat-completions')) &&
         (normalizeProviderEndpoint(endpoint) === preset.endpoint ||
-          (!endpoint && id !== 'openrouter'))
+          (!endpoint && id !== 'openrouter' && id !== 'ollama'))
     )?.[0] as ConnectionPreset | undefined) ?? 'custom'
   );
 }

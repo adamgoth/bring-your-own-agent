@@ -94,6 +94,10 @@ Choose the contract implemented by the endpoint, not the company that produced t
 
 **Local Ollama using legacy Chat Completions:**
 
+Ollama must allow the extension origin. Find your BYOA ID at `chrome://extensions`, then set `OLLAMA_ORIGINS` to `chrome-extension://YOUR_EXTENSION_ID` and restart Ollama. On macOS with the Ollama app, run `launchctl setenv OLLAMA_ORIGINS "chrome-extension://YOUR_EXTENSION_ID"`, quit Ollama fully, and reopen it. For a terminal server, stop the existing server and run `OLLAMA_ORIGINS="chrome-extension://YOUR_EXTENSION_ID" ollama serve`. Preserve any other origins you already configured. A 403 response can mean the origin is blocked, even though no API key is needed.
+
+Choose **Ollama** in the agent editor to prefill `http://localhost:11434/v1`, Legacy Chat, and `qwen3:4b`, with no API key required. Download the model first (`ollama pull qwen3:4b`), or enter another installed model ID. The endpoint is editable; changing it switches the editor to Custom while preserving the API mode and model.
+
 ```javascript
 {
   provider: "openai",

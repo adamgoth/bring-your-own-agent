@@ -1,9 +1,30 @@
+import { LocalEndpointAccessError } from '../src/lib/ai/local-endpoint-error';
 import { describe, expect, it, vi } from 'vitest';
 import { sidebarSessionTab } from '../src/background/chat-session';
 import { CHAT_SESSION_PREFIX, type ChatSessionSnapshot } from '../src/lib/chat-session';
 import { harness, submit, finish, stored } from './helpers/chat-session';
 
 describe('background-owned chat sessions', () => {
+  it.each([true, false])('only exposes trusted local endpoint feedback (%s)', async (trusted) => {
+    const h = harness();
+    const p = h.connect();
+    await p.ready();
+    await p.send(submit());
+    await vi.waitFor(() => expect(h.calls).toHaveLength(1));
+    h.calls[0].callbacks.onError(
+      trusted ? new LocalEndpointAccessError() : new Error('secret provider body')
+    );
+    h.calls[0].release();
+    await vi.waitFor(() =>
+      expect((stored[`${CHAT_SESSION_PREFIX}1`] as ChatSessionSnapshot).turns[0].status).toBe(
+        'error'
+      )
+    );
+    const data = JSON.stringify(stored);
+    expect(data).not.toContain('secret provider body');
+    expect(data.includes('OLLAMA_ORIGINS')).toBe(trusted);
+  });
+
   it('continues with no sidebar and replays without repeating model work', async () => {
     const h = harness();
     const first = h.connect();
