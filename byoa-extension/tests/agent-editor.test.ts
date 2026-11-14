@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentConfig } from '../src/lib/storage/config';
 import {
   SUGGESTED_MODELS,
@@ -218,6 +218,52 @@ function chooseProvider(value: string): void {
 }
 
 describe('provider presets', () => {
+  it('shows an exact-origin command and copies the selected launch method', async () => {
+    renderAgentEditor(form(), defaultAgentEditorState());
+    chooseProvider('ollama');
+    expect(document.getElementById('ollama-setup')?.classList.contains('hidden')).toBe(false);
+    const command = document.getElementById('ollama-setup-command') as HTMLTextAreaElement;
+    expect(command.value).toBe(
+      'launchctl setenv OLLAMA_ORIGINS "chrome-extension://test-extension-id"'
+    );
+    const launch = document.getElementById('ollama-launch') as HTMLSelectElement;
+    launch.value = 'terminal';
+    launch.dispatchEvent(new Event('change'));
+    expect(command.value).toBe(
+      'OLLAMA_ORIGINS="chrome-extension://test-extension-id" ollama serve'
+    );
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    document.getElementById('ollama-copy-command')?.click();
+    await Promise.resolve();
+    expect(writeText).toHaveBeenCalledWith(command.value);
+    expect(document.getElementById('ollama-copy-status')?.textContent).toBe('Command copied.');
+    chooseProvider('openai');
+    expect(document.getElementById('ollama-setup')?.classList.contains('hidden')).toBe(true);
+  });
+
+  it('prefills keyless Ollama and keeps its routing when customizing the endpoint', () => {
+    renderAgentEditor(form(), defaultAgentEditorState());
+    chooseProvider('ollama');
+    expect(readAgentDraft(form())).toMatchObject({
+      endpoint: 'http://localhost:11434/v1',
+      apiProtocol: 'openai-chat-completions',
+      model: 'qwen3:4b',
+      apiKey: undefined,
+    });
+    expect(input('agent-api-key').required).toBe(false);
+    renderAgentEditor(form(), agentToEditorState(agent({ ...readAgentDraft(form()) })));
+    expect((document.getElementById('agent-provider') as HTMLSelectElement).value).toBe('ollama');
+    input('agent-endpoint').value = 'http://localhost:1234/v1';
+    input('agent-endpoint').dispatchEvent(new Event('input', { bubbles: true }));
+    expect(readAgentDraft(form())).toMatchObject({
+      endpoint: 'http://localhost:1234/v1',
+      apiProtocol: 'openai-chat-completions',
+      model: 'qwen3:4b',
+    });
+    expect(input('agent-api-key').required).toBe(false);
+  });
+
   it.each([
     ['openai', 'https://api.openai.com/v1', 'openai-responses'],
     ['openrouter', 'https://openrouter.ai/api/v1', 'openai-responses'],

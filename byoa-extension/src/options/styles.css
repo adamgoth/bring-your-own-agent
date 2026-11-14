@@ -2201,3 +2201,9 @@ input[type='checkbox'].ui-switch:disabled {
     justify-content: flex-start;
   }
 }
+
+.ollama-setup-command {
+  font-family: var(--byoa-font-mono, monospace);
+  overflow-wrap: anywhere;
+  resize: vertical;
+}

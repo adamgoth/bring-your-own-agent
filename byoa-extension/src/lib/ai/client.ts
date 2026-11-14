@@ -1,3 +1,4 @@
+import { LocalEndpointAccessError, isLocalEndpoint } from './local-endpoint-error';
 import { withUsageAccounting } from './usage-model';
 import { emptyUsage, addUsage, type TaskUsage } from '../usage';
 import { validateSiteShare, type SiteShare } from '../site-grant';
@@ -136,9 +137,10 @@ function toolErrorFeedback(error: unknown): string {
 }
 
 /** Provider errors may contain prompts, generated text, headers, or proxy internals. */
-function publicAIRequestError(error: unknown): Error {
+function publicAIRequestError(error: unknown, endpoint?: string): Error {
   if (error instanceof MemoryMountError) return error;
   const status = getErrorStatus(error);
+  if (status === 403 && isLocalEndpoint(endpoint)) return new LocalEndpointAccessError();
   const message = error instanceof Error ? error.message.toLowerCase() : '';
   if (
     status === 401 ||
@@ -359,6 +361,7 @@ export class AIClient {
     };
     this.pendingStreams.set(streamId, pendingStream);
 
+    let requestEndpoint: string | undefined;
     try {
       validateWorkspaceContext(workspaceContext, agentId);
       const loadedAgent = await raceWithAbort(
@@ -377,6 +380,7 @@ export class AIClient {
         throw new Error('Configure credentials or a custom endpoint in Settings.');
       }
 
+      requestEndpoint = agent.endpoint;
       if (agent) siteTask?.onProfile?.(globalThis.structuredClone(agent));
       const establishingWorkspaceContext = workspaceContext === undefined;
       const share = validateSiteShare(siteTask?.share);
@@ -873,7 +877,7 @@ export class AIClient {
         notifyAbort();
         return;
       }
-      callbacks.onError(publicAIRequestError(error));
+      callbacks.onError(publicAIRequestError(error, requestEndpoint));
     } finally {
       removeRemoteRevocationListener?.();
       if (this.pendingStreams.get(streamId) === pendingStream) {
@@ -1005,7 +1009,7 @@ export class AIClient {
     } catch (error) {
       return {
         success: false,
-        message: publicAIRequestError(error).message,
+        message: publicAIRequestError(error, details.endpoint).message,
       };
     }
   }

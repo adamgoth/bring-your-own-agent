@@ -1,3 +1,4 @@
+import { isLocalEndpoint } from '../lib/ai/local-endpoint-error';
 import { normalizeProviderEndpoint, PROVIDER_ENDPOINTS } from '../lib/ai/provider-endpoints';
 import {
   CONNECTION_PRESETS,
@@ -224,17 +225,20 @@ function updateApiKeyRequirement(form: HTMLFormElement): void {
   const preset = Object.values(CONNECTION_PRESETS).find(
     (value) => value.endpoint === normalizeProviderEndpoint(endpoint)
   );
-  apiKey.required = !endpoint || Boolean(preset);
+  const localPreset = preset === CONNECTION_PRESETS.ollama;
+  apiKey.required = !endpoint || (Boolean(preset) && !localPreset);
   requiredMarker.classList.toggle('hidden', !apiKey.required);
   const provider = requiredControl<HTMLSelectElement>(form, 'agent-provider').value;
   apiKey.placeholder = isConnectionPreset(provider)
     ? `Your ${CONNECTION_PRESETS[provider].label} API key`
     : 'Your API key';
-  hint.textContent = preset
-    ? `Enter your ${preset.label} API key.`
-    : endpoint
-      ? 'Optional only if this endpoint accepts requests without an API key.'
-      : 'Required for direct provider connections.';
+  hint.textContent = localPreset
+    ? 'Optional. Local Ollama does not require an API key.'
+    : preset
+      ? `Enter your ${preset.label} API key.`
+      : endpoint
+        ? 'Optional only if this endpoint accepts requests without an API key.'
+        : 'Required for direct provider connections.';
   hint.className = 'api-key-hint';
 }
 
@@ -244,11 +248,17 @@ function updateDerivedVisibility(form: HTMLFormElement): void {
   const connectionApi = providerForApiProtocol(apiProtocol);
   const reasoningEnabled = data.has('reasoningEnabled');
   const provider = requiredControl<HTMLSelectElement>(form, 'agent-provider').value;
+  requiredControl<HTMLElement>(form, 'ollama-setup').classList.toggle(
+    'hidden',
+    provider !== 'ollama' && !isLocalEndpoint(formString(data, 'endpoint'))
+  );
   const custom = provider === 'custom';
   requiredControl<HTMLElement>(form, 'connection-api-group').classList.toggle('hidden', !custom);
   requiredControl<HTMLElement>(form, 'agent-provider-hint').textContent = custom
     ? 'Choose the API type and endpoint for your provider or local server.'
-    : 'Connection details are filled in for you. Enter your model ID and API key.';
+    : provider === 'ollama'
+      ? 'Choose a model you have downloaded. Complete Ollama setup below before connecting.'
+      : 'Connection details are filled in for you. Enter your model ID and API key.';
   const endpoint = requiredControl<HTMLInputElement>(form, 'agent-endpoint');
   endpoint.placeholder = isConnectionPreset(provider)
     ? CONNECTION_PRESETS[provider].endpoint
@@ -293,6 +303,7 @@ export function refreshAgentEditor(form: HTMLFormElement): void {
 /** Render every persisted and hidden field before exposing the editor. */
 export function renderAgentEditor(form: HTMLFormElement, state: AgentEditorState): void {
   form.reset();
+  requiredControl<HTMLSelectElement>(form, 'ollama-launch').dispatchEvent(new Event('change'));
   setValue(form, 'agent-provider', inferConnectionPreset(state.endpoint, state.apiProtocol));
   setValue(form, 'agent-name', state.name);
   setValue(form, 'agent-description', state.description);
@@ -353,6 +364,36 @@ function updateModelControls(form: HTMLFormElement): void {
 }
 
 export function initializeAgentEditor(form: HTMLFormElement): void {
+  const launch = requiredControl<HTMLSelectElement>(form, 'ollama-launch');
+  const command = requiredControl<HTMLTextAreaElement>(form, 'ollama-setup-command');
+  const copyStatus = requiredControl<HTMLElement>(form, 'ollama-copy-status');
+  const updateCommand = () => {
+    const origin = `chrome-extension://${chrome.runtime.id}`;
+    command.value =
+      launch.value === 'macos'
+        ? `launchctl setenv OLLAMA_ORIGINS "${origin}"`
+        : launch.value === 'windows'
+          ? `[Environment]::SetEnvironmentVariable("OLLAMA_ORIGINS", "${origin}", "User")`
+          : `OLLAMA_ORIGINS="${origin}" ollama serve`;
+    requiredControl<HTMLElement>(form, 'ollama-restart-hint').textContent =
+      launch.value === 'terminal'
+        ? 'Stop the existing Ollama server first, then run this command to start it.'
+        : 'After running the command, fully quit Ollama and reopen it, then test the connection.';
+    copyStatus.textContent = '';
+  };
+  updateCommand();
+  launch.addEventListener('change', updateCommand);
+  requiredControl<HTMLButtonElement>(form, 'ollama-copy-command').addEventListener(
+    'click',
+    async () => {
+      try {
+        await globalThis.navigator.clipboard.writeText(command.value);
+        copyStatus.textContent = 'Command copied.';
+      } catch {
+        copyStatus.textContent = 'Could not copy. Select the command and copy it manually.';
+      }
+    }
+  );
   const modelPreset = requiredControl<HTMLSelectElement>(form, 'agent-model-preset');
   const modelInput = requiredControl<HTMLInputElement>(form, 'agent-model');
   const option = (label: string, value: string) => {
@@ -390,6 +431,7 @@ export function initializeAgentEditor(form: HTMLFormElement): void {
           ? preset.apiProtocol
           : 'openai-responses'
       );
+      if (provider === 'ollama') setValue(form, 'agent-model', 'qwen3:4b');
       // A key for the previous provider must not follow a new destination.
       setValue(form, 'agent-api-key', '');
     }

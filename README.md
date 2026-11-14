@@ -1,5 +1,7 @@
 # Bring Your Own Agent (BYOA)
 
+BYOA lets you use your own AI agent inside any web app that supports it, instead of whatever AI the app has built in.
+
 ![A visitor connects their agent to the Margin demo, approves the site in BYOA's own window, asks for a warmer opening paragraph, watches the agent work, then accepts the suggested edit in the page.](docs/media/byoa-demo.gif)
 
 Configure your agent once in a browser extension. Connect an app, send a request from inside it, and review the results there. The extension runs the agent in the background; its sidebar is optional.

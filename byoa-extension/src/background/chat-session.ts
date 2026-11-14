@@ -1,3 +1,4 @@
+import { LocalEndpointAccessError } from '../lib/ai/local-endpoint-error';
 import { MemoryMountError } from '../lib/memory/manager';
 import type { CoreMessage } from 'ai';
 import type { AIClient, StreamFinishMetadata } from '../lib/ai/client';
@@ -331,7 +332,7 @@ export function createChatSessionService(
             },
             onError: (error) => {
               failure =
-                error instanceof MemoryMountError
+                error instanceof MemoryMountError || error instanceof LocalEndpointAccessError
                   ? error
                   : new Error('AI request failed. Check the agent connection and try again.');
             },
@@ -378,6 +379,7 @@ export function createChatSessionService(
           turn,
           'error',
           error instanceof MemoryMountError ||
+            error instanceof LocalEndpointAccessError ||
             (error instanceof Error && error.message.startsWith('Another sidebar'))
             ? error.message
             : 'Chat interrupted or failed. Review results before retrying; check the agent connection if this persists.'

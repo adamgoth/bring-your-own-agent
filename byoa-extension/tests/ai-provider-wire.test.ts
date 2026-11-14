@@ -876,6 +876,26 @@ describe('AI provider wire contracts', () => {
     }
   });
 
+  it('explains an empty local-server 403 without exposing response data', async () => {
+    const server = await startAIWireServer({
+      statusCode: 403,
+      contentType: 'text/plain',
+      chunks: [],
+    });
+    try {
+      const result = await AIClient.getInstance().testConnectionWithDetails({
+        apiProtocol: 'openai-chat-completions',
+        model: 'qwen3:4b',
+        endpoint: `${server.baseURL}/v1`,
+      });
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('OLLAMA_ORIGINS');
+      expect(server.getRequestCount()).toBe(1);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('does not retry or fall back after a Chat connection-probe failure', async () => {
     const server = await startAIWireServer({
       statusCode: 404,

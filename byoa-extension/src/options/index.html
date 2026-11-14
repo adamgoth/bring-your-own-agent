@@ -362,6 +362,7 @@
                 <select id="agent-provider" aria-describedby="agent-provider-hint">
                   <option value="openai">OpenAI</option>
                   <option value="openrouter">OpenRouter</option>
+                  <option value="ollama">Ollama</option>
                   <option value="anthropic">Anthropic</option>
                   <option value="google">Google Gemini</option>
                   <option value="custom">Custom / other provider</option>
@@ -369,6 +370,41 @@
                 <span class="field-hint" id="agent-provider-hint"
                   >Connection details are filled in for you. Enter your model ID and API key.</span
                 >
+              </div>
+
+              <div
+                id="ollama-setup"
+                class="agent-config-section hidden"
+                aria-labelledby="ollama-setup-title"
+              >
+                <strong id="ollama-setup-title">Ollama setup</strong>
+                <p class="field-hint">
+                  Allow this extension to connect to Ollama. Choose how you run Ollama, copy the
+                  command, and run it in Terminal. Keep any other origins you already configured.
+                </p>
+                <div class="form-group">
+                  <label for="ollama-launch">Run Ollama with</label>
+                  <select id="ollama-launch">
+                    <option value="macos">macOS app</option>
+                    <option value="terminal">Terminal (macOS / Linux)</option>
+                    <option value="windows">Windows app (PowerShell)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="ollama-setup-command">Setup command</label>
+                  <textarea
+                    id="ollama-setup-command"
+                    class="ollama-setup-command"
+                    readonly
+                    rows="3"
+                    spellcheck="false"
+                  ></textarea>
+                  <button type="button" id="ollama-copy-command" class="button button-small">
+                    Copy command
+                  </button>
+                  <span id="ollama-copy-status" class="field-hint" role="status"></span>
+                  <span id="ollama-restart-hint" class="field-hint"></span>
+                </div>
               </div>
 
               <div class="form-group" id="connection-api-group">
