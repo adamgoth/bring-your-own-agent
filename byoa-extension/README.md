@@ -1,18 +1,22 @@
-# BYOA
+# BYOA extension
+
+The browser extension behind [Bring Your Own Agent](../README.md). It holds your agent profiles and API keys, and does two jobs:
+
+- **Agent for BYOA-enabled apps.** A web app that integrates the [BYOA SDK](../packages/browser/README.md) can ask to connect. You approve the site and pick a profile in BYOA's own window, and the app can then request background work that uses only the page tools it named. You control connection duration, spending budgets and optional context sharing in **Options → Connected sites**. See [How it works](../README.md#how-it-works) and [Limits, permissions and privacy](../docs/limits-and-privacy.md).
+- **Sidebar agent for any page.** A tab-scoped chat with page tools, remote MCP servers, your own WebMCP scripts and prompt commands. Most of this README covers the sidebar.
 
 BYOA is an independent fork of [AgentBoard](https://github.com/igrigorik/agentboard) by [Ilya Grigorik](https://github.com/igrigorik). The original MIT license and copyright notices remain in [LICENSE](LICENSE).
 
-A switchboard for AI in your browser: wire in any model, script WebMCP tools, connect remote MCP servers, bring your commands.
+## What the sidebar gives you
 
 - **Multi agent**: Configure as many profiles as you want and switch mid-conversation.
-- **Your connection**: OpenAI-style Responses or legacy Chat Completions, Anthropic Messages, Google Generative AI, or a compatible proxy endpoint.
+- **Your connection**: OpenAI-style Responses or legacy Chat Completions, Anthropic Messages, Google Generative AI, or a compatible proxy endpoint. Presets include OpenRouter and local Ollama.
 - **Your settings**: Models, endpoints, temperature, and thinking settings.
 - **Your workspace**: Optionally connect a local folder for agent behavior and durable memory.
 - **Your keys**: Bring your own API keys. No lock-in, no upselling.
 - **Your tools**: Script WebMCP tools for page interactions. Connect remote MCP servers.
 - **Your commands**: Template prompts with arguments; type `/analyze`, not paragraphs.
-
-Bring your own models—local, fine-tuned, custom—to power multiple agent profiles. Connect remote MCP servers: bring external tools (APIs, databases, services) into browser context. Script WebMCP tools that interact with page content — think, Greasemonkey for the AI age. Built for power users.
+- **Your voice**: Optional dictation, transcribed on your device.
 
 ## Install locally
 
@@ -22,7 +26,7 @@ The [upstream AgentBoard Chrome Web Store listing](https://chromewebstore.google
 
 ## Compatibility and release tooling
 
-The SDK export `agentboard`, built-in `agentboard_*` tool names, message/port namespaces, storage and database keys, lock names, test environment variables, and backup `exportedBy: 'AgentBoard'` marker are retained for compatibility. They are technical identifiers, not product labels. The private local SDK package is named `@byoa/browser`; apps currently import its source by relative path.
+The SDK export `agentboard`, built-in `agentboard_*` tool names, message/port namespaces, storage and database keys, lock names, test environment variables, and backup `exportedBy: 'AgentBoard'` marker are retained for compatibility. They are technical identifiers, not product labels. The SDK packages are `@byoagent/browser` and `@byoagent/react`. They are built locally from this repository and are not on npm yet.
 
 Release scripts use BYOA artifact names and require a clean annotated Git tag. GitHub release creation additionally requires a publishing repository configured in the extension package metadata and rejects the upstream AgentBoard repository as a destination. Use the normal build for development.
 
@@ -198,7 +202,7 @@ Fast interactions with expansion templates.
 
 BYOA has no operated telemetry or AI proxy, but configured features are not local-only. When you send a chat, the selected AI endpoint receives the conversation plus URL and title snapshots captured for its user turns; switching agents can therefore send the existing in-memory conversation and its page-context snapshots to the newly selected endpoint. URLs, including local `file://` URLs, may contain sensitive paths, query parameters, fragments, document identifiers, or tokens. AI endpoints can also receive attachments, tool definitions, tool arguments, and tool results. Remote MCP servers receive MCP protocol traffic and authorization tokens. Credential-free URL fetches contact the requested website. The built-in YouTube transcript tool contacts YouTube Innertube and caption endpoints; its same-origin Innertube request and explicit caption request can include browser YouTube/Google session credentials. User WebMCP scripts run with page-level capabilities defined by their source.
 
-Settings are stored in `chrome.storage.local`. Normal sidebar conversations are kept in memory. Experimental page-request tasks keep bounded transcripts in extension session storage for optional chat viewing; these clear with the browser session. At DEBUG or TRACE, BYOA logs local diagnostic context that may contain sensitive application, page, and tool data. It applies basic credential sanitization, but review logs before sharing them externally. Other levels discard caller-supplied values. Generated page-tool registration wrappers and browser/provider code log independently and may include their own errors. Settings exports are plaintext and can contain AI credentials, MCP tokens, endpoint URLs, and executable user scripts; treat every backup as a secret.
+Settings are stored in `chrome.storage.local`. Sidebar conversations are kept in extension session storage and clear when the browser session ends. Experimental page-request tasks keep bounded transcripts in extension session storage for optional chat viewing; these clear with the browser session. At DEBUG or TRACE, BYOA logs local diagnostic context that may contain sensitive application, page, and tool data. It applies basic credential sanitization, but review logs before sharing them externally. Other levels discard caller-supplied values. Generated page-tool registration wrappers and browser/provider code log independently and may include their own errors. Settings exports are plaintext and can contain AI credentials, MCP tokens, endpoint URLs, and executable user scripts; treat every backup as a secret.
 
 OpenAI Responses requests include `store: false`, but that does not guarantee Zero Data Retention or disable provider/proxy logging, abuse monitoring, retention, or prompt caching. See [PRIVACY.md](PRIVACY.md) for the complete boundary and deletion guidance.
 
@@ -239,6 +243,6 @@ Sites that deploy strict CSP (e.g. no dynamic scripts) may not allow custom tool
 
 BYOA does not send telemetry to an BYOA-operated service. It stores your settings locally and sends request data to the AI, MCP, and website endpoints you configure or invoke. See [PRIVACY.md](PRIVACY.md) for the exact data boundaries.
 
-## Experimental app provider demo
+## Connecting web apps
 
-The local browser client in [sdk/README.md](../packages/browser/README.md) lets an app request background agent work using its existing WebMCP tools. Margin and Boardwalk use the same interface; the extension contains no per-app tool names or DOM handlers. This is a local prototype with explicit origin restrictions, not a public WebMCP standard or production permission system. See [LOCAL_TESTING.md](LOCAL_TESTING.md#connect-and-try-the-demos) for setup and checks.
+The [browser SDK](../packages/browser/README.md) lets an app request background agent work using its existing WebMCP tools. Margin and Boardwalk use the same interface; the extension contains no per-app tool names or DOM handlers. Any top-level HTTPS page or loopback development server can ask to connect, and each exact origin needs your approval. This is an experimental interface, not a public WebMCP standard. See the [integration guide](../docs/web-app-integration.md) to build it into an app and [LOCAL_TESTING.md](LOCAL_TESTING.md#connect-and-try-the-demos) for setup and checks.
