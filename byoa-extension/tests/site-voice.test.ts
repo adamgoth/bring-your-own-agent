@@ -307,8 +307,15 @@ it('disconnects an existing pane and releases capture when voice mode is switche
 });
 
 it('starts a new conversation that drops history and retires the old conversation id', async () => {
-  const { send, bindingId } = await boundWidget();
+  const { port, send, bindingId } = await boundWidget();
   send({ type: 'new-conversation' });
+  send({ type: 'start', language: 'en-US' });
+  await vi.waitFor(() => expect(mocks.start).toHaveBeenCalledOnce());
+  // Heartbeat and focus synchronization must preserve the widget and its capture.
+  expect(await register()).toEqual({ enabled: true, bindingId });
+  expect(await register()).toEqual({ enabled: true, bindingId });
+  expect(port.disconnect).not.toHaveBeenCalled();
+  expect(mocks.release).not.toHaveBeenCalled();
   const reply = vi.fn();
   listener(
     { type: 'SITE_VOICE_CONTINUE', tabId: 7, conversationId: bindingId, text: 'Continue' },
