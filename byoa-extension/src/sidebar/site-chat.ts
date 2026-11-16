@@ -1,5 +1,29 @@
 import { siteChatPrefix, type SiteChat } from '../lib/site-chat';
 import { StreamingMarkdownRenderer } from './StreamingMarkdownRenderer';
+import { formatTokens, formatUsd } from '../options/format';
+
+/**
+ * One quiet meta line per task: agent, status and usage. Unknown cost is left out; the full
+ * figures stay in the tooltip and in Settings, Connected sites.
+ */
+export function siteChatMeta(chat: SiteChat): { text: string; title: string } {
+  const parts = [chat.agentName ?? 'BYOA', chat.status];
+  const details: string[] = [];
+  if (chat.usage) {
+    const incomplete = !chat.usage.usageKnown;
+    const tokens = formatTokens(chat.usage.totalTokens, incomplete);
+    parts.push(tokens);
+    if (chat.usage.costUsd !== undefined) parts.push(formatUsd(chat.usage.costUsd, incomplete));
+    details.push(`${tokens} · ${formatUsd(chat.usage.costUsd, incomplete)}`);
+    if (incomplete) details.push('Usage is incomplete; the step limit was used as a fallback.');
+  }
+  details.push(
+    chat.shared?.length
+      ? `Shared with this task: ${chat.shared.join(', ')}`
+      : 'Nothing shared from your workspace'
+  );
+  return { text: parts.join(' · '), title: details.join('\n') };
+}
 
 /** Display popup task history without replacing the sidebar's own conversation or draft. */
 export function setupSiteChat(tabId: number | null, container: HTMLElement) {
@@ -70,20 +94,19 @@ export function setupSiteChat(tabId: number | null, container: HTMLElement) {
         for (const chat of chats) {
           const article = document.createElement('article');
           article.dataset.taskId = chat.id;
+          const meta = siteChatMeta(chat);
           const label = document.createElement('p');
           label.className = 'site-chat-label';
-          label.textContent = `${chat.agentName ?? 'BYOA'} · ${chat.status}`;
+          label.textContent = meta.text;
+          label.title = meta.title;
           article.append(label);
-          if (chat.usage) {
-            const usage = document.createElement('p');
-            usage.textContent = `${chat.usage.totalTokens} tokens${chat.usage.usageKnown ? '' : ' (incomplete; falling back to step limit)'} · ${chat.usage.costUsd === undefined ? 'Cost unknown' : `$${chat.usage.costUsd.toFixed(6)}`}`;
-            article.append(usage);
+          // Sharing is privacy-relevant, so it stays visible whenever something was shared.
+          if (chat.shared?.length) {
+            const shared = document.createElement('p');
+            shared.className = 'site-chat-label';
+            shared.textContent = `Shared: ${chat.shared.join(', ')}`;
+            article.append(shared);
           }
-          const shared = document.createElement('p');
-          shared.textContent = chat.shared?.length
-            ? `Shared with this task: ${chat.shared.join(', ')}`
-            : 'Nothing shared from your workspace';
-          article.append(shared);
           if (chat.notice) {
             const notice = document.createElement('p');
             notice.textContent = chat.notice;

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { setupSiteChat } from '../src/sidebar/site-chat';
+import { setupSiteChat, siteChatMeta } from '../src/sidebar/site-chat';
 import type { SiteChat } from '../src/lib/site-chat';
 
 const sessionGet = vi.mocked(
@@ -105,5 +105,28 @@ describe('Site chat history in the sidebar', () => {
       document.querySelector<HTMLButtonElement>('#site-agent-chat form button[type="submit"]')!
         .disabled
     ).toBe(false);
+  });
+});
+
+describe('site chat meta line', () => {
+  const usage = { totalTokens: 8285, usageKnown: true } as SiteChat['usage'];
+  it('keeps agent, status and tokens on one line and leaves out unknown cost', () => {
+    const meta = siteChatMeta({ ...chat, agentName: 'deepseek', usage });
+    expect(meta.text).toBe(`deepseek · done · ${(8285).toLocaleString()} tokens`);
+    expect(meta.title).toContain('Cost unknown');
+    expect(meta.title).toContain('Nothing shared from your workspace');
+  });
+  it('shows known cost and marks incomplete usage', () => {
+    const meta = siteChatMeta({
+      ...chat,
+      usage: { totalTokens: 20, usageKnown: false, costUsd: 0.0012 } as SiteChat['usage'],
+    });
+    expect(meta.text).toBe('Test agent · done · 20+ tokens · $0.0012+');
+    expect(meta.title).toContain('incomplete');
+  });
+  it('lists shared items in the tooltip', () => {
+    expect(siteChatMeta({ ...chat, shared: ['page text'] }).title).toContain(
+      'Shared with this task: page text'
+    );
   });
 });

@@ -287,7 +287,7 @@ export function setupSiteVoice(options: {
       const entry = bindings.get(boundTab);
       if (!entry || message.conversationId !== entry.id) {
         reply({
-          error: 'This conversation belongs to a previous document. Start a new task on the site.',
+          error: 'This conversation has ended. Start a new task on the site.',
         });
         return false;
       }
@@ -379,6 +379,17 @@ export function setupSiteVoice(options: {
       }
       if (message.type === 'finish') {
         voice.finish(port);
+        return;
+      }
+      if (message.type === 'new-conversation') {
+        if (entry.busy) {
+          send(entry, { type: 'error', error: 'Wait for the current task to finish.' });
+          return;
+        }
+        // A new id also stops the sidebar from continuing the old thread with this binding.
+        entry.history = [];
+        entry.taskId = undefined;
+        entry.id = globalThis.crypto.randomUUID();
         return;
       }
       const token = generation;

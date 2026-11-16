@@ -11,7 +11,11 @@ const finish = el<HTMLButtonElement>('finish'),
   cancel = el<HTMLButtonElement>('cancel');
 const open = el<HTMLButtonElement>('open'),
   result = el('result'),
+  resultLabel = el('result-label'),
   language = el<HTMLSelectElement>('language');
+const talk = el<HTMLButtonElement>('talk'),
+  newConversation = el<HTMLButtonElement>('new-conversation');
+const capturing = ['starting', 'recording', 'finishing'];
 const port = chrome.runtime.connect({ name: 'byoa-site-voice' });
 const paint = createVoiceBars(bars);
 let state = 'idle';
@@ -21,7 +25,6 @@ let bound = false;
 let autoSend = false;
 let submitted = false;
 let hasResult = false;
-let collapseTimer: ReturnType<typeof setTimeout> | undefined;
 const post = (message: object) => {
   try {
     port.postMessage(message);
@@ -44,18 +47,42 @@ const expand = (value: boolean) => {
   mic.hidden = value;
   reportSize();
 };
+// A result stays on screen while the person replies to it; it is compacted, not removed.
 const render = () => {
+  const settled = ['idle', 'result', 'error'].includes(state);
   bars.hidden = !['recording', 'finishing'].includes(state);
   draft.hidden = state !== 'review';
-  result.hidden = state !== 'result';
+  result.hidden = !hasResult;
+  result.classList.toggle('is-previous', hasResult && state !== 'result');
+  resultLabel.hidden = !hasResult || state === 'result';
+  talk.hidden = !settled;
+  talk.textContent = hasResult ? 'Reply' : 'Talk';
+  talk.disabled = !bound;
   finish.hidden = state !== 'recording';
   send.hidden = !['recording', 'finishing', 'review'].includes(state);
   send.disabled = state === 'finishing' || submitted;
-  cancel.hidden = !['starting', 'recording', 'finishing', 'review', 'working'].includes(state);
+  cancel.hidden = settled;
   cancel.textContent = state === 'review' ? 'Discard' : 'Cancel';
-  open.hidden = !hasResult;
-  language.disabled = ['starting', 'recording', 'finishing', 'working'].includes(state);
+  open.hidden = !hasResult || capturing.includes(state) || state === 'review';
+  newConversation.hidden = !hasResult || !settled;
+  language.disabled = [...capturing, 'working'].includes(state);
   mic.disabled = !bound;
+};
+/** Leave capture or review and return to the last result, if there is one. */
+const settle = (message: string) => {
+  autoSend = false;
+  draft.value = '';
+  state = hasResult ? 'result' : 'idle';
+  status.textContent = message;
+};
+const startRecording = () => {
+  autoSend = false;
+  submitted = false;
+  state = 'starting';
+  status.textContent = hasResult ? 'Starting your reply…' : 'Starting local dictation…';
+  expand(true);
+  post({ type: 'start', language: language.value });
+  render();
 };
 function fail(error: string) {
   autoSend = false;
@@ -74,24 +101,19 @@ const submit = () => {
 };
 const onClick = (id: string, action: () => void) =>
   el(id).addEventListener('click', (event) => {
-    if (event.isTrusted) {
-      clearTimeout(collapseTimer);
-      action();
-    }
+    if (event.isTrusted) action();
   });
+// One click on the launcher always means "talk", including a reply after a result.
+// It only reopens the panel when a draft or task is already in progress.
 onClick('mic', () => {
-  expand(true);
-  if (hasResult || state === 'review') {
+  if ([...capturing, 'review', 'working'].includes(state)) {
+    expand(true);
     render();
     return;
   }
-  autoSend = false;
-  submitted = false;
-  state = 'starting';
-  status.textContent = 'Starting local dictation…';
-  post({ type: 'start', language: language.value });
-  render();
+  startRecording();
 });
+onClick('talk', startRecording);
 onClick('finish', () => {
   state = 'finishing';
   post({ type: 'finish' });
@@ -106,45 +128,31 @@ onClick('send', () => {
   } else if (state === 'review') submit();
 });
 onClick('cancel', () => {
-  autoSend = false;
   post({ type: 'cancel' });
-  draft.value = '';
-  state = 'idle';
-  status.textContent = 'Dictation discarded.';
-  expand(false);
+  settle(state === 'review' ? 'Dictation discarded.' : 'Cancelled. Nothing was sent.');
+  if (!hasResult) expand(false);
   render();
 });
 onClick('collapse', () => {
-  if (['starting', 'recording', 'finishing'].includes(state)) {
-    autoSend = false;
+  if (capturing.includes(state)) {
     post({ type: 'cancel' });
-    state = 'idle';
+    settle('Cancelled. Nothing was sent.');
   }
   expand(false);
+  render();
 });
 onClick('open', () => post({ type: 'open' }));
 onClick('setup', () => {
   post({ type: 'cancel' });
   post({ type: 'setup' });
-  autoSend = false;
-  state = 'idle';
+  settle('Finish voice setup in the new tab, then try again.');
   render();
 });
-// The result stays accessible until the next deliberate recording.
-const again = document.createElement('button');
-again.textContent = 'Dictate again';
-again.hidden = true;
-open.after(again);
-again.addEventListener('click', (event) => {
-  if (!event.isTrusted) return;
-  clearTimeout(collapseTimer);
+onClick('new-conversation', () => {
+  post({ type: 'new-conversation' });
   hasResult = false;
-  submitted = false;
-  autoSend = false;
-  state = 'starting';
-  again.hidden = true;
-  status.textContent = 'Starting local dictation…';
-  post({ type: 'start', language: language.value });
+  result.replaceChildren();
+  settle('New chat started. Earlier replies won’t be used as context.');
   render();
 });
 port.onMessage.addListener((message) => {
@@ -191,10 +199,9 @@ port.onMessage.addListener((message) => {
     result.replaceChildren();
     StreamingMarkdownRenderer.renderComplete(result, message.text);
     status.textContent = message.status === 'done' ? 'Completed' : message.detail;
-    again.hidden = false;
     expand(true);
+    // The panel stays open after an answer; only the person collapses it (collapse button or Escape).
     render();
-    if (message.status === 'done') collapseTimer = setTimeout(() => expand(false), 10000);
   }
   if (message.type === 'error' || message.type === 'lost')
     fail(message.error || 'Recording stopped when focus or connection changed. Nothing was sent.');
@@ -205,9 +212,8 @@ port.onDisconnect.addListener(() => {
 });
 globalThis.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
-    autoSend = false;
     post({ type: 'cancel' });
-    state = 'idle';
+    settle('Cancelled. Nothing was sent.');
     expand(false);
     render();
   }

@@ -7,33 +7,82 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <button id="mic" title="Dictate to this site" aria-label="Dictate to this site" disabled>
+    <button
+      id="mic"
+      class="launcher"
+      title="Talk to this site with BYOA"
+      aria-label="Talk to this site with BYOA"
+      disabled
+    >
+      <svg class="dock" viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M5 5.5V11.5A7 7 0 0 0 19 11.5V5.5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="3.5"
+          stroke-linecap="round"
+        />
+        <circle cx="12" cy="8" r="3.5" />
+      </svg>
+      <span class="launcher-divider" aria-hidden="true"></span>
       <svg
+        class="mic-icon"
         viewBox="0 0 24 24"
-        width="24"
-        height="24"
         fill="none"
         stroke="currentColor"
-        stroke-width="1.7"
+        stroke-width="2"
+        stroke-linecap="round"
         aria-hidden="true"
       >
-        <rect x="9" y="2" width="6" height="12" rx="3" />
-        <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" />
+        <rect x="9" y="3" width="6" height="11" rx="3" />
+        <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
       </svg>
     </button>
     <section id="panel" hidden aria-label="Site voice">
       <header>
-        <strong>BYOA · this site</strong
-        ><button id="collapse" aria-label="Collapse voice">−</button>
+        <svg class="dock" viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M5 5.5V11.5A7 7 0 0 0 19 11.5V5.5"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="3.5"
+            stroke-linecap="round"
+          />
+          <circle cx="12" cy="8" r="3.5" />
+        </svg>
+        <strong>BYOA · this site</strong>
+        <button id="collapse" class="icon-button" aria-label="Collapse voice">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <path d="M6 12h12" />
+          </svg>
+        </button>
       </header>
+      <p id="result-label" class="result-label" hidden>Last reply</p>
+      <div id="result" hidden></div>
       <p id="status" role="status">Connecting…</p>
       <canvas id="bars" width="280" height="38" hidden aria-label="Microphone volume"></canvas>
       <textarea id="draft" aria-label="Review your transcript" maxlength="30000" hidden></textarea>
-      <div id="result" hidden></div>
       <div class="actions">
-        <button id="finish" hidden>Finish</button><button id="send" hidden>Send</button
+        <button id="talk" class="primary" hidden>Talk</button
+        ><button id="finish" hidden>Finish</button
+        ><button id="send" class="primary" hidden>Send</button
         ><button id="cancel" hidden>Cancel</button
-        ><button id="open" hidden>Open conversation</button>
+        ><button id="open" hidden>Open conversation</button
+        ><button
+          id="new-conversation"
+          class="text-button"
+          hidden
+          title="Start a new conversation without earlier replies"
+        >
+          New chat
+        </button>
       </div>
       <footer>
         <label
@@ -43,7 +92,7 @@
             <option value="en-GB">English (UK)</option>
             <option value="sv-SE">Swedish</option>
           </select></label
-        ><button id="setup">Voice setup</button>
+        ><button id="setup" class="text-button">Voice setup</button>
       </footer>
     </section>
     <script type="module" src="./index.ts"></script>
