@@ -49,6 +49,8 @@ async function setup(page: Page) {
     };
   });
   await page.goto('/');
+  // Title actions are available before asynchronous provider detection finishes.
+  await expect(page.locator('.byoa-indicator')).toHaveAttribute('data-state', 'connected');
   await page.getByRole('button', { name: 'New document', exact: true }).click();
   await page.getByLabel('What are you writing?').fill('A short invitation to our reading group.');
 }
