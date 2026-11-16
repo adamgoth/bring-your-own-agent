@@ -10,39 +10,18 @@ Configure your agent once in the BYOA browser extension: your provider, your mod
 
 ## How it works
 
-```mermaid
-flowchart TB
-  subgraph Page["Web app (the page)"]
-    direction LR
-    UI["App UI<br/>Connect Agent, prompts,<br/>review and undo"]
-    SDK["BYOA SDK<br/>@byoagent/browser<br/>@byoagent/react"]
-    Tools["WebMCP tools<br/>registered by the app"]
-  end
-  subgraph Ext["BYOA extension"]
-    direction LR
-    Approve["Approval popup<br/>you approve the site<br/>and pick a profile"]
-    Agent["Background agent<br/>profiles, keys,<br/>budgets, limits"]
-    Side["Optional<br/>sidebar chat,<br/>floating voice"]
-  end
-  Model["Your model provider<br/>your API key"]
-
-  UI --> SDK
-  SDK -- "1 connect" --> Approve
-  SDK -- "2 request: prompt + tool names" --> Agent
-  Agent <-- "3 model calls" --> Model
-  Agent -- "4 tool calls" --> Tools
-  Tools -- "5 proposals" --> UI
-  Approve --> Agent
-  Agent -.-> Side
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/how-it-works-dark.svg">
+  <img alt="How BYOA works. Your web app, the BYOA extension and your model provider, connected by five numbered steps: 1 Connect, 2 Ask, 3 Think, 4 Use tools, 5 You review." src="docs/media/how-it-works.svg" width="100%">
+</picture>
 
 The app registers its actions (read the selection, propose an edit) as [WebMCP](https://github.com/webmachinelearning/webmcp) tools in the page. Then:
 
-1. **Connect.** The app's **Connect Agent** button calls the SDK. BYOA opens its own window where you approve that exact site and pick an agent profile. The app never sees your keys or your other profiles.
-2. **Request.** The app sends a prompt and the names of the tools the agent may use.
-3. **Model calls.** BYOA runs your agent in the background against your model provider, with your key.
-4. **Tool calls.** When the agent uses a tool, BYOA routes the call back to the page, where the app's own code runs it.
-5. **Proposals.** The app shows what the agent proposed, and you accept, reject or undo.
+1. **Connect.** You click **Connect Agent** in the app. BYOA opens its own window where you approve that exact site and pick an agent profile. The app never sees your keys or your other profiles.
+2. **Ask.** The app sends a prompt and the names of the tools the agent may use.
+3. **Think.** BYOA runs your agent in the background on your model provider, with your key.
+4. **Use tools.** When the agent calls a tool, BYOA routes the call back to the page, where the app's own code runs it.
+5. **You review.** The app shows what the agent proposed, and you accept, reject or undo.
 
 The sidebar is optional: tasks run without it, and you can open a task's transcript there when you want to see what the agent did.
 
