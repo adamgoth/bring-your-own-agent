@@ -1527,8 +1527,11 @@ textarea {
 }
 .site-chat-label {
   font-size: 12px;
-  opacity: 0.7;
+  color: var(--byoa-ink-muted);
   margin: 8px 0;
+}
+.site-chat-label + .site-chat-label {
+  margin-top: -6px;
 }
 
 /* Keep hidden chat and setup surfaces out of layout and keyboard navigation. */

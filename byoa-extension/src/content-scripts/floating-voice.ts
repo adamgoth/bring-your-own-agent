@@ -1,3 +1,6 @@
+/** Collapsed frame: the BYOA + mic launcher pill plus room for its shadow. */
+const LAUNCHER = { width: 84, height: 52 };
+
 /** Only the extension iframe sees transcripts; the host page receives size changes only. */
 export function createFloatingVoice() {
   let bindingId: string | undefined;
@@ -31,13 +34,17 @@ export function createFloatingVoice() {
     const expanded = event.data.expanded === true;
     frame.style.setProperty(
       'width',
-      expanded ? 'min(340px, calc(100vw - 24px))' : '64px',
+      expanded ? 'min(340px, calc(100vw - 24px))' : `${LAUNCHER.width}px`,
       'important'
     );
     const height = Number.isFinite(event.data.height)
-      ? Math.max(64, Math.min(330, event.data.height))
-      : 330;
-    frame.style.setProperty('height', expanded ? `${height}px` : '64px', 'important');
+      ? Math.max(LAUNCHER.height, Math.min(380, event.data.height))
+      : 380;
+    frame.style.setProperty(
+      'height',
+      expanded ? `${height}px` : `${LAUNCHER.height}px`,
+      'important'
+    );
   });
   return (enabled: boolean, nextBindingId?: string) => {
     if (!enabled) {
@@ -51,8 +58,7 @@ export function createFloatingVoice() {
     frame = document.createElement('iframe');
     frame.src = chrome.runtime.getURL('src/site-voice/index.html');
     frame.title = 'BYOA voice';
-    frame.style.cssText =
-      'position:fixed!important;bottom:12px!important;right:12px!important;width:64px!important;height:64px!important;max-height:calc(100vh - 24px)!important;border:0!important;z-index:2147483647!important;background:transparent!important;color-scheme:light!important;';
+    frame.style.cssText = `position:fixed!important;bottom:12px!important;right:12px!important;width:${LAUNCHER.width}px!important;height:${LAUNCHER.height}px!important;max-height:calc(100vh - 24px)!important;border:0!important;z-index:2147483647!important;background:transparent!important;color-scheme:light!important;`;
     document.documentElement.append(frame);
     visibility = setInterval(() => {
       if (!frame?.isConnected) {

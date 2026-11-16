@@ -27,6 +27,7 @@ export function setupSiteVoice(options: {
     agentId: string;
     grant: string;
     policy: SiteVoiceOptions;
+    readonly bindingId: string;
     id: string;
     history: CoreMessage[];
     widget?: chrome.runtime.Port;
@@ -236,7 +237,7 @@ export function setupSiteVoice(options: {
           previous.grant === grantKey(grant) &&
           JSON.stringify(previous.policy) === JSON.stringify(policy)
         )
-          return { enabled: true, bindingId: previous.id };
+          return { enabled: true, bindingId: previous.bindingId };
         await options.prepare(tabId);
         if (!(await enabled())) return { enabled: false };
         const currentFrame = await chrome.webNavigation.getFrame({ tabId, frameId: 0 });
@@ -250,6 +251,8 @@ export function setupSiteVoice(options: {
         )
           throw new Error('Voice tools must be registered page tools.');
         remove(tabId);
+        // The iframe identity survives New chat; only the conversation id rotates.
+        const bindingId = globalThis.crypto.randomUUID();
         const entry: Binding = {
           sender,
           tabId,
@@ -259,7 +262,8 @@ export function setupSiteVoice(options: {
           agentId: connection.agentId,
           grant: grantKey(grant),
           policy,
-          id: globalThis.crypto.randomUUID(),
+          bindingId,
+          id: bindingId,
           history: [],
           busy: false,
           submissionEpoch: 0,
@@ -277,7 +281,7 @@ export function setupSiteVoice(options: {
           )
             remove(tabId);
         });
-        return { enabled: true, bindingId: entry.id };
+        return { enabled: true, bindingId: entry.bindingId };
       })().then(reply, (error) => reply({ enabled: false, error: String(error) }));
       return true;
     }
@@ -287,7 +291,7 @@ export function setupSiteVoice(options: {
       const entry = bindings.get(boundTab);
       if (!entry || message.conversationId !== entry.id) {
         reply({
-          error: 'This conversation belongs to a previous document. Start a new task on the site.',
+          error: 'This conversation has ended. Start a new task on the site.',
         });
         return false;
       }
@@ -379,6 +383,17 @@ export function setupSiteVoice(options: {
       }
       if (message.type === 'finish') {
         voice.finish(port);
+        return;
+      }
+      if (message.type === 'new-conversation') {
+        if (entry.busy) {
+          send(entry, { type: 'error', error: 'Wait for the current task to finish.' });
+          return;
+        }
+        // A new id also stops the sidebar from continuing the old thread with this binding.
+        entry.history = [];
+        entry.taskId = undefined;
+        entry.id = globalThis.crypto.randomUUID();
         return;
       }
       const token = generation;

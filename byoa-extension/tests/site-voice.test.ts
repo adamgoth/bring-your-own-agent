@@ -305,3 +305,29 @@ it('disconnects an existing pane and releases capture when voice mode is switche
   expect(mocks.release).toHaveBeenCalledWith(port);
   expect(await register()).toEqual({ enabled: false });
 });
+
+it('starts a new conversation that drops history and retires the old conversation id', async () => {
+  const { port, send, bindingId } = await boundWidget();
+  send({ type: 'new-conversation' });
+  send({ type: 'start', language: 'en-US' });
+  await vi.waitFor(() => expect(mocks.start).toHaveBeenCalledOnce());
+  // Heartbeat and focus synchronization must preserve the widget and its capture.
+  expect(await register()).toEqual({ enabled: true, bindingId });
+  expect(await register()).toEqual({ enabled: true, bindingId });
+  expect(port.disconnect).not.toHaveBeenCalled();
+  expect(mocks.release).not.toHaveBeenCalled();
+  const reply = vi.fn();
+  listener(
+    { type: 'SITE_VOICE_CONTINUE', tabId: 7, conversationId: bindingId, text: 'Continue' },
+    { id: chrome.runtime.id, url: chrome.runtime.getURL('src/sidebar/index.html#tab=7') },
+    reply
+  );
+  expect(reply).toHaveBeenCalledWith({
+    error: 'This conversation has ended. Start a new task on the site.',
+  });
+  send({ type: 'submit', text: 'Show C major' });
+  await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalled());
+  const context = mocks.execute.mock.calls[0][1] as { id: string; history: unknown[] };
+  expect(context.id).not.toBe(bindingId);
+  expect(context.history).toEqual([]);
+});
