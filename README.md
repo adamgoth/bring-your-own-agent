@@ -8,7 +8,7 @@ Configure your agent once in a browser extension. Connect an app, send a request
 
 [Watch the demo on YouTube](https://www.youtube.com/watch?v=2dbfm2v9eKE)
 
-This repo contains the BYOA browser extension (a modified AgentBoard), the SDK packages that add BYOA to a web app, and two WebMCP demos:
+This repo contains the BYOA browser extension (a modified AgentBoard), the SDK packages that add BYOA to a web app, and three WebMCP demos:
 
 | Folder                | What it does                                                                                                                                                                                             |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -17,6 +17,7 @@ This repo contains the BYOA browser extension (a modified AgentBoard), the SDK p
 | `packages/browser/` | The SDK for any web app: connection and request client, the `<byoa-connection-dialog>` custom element, shared styles, and the coding-agent recipes. |
 | `demos/margin/`       | Selection-first writing app with inline suggestions and comments. Port 5183.                                                                                                                             |
 | `demos/boardwalk/`    | Kanban board with reviewable card and column changes. Port 5184.                                                                                                                                         |
+| `demos/piano-tutor/`  | Voice-driven piano tutor: shows chords and keys, listens to MIDI. No backend; BYOA's floating voice drives its tools. Port 5185. See [its README](demos/piano-tutor/README.md). |
 
 ## Add BYOA to your app with a coding agent
 
@@ -94,7 +95,7 @@ Apps expose their actions with WebMCP. They pass registered tool names to `byoa.
 
 The SDKs are packaged locally as `@byoagent/browser` and `@byoagent/react` (no npm publication in this change). Use `pnpm sdk:vendor --out /path/to/app/vendor/byoa` to build both archives into an app (or `pnpm pack:sdk` to also verify them in fresh consumer installs), then install them with relative paths. Import `{ byoa }` from `@byoagent/browser`; the deprecated `agentboard` alias still works. See the [neutral provider spec](docs/provider-spec.md) for discovery, provider selection, security and use without the SDK.
 
-To build BYOA into a web app, start with the [web app integration guide](docs/web-app-integration.md). See [the SDK contract](packages/browser/README.md) for the client API, and [Margin's guide](demos/margin/README.md) and [Boardwalk's guide](demos/boardwalk/README.md) for worked examples.
+To build BYOA into a web app, start with the [web app integration guide](docs/web-app-integration.md). See [the SDK contract](packages/browser/README.md) for the client API, and [Margin's guide](demos/margin/README.md), [Boardwalk's guide](demos/boardwalk/README.md) and [Piano Tutor's guide](demos/piano-tutor/README.md) for worked examples.
 
 This is a prototype. Any HTTPS site, and `localhost`/`127.0.0.1` on any port, can ask to connect; nothing is shared until you approve that exact origin in BYOA's popup. Connections are per origin, lasting until the browser closes by default, for 30 days, or until you disconnect; page tasks run independently of sidebar chats (up to 3 globally, 2 per profile, and 1 per tab), with separate limits of five minutes queued, two minutes running by default (1–10 minutes in Options), and 60 seconds without progress. Apps may shorten the run limit. A dropped port can reattach within the same document for ten seconds; navigation and worker restarts stop the run, leaving session-only task summaries for lookup and an explicit Retry action. There is no automatic retry. BYOA owns the profile picker and site-approval popup. Person-controlled spending budgets and cumulative token reporting are available.
 
