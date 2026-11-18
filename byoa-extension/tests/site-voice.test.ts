@@ -152,7 +152,9 @@ it('binds the verified extension iframe and ignores grant touch timestamps', asy
   mocks.grant.lastUsedAt = 2;
   const { port, send } = widget();
   await vi.waitFor(() =>
-    expect(port.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'bound' }))
+    expect(port.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'bound', origin: expect.stringMatching(/^https?:\/\//) })
+    )
   );
   send({ type: 'start', language: 'en-US' });
   await vi.waitFor(() => expect(mocks.start).toHaveBeenCalledOnce());
@@ -248,6 +250,7 @@ it('returns a new binding identity when the enabled policy changes', async () =>
   await vi.waitFor(() =>
     expect(next.port.postMessage).toHaveBeenCalledWith({
       type: 'bound',
+      origin: expect.any(String),
       conversationId: replacement.bindingId,
     })
   );
@@ -281,6 +284,7 @@ it('rebinds after the registered tool capability is replaced', async () => {
   await vi.waitFor(() =>
     expect(next.port.postMessage).toHaveBeenCalledWith({
       type: 'bound',
+      origin: expect.any(String),
       conversationId: replacement.bindingId,
     })
   );

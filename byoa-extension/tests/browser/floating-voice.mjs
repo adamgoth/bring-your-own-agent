@@ -172,6 +172,10 @@ try {
     throw error;
   });
   assert.equal(await evaluate(page, `document.querySelector('iframe').contentDocument`), null);
+  assert.equal(
+    await evaluate(widget, `document.querySelector('#site-name').textContent`),
+    `BYOA · ${new URL(origin).host}`
+  );
   await cdp.send('Page.bringToFront', {}, page);
   const click = async (id) => {
     let previous;
@@ -204,6 +208,50 @@ try {
         page
       );
   };
+  // Dragging the launcher moves the frame, is remembered for this site, and never counts as a click.
+  const frameBox = () =>
+    evaluate(
+      page,
+      `(()=>{const r=document.querySelector('iframe').getBoundingClientRect();return {x:r.x,y:r.y,right:innerWidth-r.right,bottom:innerHeight-r.bottom}})()`
+    );
+  const before = await frameBox();
+  const grip = await evaluate(
+    widget,
+    `(()=>{const r=document.querySelector('#mic').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`
+  );
+  const mouse = (type, x, y) =>
+    cdp.send(
+      'Input.dispatchMouseEvent',
+      { type, x, y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1 },
+      page
+    );
+  const startX = before.x + grip.x,
+    startY = before.y + grip.y;
+  await mouse('mousePressed', startX, startY);
+  for (let step = 1; step <= 10; step++)
+    await mouse('mouseMoved', startX - 20 * step, startY - 15 * step);
+  await mouse('mouseReleased', startX - 200, startY - 150);
+  await waitFor(async () => {
+    const after = await frameBox();
+    return (
+      Math.abs(after.right - before.right - 200) <= 2 &&
+      Math.abs(after.bottom - before.bottom - 150) <= 2
+    );
+  }, 'dragged frame');
+  assert.equal(
+    await evaluate(widget, `document.querySelector('#panel').hidden`),
+    true,
+    'A drag is not a click'
+  );
+  const savedPosition = await waitFor(
+    () =>
+      evaluate(
+        workerSession,
+        `chrome.storage.local.get(${JSON.stringify('siteVoicePosition:' + origin)}).then(x=>x[${JSON.stringify('siteVoicePosition:' + origin)}])`
+      ),
+    'saved position'
+  );
+  assert.ok(Math.abs(savedPosition.right - before.right - 200) <= 2);
   // Prewarm the real offscreen host, then replace only its recognition API with a deterministic fixture.
   await evaluate(
     workerSession,

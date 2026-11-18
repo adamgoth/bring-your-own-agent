@@ -21,13 +21,15 @@
       </p>
       <section>
         <h2>Local language pack</h2>
-        <select id="speech-language" aria-label="Speech language">
-          <option value="en-US">English (US)</option>
-          <option value="en-GB">English (UK)</option>
-          <option value="sv-SE">Swedish</option>
-        </select>
-        <button id="speech-check">Check local speech</button
-        ><button id="speech-install">Download language pack</button>
+        <div class="speech-controls">
+          <select id="speech-language" aria-label="Speech language">
+            <option value="en-US">English (US)</option>
+            <option value="en-GB">English (UK)</option>
+            <option value="sv-SE">Swedish</option>
+          </select>
+          <button id="speech-check" class="secondary" type="button">Check local speech</button>
+          <button id="speech-install" type="button">Download language pack</button>
+        </div>
         <p id="speech-status" role="status">
           Check availability, then download if needed. Downloads require this button click.
         </p>

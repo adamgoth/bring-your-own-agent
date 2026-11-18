@@ -50,6 +50,18 @@ button.primary {
 button.primary:hover:not(:disabled) {
   background: var(--byoa-ink-hover);
 }
+.talk-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--byoa-radius-pill);
+}
+.talk-button svg {
+  width: 18px;
+  height: 18px;
+}
 .text-button {
   border: 0;
   background: none;
@@ -114,9 +126,19 @@ header {
   display: flex;
   align-items: center;
   gap: 7px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.launcher {
+  touch-action: none;
 }
 header strong {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   font-weight: 600;
 }
@@ -174,15 +196,17 @@ textarea {
   overflow: auto;
   overflow-wrap: anywhere;
 }
-/* While replying, the last answer shrinks to a few muted lines instead of disappearing. */
+/* While replying, the last answer keeps its look but shortens to a few lines and fades out, so the panel doesn't jump. */
 #result.is-previous {
-  max-height: 4.4em;
+  max-height: 4.5em;
   margin-top: 0;
-  padding: 6px 8px;
-  border-radius: var(--byoa-radius-sm);
-  background: var(--byoa-surface-sunk);
-  color: var(--byoa-ink-muted);
-  font-size: 12px;
+  scrollbar-width: none;
+}
+#result.is-previous.is-clipped {
+  mask-image: linear-gradient(to bottom, #000 55%, transparent);
+}
+#result.is-previous::-webkit-scrollbar {
+  display: none;
 }
 footer {
   display: flex;
