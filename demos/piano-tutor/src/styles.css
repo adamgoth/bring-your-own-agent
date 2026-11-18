@@ -1,0 +1,378 @@
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bodoni+Moda:opsz,wght@6..96,500;6..96,700&display=swap');
+
+:root {
+  --felt: #dce0d9;
+  --felt-deep: #cdd3c9;
+  --panel: #e7eae4;
+  --ink: #1f2a24;
+  --ink-soft: #4d5a52;
+  --ivory: #faf8f2;
+  --ivory-edge: #b9bdb3;
+  --ebony: #22201d;
+  --ebony-edge: #000;
+  --brass: #d9a520;
+  --brass-soft: #ebc75c;
+  --brass-ink: #6e500a;
+  --error: #9b2a1f;
+  --focus: #1f2a24;
+  --heard: #2f56c9;
+  --heard-soft: #7b97e6;
+
+  --serif: 'Bodoni Moda', 'Didot', 'Bodoni 72', Georgia, serif;
+  --sans: 'Atkinson Hyperlegible', system-ui, sans-serif;
+
+  --step--1: 0.875rem;
+  --step-0: 1rem;
+  --step-1: 1.25rem;
+  --step-2: 1.5625rem;
+  --step-4: clamp(3rem, 6vw, 4.75rem);
+
+  --gutter: clamp(1rem, 3vw, 2.5rem);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --felt: #16221c;
+    --felt-deep: #101a15;
+    --panel: #1d2c24;
+    --ink: #e6eae2;
+    --ink-soft: #a3b0a7;
+    --ivory: #f2efe6;
+    --ivory-edge: #0c1410;
+    --ebony: #1a1816;
+    --ebony-edge: #000;
+    --brass: #dcaa2a;
+    --brass-soft: #e9c45a;
+    --brass-ink: #f0cf6e;
+    --error: #ff9c8c;
+    --focus: #f0cf6e;
+    --heard: #5d82f0;
+    --heard-soft: #9db2f5;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --felt: #16221c;
+  --felt-deep: #101a15;
+  --panel: #1d2c24;
+  --ink: #e6eae2;
+  --ink-soft: #a3b0a7;
+  --ivory: #f2efe6;
+  --ivory-edge: #0c1410;
+  --ebony: #1a1816;
+  --ebony-edge: #000;
+  --brass: #dcaa2a;
+  --brass-soft: #e9c45a;
+  --brass-ink: #f0cf6e;
+  --error: #ff9c8c;
+  --focus: #f0cf6e;
+  --heard: #5d82f0;
+  --heard-soft: #9db2f5;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { margin: 0; }
+
+body {
+  background: var(--felt);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--step-0);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select { font: inherit; color: inherit; }
+
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+
+.app {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+/* Header */
+.header {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: 0.6rem var(--gutter);
+}
+.header__title { margin: 0; white-space: nowrap; font-family: var(--serif); font-weight: 500; font-size: var(--step-1); letter-spacing: 0.01em; }
+.header__tools { position: relative; display: flex; align-items: center; gap: 0.75rem; }
+.theme, .settings__gear {
+  inline-size: 2.5rem; block-size: 2.5rem; display: grid; place-items: center;
+  border: 1px solid color-mix(in srgb, var(--ink) 25%, transparent); border-radius: 50%; background: transparent; cursor: pointer;
+}
+.theme svg { inline-size: 1.25rem; fill: var(--ink); stroke: var(--ink); }
+.settings__gear svg { inline-size: 1.25rem; fill: var(--ink); }
+.settings__gear[aria-expanded='true'] { background: var(--panel); border-color: var(--ink); }
+
+/* Settings popover: anchored to the header tools, right-aligned with the theme button */
+.settings__panel {
+  position: absolute; inset-block-start: calc(100% + 0.5rem); inset-inline-end: 0; z-index: 20;
+  inline-size: min(19rem, calc(100vw - 2 * var(--gutter)));
+  display: grid; gap: 0.85rem; padding: 0.85rem 1rem 1rem;
+  border-radius: 14px; background: var(--panel); color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  box-shadow: 0 14px 34px -14px rgb(0 0 0 / 0.4);
+}
+.settings__heading { margin: 0; font-family: var(--serif); font-weight: 500; font-size: var(--step-1); line-height: 1.2; }
+.settings__group { display: grid; gap: 0.35rem; }
+.settings__group + .settings__group { padding-block-start: 0.85rem; border-block-start: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); }
+.settings__field { font-size: var(--step--1); color: var(--ink-soft); }
+.settings__panel select {
+  inline-size: 100%; margin-block-end: 0.35rem; padding: 0.45rem 0.6rem; border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--ink) 25%, transparent); background: var(--ivory); color: #1f2a24;
+}
+.settings__note { margin: -0.15rem 0 0; font-size: var(--step--1); color: var(--ink-soft); }
+.settings__check { display: flex; align-items: center; gap: 0.5rem; padding-block: 0.15rem; cursor: pointer; }
+.settings__check input { margin: 0; inline-size: 1.05rem; block-size: 1.05rem; accent-color: var(--ink); }
+
+/* BYOA connection (indicator and dialog), themed from the app's tokens */
+:root {
+  --byoa-font-family: var(--sans);
+  --byoa-color-accent: var(--ink);
+  --byoa-color-on-accent: var(--felt);
+  --byoa-color-surface: var(--panel);
+  --byoa-color-text: var(--ink);
+  --byoa-color-muted: var(--ink-soft);
+  --byoa-color-sunk: var(--felt);
+  --byoa-color-border: color-mix(in srgb, var(--ink) 18%, transparent);
+  --byoa-color-error: var(--error);
+  --byoa-radius: 12px;
+}
+.agent-indicator > .byoa-agent-name { max-inline-size: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Stage */
+.stage {
+  display: flex; flex-direction: column; gap: clamp(0.75rem, 2vh, 1.25rem);
+  padding: 0.25rem var(--gutter) var(--gutter);
+  min-width: 0;
+}
+.stage__top {
+  display: grid; gap: 1rem 2.5rem;
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 27rem);
+  align-items: start;
+}
+/* One height for the top area in every mode, so switching modes doesn't move the keyboard. */
+.stage__top > :first-child { min-block-size: 15.75rem; }
+.stage__side { display: grid; gap: 0.75rem; align-content: start; min-width: 0; }
+
+/* Chord */
+.chord { min-width: 0; }
+.chord__head { display: flex; align-items: flex-start; gap: 1.5rem; flex-wrap: wrap; }
+.chord__symbol {
+  margin: 0; font-family: var(--serif); font-weight: 700; font-size: var(--step-4);
+  line-height: 1; letter-spacing: -0.01em; font-variant-numeric: lining-nums;
+  overflow-wrap: anywhere;
+}
+.chord__symbol--quiet { font-weight: 500; color: var(--ink-soft); }
+.chord__name { margin: 0.4rem 0 0; font-size: var(--step-1); color: var(--ink-soft); }
+.chord__notes { display: flex; gap: 1.1rem; margin: 0.9rem 0 0; font-size: var(--step-2); font-weight: 700; }
+.chord__notes sub { font-size: 0.55em; font-weight: 400; color: var(--ink-soft); margin-inline-start: 0.08em; }
+.chord__controls { display: flex; flex-wrap: wrap; gap: 1rem 2rem; margin-top: 1rem; }
+.chord__hint { margin: 0.6rem 0 0; color: var(--ink-soft); max-width: 40ch; }
+
+.examples { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.9rem; }
+.examples button {
+  padding: 0.45rem 0.9rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--ink) 30%, transparent); background: transparent;
+}
+.examples button:hover { background: var(--panel); }
+
+.play {
+  display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem;
+  padding: 0.7rem 1.4rem 0.7rem 1.1rem; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--ink); color: var(--felt); font-weight: 700; font-size: var(--step-1);
+}
+.play svg { inline-size: 1em; fill: currentColor; }
+.play:active { transform: translateY(1px); }
+
+/* Segmented radios */
+.segmented { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0; }
+.segmented legend { float: left; margin-inline-end: 0.75rem; padding: 0; font-size: var(--step--1); color: var(--ink-soft); }
+.segmented label { position: relative; }
+.segmented input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.segmented span {
+  display: block; padding: 0.35rem 0.8rem; font-size: var(--step--1);
+  border: 1px solid color-mix(in srgb, var(--ink) 28%, transparent); margin-inline-start: -1px;
+}
+.segmented label:first-of-type span { border-radius: 999px 0 0 999px; margin-inline-start: 0; }
+.segmented label:last-of-type span { border-radius: 0 999px 999px 0; }
+.segmented input:checked + span { background: var(--ink); color: var(--felt); border-color: var(--ink); font-weight: 700; }
+.segmented input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* Controls: one slim row. Enter shows the chord; picking a key note shows the key. */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.controls__chord { display: flex; flex: 1 1 9rem; min-width: 0; }
+.controls__key { display: flex; gap: 0.5rem; flex: 0 1 auto; min-width: 0; }
+.controls input, .controls select {
+  min-width: 0; padding: 0.45rem 0.65rem; border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--ink) 25%, transparent); background: var(--ivory); color: #1f2a24;
+}
+.controls input { flex: 1; }
+.controls select[aria-label='Key note'] { inline-size: 4.75rem; }
+.controls select[aria-label='Mode'] { inline-size: 9.75rem; }
+.controls__error { flex-basis: 100%; margin: 0; }
+.error { margin: 0.25rem 0 0; color: var(--error); font-size: var(--step--1); max-width: 60ch; }
+
+/* Key strip */
+.strip__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.5rem 1rem; margin-bottom: 0.6rem; }
+.strip__head h2 { margin: 0; font-size: var(--step-1); font-weight: 700; }
+.strip__chords {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-block: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+}
+.strip__chords li { position: relative; }
+.strip__chords li + li { border-inline-start: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); }
+.strip__chords button {
+  inline-size: 100%; display: grid; justify-items: start; gap: 0.1rem;
+  padding: 0.6rem 0.75rem 0.7rem; border: 0; background: transparent; cursor: pointer; text-align: start;
+  box-shadow: inset 0 -4px 0 transparent;
+}
+.strip__chords button:hover { background: color-mix(in srgb, var(--panel) 70%, transparent); }
+.strip__chords button[aria-pressed='true'] { box-shadow: inset 0 -5px 0 var(--brass); background: var(--panel); }
+.strip__chords .strip__play {
+  position: absolute; inset-block-end: 0.55rem; inset-inline-end: 0.45rem;
+  display: grid; place-items: center; inline-size: 1.75rem; block-size: 1.75rem; padding: 0;
+  border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent); border-radius: 999px;
+  background: transparent; color: var(--ink); cursor: pointer;
+}
+.strip__chords .strip__play svg { inline-size: 0.8rem; fill: currentColor; margin-inline-start: 0.1rem; }
+.strip__chords .strip__play:hover { background: var(--ink); color: var(--felt); border-color: var(--ink); }
+.strip__chords .strip__play:active { transform: translateY(1px); }
+.strip__cell { display: grid; justify-items: start; gap: 0.1rem; padding: 0.6rem 0.75rem 0.7rem; }
+.strip--listen li.is-current { box-shadow: inset 0 -5px 0 var(--heard); background: color-mix(in srgb, var(--heard) 14%, transparent); }
+.strip--listen li.is-current .strip__symbol { color: var(--ink); font-weight: 700; }
+.strip__now { color: var(--heard); }
+.strip__numeral { font-family: var(--serif); font-weight: 700; font-size: var(--step-2); line-height: 1.1; }
+.strip__mark { font-family: var(--sans); font-weight: 700; font-size: 0.62em; }
+.strip__mark--suffix { margin-inline-start: 0.08em; vertical-align: 0.5em; }
+.strip__symbol { font-size: var(--step-0); color: var(--ink-soft); overflow-wrap: anywhere; padding-inline-end: 2rem; }
+.strip__chords button[aria-pressed='true'] .strip__symbol { color: var(--ink); font-weight: 700; }
+
+/* Keyboard */
+.keyboard-wrap {
+  padding: 10px 10px 14px; border-radius: 12px;
+  background: linear-gradient(var(--ebony), var(--ebony)) top / 100% 10px no-repeat, var(--felt-deep);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 10%, transparent);
+}
+.keyboard { display: block; inline-size: 100%; block-size: auto; max-block-size: 52vh; }
+.key__body { stroke-width: 1; transition: fill 120ms ease; }
+.key--white .key__body { fill: var(--ivory); stroke: var(--ivory-edge); }
+.key--black .key__body { fill: var(--ebony); stroke: var(--ebony-edge); }
+.key--white.is-lit .key__body { fill: var(--brass); stroke: color-mix(in srgb, var(--brass) 60%, #000); }
+.key--black.is-lit .key__body { fill: var(--brass-soft); stroke: color-mix(in srgb, var(--brass) 50%, #000); }
+.key__name { font-family: var(--sans); font-weight: 700; font-size: 11px; fill: #1f2a24; }
+.key--black .key__name { font-size: 8px; }
+.finger circle { fill: #1f2a24; }
+.finger text { font-family: var(--serif); font-weight: 700; font-size: 11.5px; fill: #faf8f2; }
+.key--black .finger text { font-size: 8.5px; }
+.key--white.is-held:not(.is-lit) .key__body { fill: var(--heard); stroke: color-mix(in srgb, var(--heard) 60%, #000); }
+.key--black.is-held:not(.is-lit) .key__body { fill: var(--heard-soft); stroke: color-mix(in srgb, var(--heard) 50%, #000); }
+.key__name--heard { fill: #faf8f2; }
+.key--black .key__name--heard { fill: #10204d; }
+.key__heard-bar { fill: var(--heard); }
+.scale-dot { fill: color-mix(in srgb, #1f2a24 55%, transparent); pointer-events: none; }
+.key--black .scale-dot { fill: color-mix(in srgb, #faf8f2 70%, transparent); }
+.scale-dot--tonic, .key--black .scale-dot--tonic { fill: var(--heard); }
+.key.is-held .scale-dot, .key.is-held .scale-dot--tonic { fill: #faf8f2; }
+.keyboard.is-playable .key { cursor: pointer; }
+.keyboard.is-playable { touch-action: none; user-select: none; -webkit-user-select: none; }
+.key__c { font-family: var(--sans); font-size: 7px; fill: #7d847a; }
+.key__c.is-middle { fill: #1f2a24; font-weight: 700; }
+
+.key { transform-box: fill-box; transform-origin: top; }
+.key.is-sounding { animation: press 900ms ease-out; }
+@keyframes press {
+  0% { transform: scaleY(1); }
+  12% { transform: scaleY(0.975); }
+  100% { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .key.is-sounding { animation: none; }
+  .key__body { transition: none; }
+}
+
+/* Listening */
+/* Mode switch: Chord · Key · Listen */
+.modes__switch span { display: inline-flex; align-items: center; gap: 0.45rem; padding-inline: 1.05rem; }
+.modes__dot { display: inline-block; flex: none; inline-size: 0.55rem; block-size: 0.55rem; border-radius: 50%; background: var(--heard); }
+.modes__dot.is-on { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .modes__dot.is-on { animation: none; } }
+
+/* Listen mode's main panel, laid out like the chord panel it replaces */
+.listen-panel { position: relative; }
+.listen-panel__name { display: flex; align-items: center; gap: 0.5rem; }
+/* Same height whether notes are held or not, so the panel doesn't move as you play. */
+.listen-panel__notes { align-items: center; min-block-size: 2.5rem; }
+.listen-panel__chord { color: var(--heard); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.listen-panel__name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.listen-panel__chord.chord__symbol--quiet { color: var(--ink-soft); }
+.listen-panel__facts { display: flex; flex-wrap: wrap; align-items: end; gap: 0.5rem 1.75rem; margin-top: 0.9rem; min-inline-size: 0; }
+.listen__now, .listen__key { display: grid; line-height: 1.15; min-inline-size: 0; }
+.listen__label { font-size: var(--step--1); color: var(--ink-soft); }
+.listen__key > span:nth-child(2) { display: grid; gap: 0.2rem; font-weight: 700; font-size: var(--step-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.listen__key meter { inline-size: 100%; max-inline-size: 5rem; block-size: 0.35rem; }
+.listen__muted { color: var(--ink-soft); font-size: var(--step--1); font-weight: 400; }
+.listen__history { list-style: none; display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0; padding: 0; }
+.listen__history li { padding: 0.1rem 0.5rem; border-radius: 6px; font-size: var(--step--1); background: color-mix(in srgb, var(--heard) 14%, transparent); }
+.listen__history li:last-child { background: color-mix(in srgb, var(--heard) 30%, transparent); font-weight: 700; }
+.listen__input { display: grid; gap: 0.2rem; min-inline-size: 0; flex: 1 1 14rem; }
+.listen__input-row { display: flex; align-items: center; gap: 0.75rem; min-inline-size: 0; }
+.listen__note { display: inline-flex; align-items: center; gap: 0.4rem; min-inline-size: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.listen__unsure { margin-inline-start: 0.1em; color: var(--ink-soft); }
+.segmented--small { flex: none; flex-wrap: nowrap; }
+.segmented--small span { padding: 0.25rem 0.75rem; font-size: var(--step--1); white-space: nowrap; }
+.strip__legend { margin: 0; font-size: var(--step--1); color: var(--ink-soft); }
+.listen__status { display: flex; gap: 1rem; min-inline-size: 0; flex: 1 1 12rem; white-space: nowrap; overflow: hidden; }
+.listen__status > * { overflow: hidden; text-overflow: ellipsis; }
+.listen-panel__facts { flex-wrap: nowrap; }
+.listen__status > * { overflow: hidden; text-overflow: ellipsis; }
+.listen-more { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.25rem; }
+.listen__reset { border: 0; background: transparent; color: var(--ink-soft); text-decoration: underline; cursor: pointer; font-size: var(--step--1); }
+
+.mic__level { display: inline-block; flex: none; inline-size: 3rem; block-size: 0.4rem; border-radius: 999px; background: color-mix(in srgb, var(--ink) 15%, transparent); overflow: hidden; }
+.mic__level span { display: block; block-size: 100%; background: var(--heard); transition: inline-size 100ms linear; }
+.compare { padding: 0.6rem 0.9rem; border-radius: 12px; background: var(--panel); display: grid; gap: 0.5rem; justify-items: start; }
+.compare__lead { margin: 0; font-size: var(--step--1); max-width: 70ch; }
+.compare table { border-collapse: collapse; font-size: var(--step--1); font-variant-numeric: tabular-nums; }
+.compare th, .compare td { padding: 0.2rem 0.9rem 0.2rem 0; text-align: start; }
+.compare thead th { color: var(--ink-soft); font-weight: 400; }
+.compare tfoot { border-block-start: 1px solid color-mix(in srgb, var(--ink) 20%, transparent); font-weight: 700; }
+
+
+/* Tablet and narrower */
+/* Narrow desktops: the chord panel's controls wrap to a second row, so every mode reserves that row. */
+@media (min-width: 901px) and (max-width: 1150px) {
+  .stage__top > :first-child { min-block-size: 17rem; }
+}
+@media (max-width: 900px) {
+  .stage__top { grid-template-columns: minmax(0, 1fr); }
+  /* Stacked: the mode switch and inputs come first, then that mode's panel. */
+  .stage__side { order: -1; }
+  .stage__top > :first-child { min-block-size: 0; }
+  .strip__chords button { padding-inline: 0.5rem; }
+  /* Narrow cells: the play button gets its own row under the symbol */
+  .strip__chords button[aria-pressed] { padding-block-end: 2.9rem; }
+  .strip__chords .strip__play { inset-inline: 0.5rem auto; }
+  .strip__symbol { padding-inline-end: 0; }
+}
+@media (max-width: 640px) {
+  .header { gap: 0.5rem; }
+  .header__tools { gap: 0.5rem; }
+  .strip__chords { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .strip__chords li + li { border-inline-start: 0; }
+  .strip__chords li { border-block-end: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); }
+}
