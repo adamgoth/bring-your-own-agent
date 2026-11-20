@@ -26,8 +26,6 @@ Install [BYOA from the Chrome Web Store](https://chromewebstore.google.com/detai
 
 For development, run `pnpm run build` from this directory, then load `dist/` through Chrome's **Load unpacked** action at `chrome://extensions`. Reload the extension after rebuilding. See [LOCAL_TESTING.md](LOCAL_TESTING.md) for demo and mock-provider checks.
 
-BYOA's listing is separate from the [upstream AgentBoard Chrome Web Store listing](https://chromewebstore.google.com/detail/agentboard/jlmajjfiibgnejlndfoboojahlclgoam), which installs AgentBoard, not this BYOA fork.
-
 ## Compatibility and release tooling
 
 The SDK export `agentboard`, built-in `agentboard_*` tool names, message/port namespaces, storage and database keys, lock names, test environment variables, and backup `exportedBy: 'AgentBoard'` marker are retained for compatibility. They are technical identifiers, not product labels. The SDK packages are `@byoagent/browser` and `@byoagent/react`. They are built locally from this repository and are not on npm yet.
