@@ -2,6 +2,8 @@
 
 BYOA lets you use your own AI agent inside any web app that supports it, instead of whatever AI the app has built in.
 
+**[Install BYOA from the Chrome Web Store](https://chromewebstore.google.com/detail/byoa/blejfcpiehehleecegkoapjfngcijhhp)**
+
 ![A visitor connects their agent to the Margin demo, approves the site in BYOA's own window, asks for a warmer opening paragraph, watches the agent work, then accepts the suggested edit in the page.](docs/media/byoa-demo.gif)
 
 Configure your agent once in the BYOA browser extension: your provider, your model, your API key. When an app supports BYOA, click **Connect Agent**, approve the site, and ask for work from inside the app. The agent runs in the background and its results show up in the app for you to review.
@@ -67,7 +69,11 @@ The sidebar is optional: tasks run without it, and you can open a task's transcr
 
 ## Install the extension
 
-BYOA isn't in the Chrome Web Store yet, so build it from this repository (Node 22.13+ and pnpm 10.28):
+Install [BYOA from the Chrome Web Store](https://chromewebstore.google.com/detail/byoa/blejfcpiehehleecegkoapjfngcijhhp). In BYOA's Options, add an agent profile with your provider, model and API key. Then open a BYOA-enabled app and click **Connect Agent**.
+
+### Build from source
+
+To work on the extension itself, build it from this repository (Node 22.13+ and pnpm 10.28):
 
 ```sh
 git clone https://github.com/adamgoth/bring-your-own-agent.git
@@ -76,9 +82,9 @@ pnpm install --frozen-lockfile
 pnpm build
 ```
 
-Open `chrome://extensions`, turn on Developer mode, choose **Load unpacked** and select `byoa-extension/dist`. In BYOA's Options, add an agent profile with your provider, model and API key. Then open a BYOA-enabled app and click **Connect Agent**.
+Open `chrome://extensions`, turn on Developer mode, choose **Load unpacked** and select `byoa-extension/dist`. Disable the store version while you test the local build, so only one BYOA installation runs.
 
-Load only one BYOA installation at a time, and reload the extension and app tabs after a rebuild.
+Reload the extension and app tabs after a rebuild.
 
 ## Run the demos
 
