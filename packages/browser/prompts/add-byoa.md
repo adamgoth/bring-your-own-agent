@@ -155,7 +155,7 @@ addEventListener('agent:requestProvider', () => dispatchEvent(new CustomEvent('a
 
 In unit tests, pass the same kind of object to `createClient(provider)` and give `createAgentSession(client)` to `AgentProvider session={...}` or the element's `session`. Cover: extension missing, cancelled approval, successful connection, the exact tool list sent, task error, cancellation, disconnect during work, route or tool changes, and explicit retry. For React also check StrictMode and server rendering. Check keyboard-only use of the dialog, focus return, scoped or dark themes, and a 375px-wide screen.
 
-For a manual check, the person needs the extension. Until it is in the Chrome Web Store they build it from the BYOA repository ([Install the extension](https://github.com/adamgoth/bring-your-own-agent#install-the-extension)), add a provider profile in its Options, open the app, and click **Connect Agent**.
+For a manual check, the person needs the extension. They install [BYOA from the Chrome Web Store](https://chromewebstore.google.com/detail/byoa/blejfcpiehehleecegkoapjfngcijhhp) (or build it from the BYOA repository: [Install the extension](https://github.com/adamgoth/bring-your-own-agent#install-the-extension)), add a provider profile in its Options, open the app, and click **Connect Agent**.
 
 ## Report back
 

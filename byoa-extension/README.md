@@ -18,11 +18,13 @@ BYOA is an independent fork of [AgentBoard](https://github.com/igrigorik/agentbo
 - **Your commands**: Template prompts with arguments; type `/analyze`, not paragraphs.
 - **Your voice**: Optional dictation, transcribed on your device.
 
+## Install
+
+Install [BYOA from the Chrome Web Store](https://chromewebstore.google.com/detail/byoa/blejfcpiehehleecegkoapjfngcijhhp).
+
 ## Install locally
 
-From this directory, run `pnpm run build`, then load `dist/` through Chrome's **Load unpacked** action at `chrome://extensions`. Reload the extension after rebuilding. See [LOCAL_TESTING.md](LOCAL_TESTING.md) for demo and mock-provider checks.
-
-The [upstream AgentBoard Chrome Web Store listing](https://chromewebstore.google.com/detail/agentboard/jlmajjfiibgnejlndfoboojahlclgoam) installs AgentBoard, not this BYOA fork.
+For development, run `pnpm run build` from this directory, then load `dist/` through Chrome's **Load unpacked** action at `chrome://extensions`. Reload the extension after rebuilding. See [LOCAL_TESTING.md](LOCAL_TESTING.md) for demo and mock-provider checks.
 
 ## Compatibility and release tooling
 
