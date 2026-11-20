@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-vi.mock('../src/lib/voice-bars', () => ({ createVoiceBars: () => vi.fn() }));
+vi.mock('../src/lib/voice-wave', () => ({ createVoiceWave: () => vi.fn() }));
 let receive: (message: Record<string, unknown>) => void;
 let posted: ReturnType<typeof vi.fn>;
 const clicks = new Map<string, (event: { isTrusted: boolean }) => void>();
@@ -111,7 +111,8 @@ it('renders result Markdown while keeping HTML and unsafe links inert', () => {
   expect(output.textContent).toBe('next');
 });
 
-const bind = () => receive({ type: 'bound', conversationId: 'c1' });
+const bind = () =>
+  receive({ type: 'bound', conversationId: 'c1', origin: 'https://piano.example:8443' });
 const done = (taskId: string) => {
   task(taskId, true);
   receive({ type: 'result', taskId, status: 'done', text: `Answer ${taskId}` });
@@ -150,7 +151,7 @@ it('returns to the last answer when a reply is cancelled', () => {
   expect(posted).toHaveBeenCalledWith({ type: 'cancel' });
   expect(element('panel').hidden).toBe(false);
   expect(element('result').classList.contains('is-previous')).toBe(false);
-  expect(element('talk').textContent).toBe('Reply');
+  expect(element('talk').getAttribute('aria-label')).toBe('Reply');
   expect(element('open').hidden).toBe(false);
 });
 
@@ -173,6 +174,12 @@ it('starts a new conversation on request', () => {
   click('new-conversation');
   expect(posted).toHaveBeenCalledWith({ type: 'new-conversation' });
   expect(element('result').hidden).toBe(true);
-  expect(element('talk').textContent).toBe('Talk');
+  expect(element('talk').getAttribute('aria-label')).toBe('Talk');
   expect(element('new-conversation').hidden).toBe(true);
+});
+
+it('names the bound site in the header and launcher', () => {
+  bind();
+  expect(element('site-name').textContent).toBe('BYOA · piano.example:8443');
+  expect(element('mic').getAttribute('aria-label')).toBe('Talk to piano.example:8443 with BYOA');
 });

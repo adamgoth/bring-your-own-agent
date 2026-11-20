@@ -78,78 +78,93 @@ function sizedCanvas(width: number) {
   const canvas = document.createElement('canvas');
   Object.defineProperty(canvas, 'clientWidth', { value: width });
   Object.defineProperty(canvas, 'clientHeight', { value: 32 });
-  const bars: Array<[number, number, number]> = [];
-  let start = 0;
+  // Points of the last line stroked (the main wave is drawn last).
+  let points: Array<[number, number]> = [];
+  let current: Array<[number, number]> = [];
   const draw = {
     clearRect: vi.fn(),
-    beginPath: () => bars.splice(0),
-    moveTo: (_x: number, y: number) => (start = y),
-    lineTo: (x: number, y: number) => bars.push([x, start, y]),
-    stroke: vi.fn(),
+    beginPath: () => (current = []),
+    moveTo: (x: number, y: number) => current.push([x, y]),
+    lineTo: (x: number, y: number) => current.push([x, y]),
+    stroke: vi.fn(() => (points = current)),
     setTransform: vi.fn(),
   } as Record<string, unknown>;
   vi.spyOn(canvas, 'getContext').mockReturnValue(draw as unknown as CanvasRenderingContext2D);
-  return { canvas, bars, draw };
+  return { canvas, points: () => points, draw };
 }
+const spread = (points: Array<[number, number]>) =>
+  Math.max(...points.map(([, y]) => y)) - Math.min(...points.map(([, y]) => y));
 
-it('fits rounded, evenly spaced bars to the available width', async () => {
+it('draws silence as a flat line across the whole width', async () => {
   fakeMicrophone(128);
   vi.stubGlobal(
     'requestAnimationFrame',
     vi.fn(() => 1)
   );
-  for (const [width, count] of [
-    [120, 24],
-    [240, 48],
-  ]) {
-    const { canvas, bars, draw } = sizedCanvas(width);
+  for (const width of [120, 240]) {
+    const { canvas, points, draw } = sizedCanvas(width);
     const stop = startVoiceMeter(canvas, vi.fn());
-    await vi.waitFor(() => expect(bars.length).toBe(count));
+    await vi.waitFor(() => expect(points().length).toBeGreaterThan(2));
     expect(draw.lineCap).toBe('round');
-    expect(draw.lineWidth).toBe(3);
-    const gaps = bars.slice(1).map(([x], i) => x - bars[i][0]);
-    expect(new Set(gaps)).toEqual(new Set([5]));
-    expect(bars[0][0]).toBeGreaterThanOrEqual(1.5);
-    expect(bars.at(-1)![0]).toBeLessThanOrEqual(width - 1.5);
-    // Silence draws tiny dots centered vertically.
-    for (const [, top, bottom] of bars) {
-      expect(top).toBeCloseTo(16 - 0.25);
-      expect(bottom).toBeCloseTo(16 + 0.25);
-    }
+    const xs = points().map(([x]) => x);
+    expect(Math.min(...xs)).toBeCloseTo(1.5);
+    expect(Math.max(...xs)).toBeCloseTo(width - 1.5);
+    expect(new Set(points().map(([, y]) => y))).toEqual(new Set([16]));
     stop();
   }
   vi.unstubAllGlobals();
 });
 
-it('rises gently with speech and keeps quiet history as dots', async () => {
+it('moves with current speech and returns to flat when it stops, keeping no history', async () => {
   vi.useFakeTimers();
-  fakeMicrophone(176);
+  let level = 176;
+  vi.stubGlobal(
+    'AudioContext',
+    class {
+      state = 'running';
+      resume = async () => {};
+      close = async () => {};
+      createAnalyser = () => ({
+        fftSize: 256,
+        getByteTimeDomainData: (data: Uint8Array) => data.fill(level),
+      });
+      createMediaStreamSource = () => ({ connect: vi.fn(), disconnect: vi.fn() });
+    }
+  );
+  Object.defineProperty(navigator, 'mediaDevices', {
+    configurable: true,
+    value: { getUserMedia: async () => ({ getTracks: () => [{ stop: vi.fn() }] }) },
+  });
+  vi.stubGlobal('cancelAnimationFrame', vi.fn());
   const frames: Array<(now: number) => void> = [];
   vi.stubGlobal(
     'requestAnimationFrame',
     vi.fn((paint: (now: number) => void) => frames.push(paint))
   );
-  const { canvas, bars } = sizedCanvas(100);
+  const { canvas, points } = sizedCanvas(100);
   const stop = startVoiceMeter(canvas, vi.fn());
-  await vi.waitFor(() => expect(bars.length).toBe(20));
-  const heights = () => bars.map(([, top, bottom]) => bottom - top);
-  await vi.advanceTimersByTimeAsync(42);
-  frames.at(-1)!(42);
-  const first = heights().at(-1)!;
-  // A single frame of loud audio only partly raises the newest bar.
-  expect(first).toBeGreaterThan(0.5);
-  expect(first).toBeLessThan(10);
-  for (let now = 92; now <= 1000; now += 50) {
-    await vi.advanceTimersByTimeAsync(50);
-    frames.at(-1)!(now);
-  }
-  const later = heights();
-  expect(later.at(-1)!).toBeGreaterThan(first);
-  expect(later.at(-1)!).toBeLessThanOrEqual(32 - 3 - 4 + 0.01);
-  // Bars before speech started are still dots; recent bars form a rising cluster.
-  expect(later[0]).toBeCloseTo(0.5);
-  const recent = later.slice(-8);
-  recent.slice(1).forEach((height, i) => expect(height).toBeGreaterThanOrEqual(recent[i] - 0.01));
+  await vi.waitFor(() => expect(points().length).toBeGreaterThan(2));
+  const run = async (from: number, to: number) => {
+    for (let now = from; now <= to; now += 50) {
+      await vi.advanceTimersByTimeAsync(50);
+      frames.at(-1)!(now);
+    }
+  };
+  await run(50, 50);
+  const first = spread(points());
+  // One frame of loud audio only partly raises the wave.
+  expect(first).toBeGreaterThan(0);
+  await run(100, 1000);
+  const talking = spread(points());
+  expect(talking).toBeGreaterThan(first);
+  expect(talking).toBeLessThanOrEqual(32 - 6 + 0.01);
+  // The shape moves between frames even at a steady level.
+  const before = points().map(([, y]) => y);
+  await run(1050, 1050);
+  expect(points().map(([, y]) => y)).not.toEqual(before);
+  level = 128;
+  await run(1100, 4000);
+  expect(spread(points())).toBe(0);
   stop();
   vi.unstubAllGlobals();
   vi.useRealTimers();

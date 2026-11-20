@@ -1,5 +1,5 @@
 import { sampleVoiceVolume } from '../lib/voice-volume';
-import { createVoiceBars } from '../lib/voice-bars';
+import { createVoiceWave } from '../lib/voice-wave';
 export function startVoiceMeter(canvas: HTMLCanvasElement, unavailable: () => void): () => void {
   let frame: number | undefined;
   let stopSamples: (() => void) | undefined;
@@ -10,7 +10,7 @@ export function startVoiceMeter(canvas: HTMLCanvasElement, unavailable: () => vo
     stopSamples?.();
   };
   try {
-    const draw = createVoiceBars(canvas);
+    const draw = createVoiceWave(canvas);
     let level = 0;
     stopSamples = sampleVoiceVolume(
       (value) => {

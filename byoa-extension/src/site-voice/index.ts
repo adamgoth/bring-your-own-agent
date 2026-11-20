@@ -1,5 +1,6 @@
-import { createVoiceBars } from '../lib/voice-bars';
+import { createVoiceWave } from '../lib/voice-wave';
 import { StreamingMarkdownRenderer } from '../sidebar/StreamingMarkdownRenderer';
+import { siteHost } from '../options/format';
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const mic = el<HTMLButtonElement>('mic'),
   panel = el('panel'),
@@ -17,7 +18,24 @@ const talk = el<HTMLButtonElement>('talk'),
   newConversation = el<HTMLButtonElement>('new-conversation');
 const capturing = ['starting', 'recording', 'finishing'];
 const port = chrome.runtime.connect({ name: 'byoa-site-voice' });
-const paint = createVoiceBars(bars);
+const paint = createVoiceWave(bars);
+/** The latest level; the wave redraws every frame while visible so it moves smoothly between updates. */
+let level = 0;
+let waveFrame: number | undefined;
+const animateWave = (on: boolean) => {
+  if (!on) {
+    if (waveFrame !== undefined) globalThis.cancelAnimationFrame(waveFrame);
+    waveFrame = undefined;
+    level = 0;
+    return;
+  }
+  if (waveFrame !== undefined) return;
+  const frame = (now: number) => {
+    paint(level, now);
+    waveFrame = globalThis.requestAnimationFrame(frame);
+  };
+  waveFrame = globalThis.requestAnimationFrame(frame);
+};
 let state = 'idle';
 let taskId: string | undefined;
 let completedTaskId: string | undefined;
@@ -51,12 +69,15 @@ const expand = (value: boolean) => {
 const render = () => {
   const settled = ['idle', 'result', 'error'].includes(state);
   bars.hidden = !['recording', 'finishing'].includes(state);
+  animateWave(!bars.hidden);
   draft.hidden = state !== 'review';
   result.hidden = !hasResult;
   result.classList.toggle('is-previous', hasResult && state !== 'result');
+  result.classList.toggle('is-clipped', result.scrollHeight > result.clientHeight + 1);
   resultLabel.hidden = !hasResult || state === 'result';
   talk.hidden = !settled;
-  talk.textContent = hasResult ? 'Reply' : 'Talk';
+  talk.title = hasResult ? 'Reply' : 'Talk';
+  talk.setAttribute('aria-label', talk.title);
   talk.disabled = !bound;
   finish.hidden = state !== 'recording';
   send.hidden = !['recording', 'finishing', 'review'].includes(state);
@@ -98,6 +119,42 @@ const submit = () => {
   status.textContent = 'Working…';
   post({ type: 'submit', text: draft.value });
   render();
+};
+/**
+ * Drag the launcher or the panel header to move the frame. Past a small threshold the page takes over
+ * the drag (it owns the frame's position), told only where in the frame the pointer grabbed it.
+ * Double-clicking the header puts the frame back in its corner.
+ */
+const DRAG_THRESHOLD = 4;
+const draggable = (handle: HTMLElement) => {
+  let start: { x: number; y: number; id: number } | undefined;
+  handle.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || (event.target as Element).closest('#collapse')) return;
+    start = { x: event.clientX, y: event.clientY, id: event.pointerId };
+  });
+  handle.addEventListener('pointermove', (event) => {
+    if (!start || event.pointerId !== start.id) return;
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) < DRAG_THRESHOLD) return;
+    globalThis.parent.postMessage({ type: 'byoa-voice-drag', x: start.x, y: start.y }, '*');
+    start = undefined;
+  });
+  const reset = () => (start = undefined);
+  handle.addEventListener('pointerup', reset);
+  handle.addEventListener('pointercancel', reset);
+};
+draggable(mic);
+draggable(el('panel-header'));
+el('panel-header').addEventListener('dblclick', (event) => {
+  if (!(event.target as Element).closest('#collapse'))
+    globalThis.parent.postMessage({ type: 'byoa-voice-move-reset' }, '*');
+});
+/** Name the site in the header and launcher, so it is clear where spoken requests go. */
+const showSite = (host: string) => {
+  const name = el('site-name');
+  name.textContent = `BYOA · ${host}`;
+  name.title = host;
+  mic.title = `Talk to ${host} with BYOA. Drag to move.`;
+  mic.setAttribute('aria-label', `Talk to ${host} with BYOA`);
 };
 const onClick = (id: string, action: () => void) =>
   el(id).addEventListener('click', (event) => {
@@ -162,6 +219,7 @@ port.onMessage.addListener((message) => {
   }
   if (message.type === 'bound') {
     bound = true;
+    if (typeof message.origin === 'string') showSite(siteHost(message.origin));
     render();
     return;
   }
@@ -170,7 +228,7 @@ port.onMessage.addListener((message) => {
     status.textContent = state === 'recording' ? 'Listening locally' : 'Finishing…';
     render();
   }
-  if (message.type === 'volume') paint(message.level);
+  if (message.type === 'volume') level = message.level;
   if (message.type === 'transcript') {
     if (!['starting', 'recording', 'finishing'].includes(state)) return;
     const shouldSend = autoSend && message.ok;

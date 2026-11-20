@@ -10,7 +10,7 @@
     <button
       id="mic"
       class="launcher"
-      title="Talk to this site with BYOA"
+      title="Talk to this site with BYOA. Drag to move."
       aria-label="Talk to this site with BYOA"
       disabled
     >
@@ -39,7 +39,7 @@
       </svg>
     </button>
     <section id="panel" hidden aria-label="Site voice">
-      <header>
+      <header id="panel-header" title="Drag to move. Double-click to put it back in the corner.">
         <svg class="dock" viewBox="0 0 24 24" aria-hidden="true">
           <path
             d="M5 5.5V11.5A7 7 0 0 0 19 11.5V5.5"
@@ -50,7 +50,7 @@
           />
           <circle cx="12" cy="8" r="3.5" />
         </svg>
-        <strong>BYOA · this site</strong>
+        <strong id="site-name" title="This site">BYOA · this site</strong>
         <button id="collapse" class="icon-button" aria-label="Collapse voice">
           <svg
             viewBox="0 0 24 24"
@@ -70,11 +70,21 @@
       <canvas id="bars" width="280" height="38" hidden aria-label="Microphone volume"></canvas>
       <textarea id="draft" aria-label="Review your transcript" maxlength="30000" hidden></textarea>
       <div class="actions">
-        <button id="talk" class="primary" hidden>Talk</button
+        <button id="talk" class="primary talk-button" title="Talk" aria-label="Talk" hidden>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <rect x="9" y="3" width="6" height="11" rx="3" />
+            <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
+          </svg></button
         ><button id="finish" hidden>Finish</button
         ><button id="send" class="primary" hidden>Send</button
-        ><button id="cancel" hidden>Cancel</button
-        ><button id="open" hidden>Open conversation</button
+        ><button id="cancel" hidden>Cancel</button><button id="open" hidden>Open in sidebar</button
         ><button
           id="new-conversation"
           class="text-button"

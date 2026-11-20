@@ -31,7 +31,7 @@ Features:
 - An optional local workspace for agent context and memory, with opt-in read-only sharing per site. Shared content can be sent wherever that site’s tools send it.
 - Experimental in-app agent connections: apps that integrate BYOA can ask to connect, and you approve each site.
 
-You supply access to a compatible AI service. Provider charges and terms may apply. WebMCP is experimental, and available tools depend on the website. The experimental Connect agent flow works with HTTPS websites and local development servers that integrate BYOA's client. Each site must be approved separately, and approvals last for the browser session.
+You supply access to a compatible AI service. Provider charges and terms may apply. WebMCP is experimental, and available tools depend on the website. The experimental Connect agent flow works with HTTPS websites and local development servers that integrate BYOA's client. Each site must be approved separately. Approvals last for the browser session by default; you can choose 30 days or until you disconnect.
 
 BYOA has no account system, advertising, or analytics backend. Prompts, page context, tool results, attachments, and workspace files may be sent to services you configure. Review the privacy policy before use.
 

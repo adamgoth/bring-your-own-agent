@@ -1,5 +1,7 @@
 # Independent model streams
 
+> Design note from when concurrent site tasks were added. Later work changed some details: queue wait, run time and inactivity are now separate limits, and interrupted tasks can be looked up and retried explicitly. See [Limits, permissions and privacy](limits-and-privacy.md) for current behavior.
+
 Site tasks run in unique `site:<streamId>` lanes. Sidebar requests use the default
 `sidebar` lane and retain the existing newest-fully-prepared-request-wins behavior.
 Cancellation uses stream ownership across all pending and active lanes.

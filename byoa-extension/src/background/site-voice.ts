@@ -165,7 +165,7 @@ export function setupSiteVoice(options: {
               send(entry, {
                 type: 'error',
                 error:
-                  'Task ended, but its saved response could not be loaded. Open conversation to review.',
+                  'Task ended, but its saved response could not be loaded. Open it in the sidebar to review.',
               })
             )
             .finally(() => {
@@ -357,7 +357,7 @@ export function setupSiteVoice(options: {
             }
             entry.widget = port;
             bound = true;
-            port.postMessage({ type: 'bound', conversationId: entry.id });
+            port.postMessage({ type: 'bound', conversationId: entry.id, origin: entry.origin });
           })
           .catch(() => port.disconnect());
       },

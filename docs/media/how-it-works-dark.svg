@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 420" width="1040" height="420" role="img" aria-labelledby="t d">
+<title id="t">How BYOA works</title>
+<desc id="d">1. In a web app you click Connect Agent and approve the site in the BYOA extension. 2. The app asks for work with a prompt and the names of its WebMCP tools. 3. BYOA runs your agent on your model provider with your API key. 4. The agent calls the app's tools in the page. 5. The app shows the proposed change and you accept or reject it.</desc>
+<defs><marker id="ah" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1 1.5 8.5 5 1 8.5" fill="none" stroke="#F3F2EE" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect width="1040" height="420" rx="16" fill="#15171C"/>
+<text x="28" y="44" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" fill="#A3A6AD" text-anchor="start" letter-spacing="0.08em">YOUR WEB APP</text>
+<rect x="24" y="64" width="300" height="332" rx="14" fill="#1F2228" stroke="#33363D" stroke-width="1.5"/>
+<rect x="44" y="86" width="152" height="36" rx="10" fill="#F3F2EE"/>
+<g transform="translate(54 94) scale(0.8333333333333334)"><path d="M5 5.5V11.5A7 7 0 0 0 19 11.5V5.5" fill="none" stroke="#15171C" stroke-width="3.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3.5" fill="#FF6B3D"/></g>
+<text x="82" y="109" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="600" fill="#15171C" text-anchor="start">Connect Agent</text>
+<rect x="44" y="140" width="260" height="40" rx="10" fill="none" stroke="#33363D" stroke-width="1.5"/>
+<text x="58" y="165" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="400" fill="#F3F2EE" text-anchor="start">“Make this paragraph warmer”</text>
+<text x="44" y="208" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" fill="#A3A6AD" text-anchor="start">WebMCP tools</text>
+<rect x="44" y="218" width="260" height="26" rx="7" fill="#2A2D34"/>
+<text x="56" y="235.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="500" fill="#F3F2EE" text-anchor="start">get_selection</text>
+<rect x="44" y="250" width="260" height="26" rx="7" fill="#2A2D34"/>
+<text x="56" y="267.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="500" fill="#F3F2EE" text-anchor="start">propose_replacement</text>
+<rect x="44" y="300" width="260" height="76" rx="10" fill="none" stroke="#33363D" stroke-width="1.5" stroke-dasharray="5 4"/>
+<text x="58" y="326" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600" fill="#F3F2EE" text-anchor="start">Suggested edit</text>
+<rect x="58" y="338" width="72" height="26" rx="7" fill="#F3F2EE"/>
+<text x="94" y="355.5" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600" fill="#15171C" text-anchor="middle">Accept</text>
+<rect x="138" y="338" width="72" height="26" rx="7" fill="none" stroke="#33363D" stroke-width="1.5"/>
+<text x="174" y="355.5" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600" fill="#F3F2EE" text-anchor="middle">Reject</text>
+<circle cx="190" cy="321.5" r="12" fill="#F3F2EE"/>
+<text x="190" y="326.0" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="700" fill="#15171C" text-anchor="middle">5</text>
+<text x="208" y="326" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600" fill="#F3F2EE" text-anchor="start">You review</text>
+<text x="456" y="44" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" fill="#A3A6AD" text-anchor="start" letter-spacing="0.08em">BYOA EXTENSION</text>
+<rect x="452" y="64" width="248" height="332" rx="14" fill="#1F2228" stroke="#33363D" stroke-width="1.5"/>
+<g transform="translate(472 86) scale(1.6666666666666667)"><path d="M5 5.5V11.5A7 7 0 0 0 19 11.5V5.5" fill="none" stroke="#F3F2EE" stroke-width="3.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3.5" fill="#FF6B3D"/></g>
+<text x="522" y="102" font-family="'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="800" fill="#F3F2EE" text-anchor="start">Your agent</text>
+<text x="522" y="122" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="400" fill="#A3A6AD" text-anchor="start">runs in the background</text>
+<circle cx="478" cy="163.5" r="3.5" fill="#5E6168"/>
+<text x="492" y="168" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="400" fill="#F3F2EE" text-anchor="start">Approves each site</text>
+<circle cx="478" cy="197.5" r="3.5" fill="#5E6168"/>
+<text x="492" y="202" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="400" fill="#F3F2EE" text-anchor="start">Holds your profiles and keys</text>
+<circle cx="478" cy="231.5" r="3.5" fill="#5E6168"/>
+<text x="492" y="236" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="400" fill="#F3F2EE" text-anchor="start">Enforces budgets and limits</text>
+<circle cx="478" cy="265.5" r="3.5" fill="#5E6168"/>
+<text x="492" y="270" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="400" fill="#F3F2EE" text-anchor="start">Routes tool calls to the page</text>
+<line x1="472" y1="314" x2="680" y2="314" stroke="#33363D" stroke-width="1.5"/>
+<text x="472" y="342" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="400" fill="#A3A6AD" text-anchor="start">Optional: sidebar transcript,</text>
+<text x="472" y="362" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="400" fill="#A3A6AD" text-anchor="start">floating voice</text>
+<text x="832" y="44" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" fill="#A3A6AD" text-anchor="start" letter-spacing="0.08em">YOUR MODEL</text>
+<rect x="828" y="162" width="188" height="144" rx="14" fill="#1F2228" stroke="#33363D" stroke-width="1.5"/>
+<text x="848" y="196" font-family="'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="800" fill="#F3F2EE" text-anchor="start">Any provider</text>
+<text x="848" y="222" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="400" fill="#A3A6AD" text-anchor="start">OpenAI, Anthropic,</text>
+<text x="848" y="241" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="400" fill="#A3A6AD" text-anchor="start">Google, OpenRouter,</text>
+<text x="848" y="260" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="400" fill="#A3A6AD" text-anchor="start">Ollama…</text>
+<text x="848" y="286" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600" fill="#F3F2EE" text-anchor="start">Billed to your key</text>
+<line x1="334" y1="104" x2="442" y2="104" stroke="#F3F2EE" stroke-width="1.8" marker-end="url(#ah)"/>
+<circle cx="354.0" cy="86" r="12" fill="#F3F2EE"/>
+<text x="354.0" y="90.5" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="700" fill="#15171C" text-anchor="middle">1</text>
+<text x="372.0" y="90.5" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600" fill="#F3F2EE" text-anchor="start">Connect</text>
+<line x1="334" y1="160" x2="442" y2="160" stroke="#F3F2EE" stroke-width="1.8" marker-end="url(#ah)"/>
+<circle cx="354.0" cy="142" r="12" fill="#F3F2EE"/>
+<text x="354.0" y="146.5" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="700" fill="#15171C" text-anchor="middle">2</text>
+<text x="372.0" y="146.5" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600" fill="#F3F2EE" text-anchor="start">Ask</text>
+<text x="388.0" y="182" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="400" fill="#A3A6AD" text-anchor="middle">prompt + tool names</text>
+<line x1="442" y1="234" x2="334" y2="234" stroke="#F3F2EE" stroke-width="1.8" marker-end="url(#ah)"/>
+<circle cx="354.0" cy="216" r="12" fill="#F3F2EE"/>
+<text x="354.0" y="220.5" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="700" fill="#15171C" text-anchor="middle">4</text>
+<text x="372.0" y="220.5" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600" fill="#F3F2EE" text-anchor="start">Use tools</text>
+<text x="388.0" y="256" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="400" fill="#A3A6AD" text-anchor="middle">runs in the page</text>
+<line x1="710" y1="234.0" x2="818" y2="234.0" stroke="#F3F2EE" stroke-width="1.8" marker-start="url(#ah)" marker-end="url(#ah)"/>
+<circle cx="742.0" cy="216.0" r="12" fill="#F3F2EE"/>
+<text x="742.0" y="220.5" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="700" fill="#15171C" text-anchor="middle">3</text>
+<text x="760.0" y="220.5" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600" fill="#F3F2EE" text-anchor="start">Think</text>
+</svg>
