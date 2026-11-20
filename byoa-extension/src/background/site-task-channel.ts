@@ -4,6 +4,8 @@ import type { TaskEvent } from '../lib/task-event';
 /** Worker-only context, never populated from page messages. */
 export interface SiteConversationContext {
   id: string;
+  /** Private provider routing key for this voice conversation; never shown to the page. */
+  routingSessionId: string;
   agentId: string;
   history: CoreMessage[];
   instructions: string;

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### OpenRouter sticky routing
+
+- OpenRouter connections (Responses and Chat Completions) now send an opaque, random `session_id` on every request of a conversation, including each tool-loop step, to improve provider affinity and prompt-cache reuse. Sidebar chats keep one key across turns, agent switches and worker restarts, and get a new key when cleared. Each page task gets its own key; a site voice conversation keeps one until it starts a new conversation. Fallback is unchanged and cache hits are not guaranteed. Other providers and compatible endpoints receive no such field.
+- OpenRouter requests also send app attribution headers (`HTTP-Referer` and `X-OpenRouter-Title: BYOA`), so they show up as BYOA in OpenRouter's activity log. Other providers don't receive them.
+
 ### Connecting web apps
 
 - Choose session-only, 30-day, or until-disconnect site approvals; incognito stays session-only.

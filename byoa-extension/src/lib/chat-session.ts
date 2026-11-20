@@ -25,6 +25,12 @@ export interface ChatSessionSnapshot {
   tabId: number;
   incognito: boolean;
   selectedAgentId?: string;
+  /**
+   * Opaque provider routing key for this conversation (OpenRouter sticky routing). Stable across
+   * turns, tool steps, agent switches, and worker restarts; replaced when the chat is cleared.
+   * Optional so snapshots saved before it existed still restore.
+   */
+  routingSessionId?: string;
   turns: ChatTurn[];
   revision: number;
 }
