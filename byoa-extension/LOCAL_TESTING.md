@@ -18,9 +18,9 @@ Margin runs at `http://localhost:5183/` and Boardwalk at `http://localhost:5184/
 
 ## Connect and try the demos
 
-Configure a profile in BYOA Settings. Each app's **Connect agent** action calls `agentboard.connect()` and opens BYOA's private approval window. That window shows the requesting origin and all profiles, even a single profile. Approve the desired profile there. Apps never enumerate profiles or receive credentials. Cancellation leaves existing grants intact; grants are scoped per origin and browser session.
+Configure a profile in BYOA Settings. Each app's **Connect agent** action calls the SDK client's `connect()` and opens BYOA's private approval window. That window shows the requesting origin and all profiles, even a single profile. Approve the desired profile there. Apps never enumerate profiles or receive credentials. Cancellation leaves existing grants intact; grants are scoped per origin and last for the duration chosen in the approval window (the browser session by default).
 
-In Margin, highlight sample text, choose an editing action, enter an instruction, and press **Send**. In Boardwalk, select a card, choose **Ask agent**, enter an instruction, and press **Send**. Review proposals in the app. Tasks run in the background; **View agent chat** explicitly opens the transcript. Disconnect cancels that origin's tasks. See [sdk/README.md](../packages/browser/README.md) for lifecycle and capability limits.
+In Margin, highlight sample text, choose an editing action, enter an instruction, and press **Send**. In Boardwalk, select a card, choose **Ask agent**, enter an instruction, and press **Send**. Review proposals in the app. Tasks run in the background; **Open in sidebar** explicitly opens the transcript. Disconnect cancels that origin's tasks. See the [browser SDK README](../packages/browser/README.md) for lifecycle and capability limits.
 
 ## Browser verification
 

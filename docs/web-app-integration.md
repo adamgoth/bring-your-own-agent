@@ -2,7 +2,7 @@
 
 BYOA lets a user connect their configured agent to your app and request work from your interface. Your app exposes capabilities through WebMCP tools; BYOA runs the agent and routes tool calls back to the page. Results appear through your app's own state and UI.
 
-This guide describes the experimental implementation in this repository. **Top-level HTTPS pages, and plain-HTTP `localhost` or `127.0.0.1` on any port, can ask to connect.** Plain HTTP on other hosts and pages inside iframes cannot. Each exact origin needs the person's approval in BYOA's popup. Use the locally packaged `@byoagent/browser` SDK; registry publication is a separate step.
+This guide describes the experimental implementation in this repository. **Top-level HTTPS pages, and plain-HTTP `localhost` or `127.0.0.1` on any port, can ask to connect.** Plain HTTP on other hosts and pages inside iframes cannot. Each exact origin needs the person's approval in BYOA's popup. Use the locally packaged `@byoagent/browser` SDK; it is not on npm yet. For a picture of how the pieces fit, see [How it works](../README.md#how-it-works).
 
 ## Who owns what
 
@@ -164,7 +164,7 @@ Use [Boardwalk's tools](../demos/boardwalk/src/tools.ts) and [board state](../de
 
 ## 5. Test locally
 
-Follow the [root setup instructions](../README.md#get-running) to install dependencies, build the extension, load it unpacked, configure an API profile, and start the demos. Reload the extension and app tabs after extension rebuilds. For an integration experiment today, adapt a demo on its supported origin; changing the dev-server port or deploying the app does not grant connection access.
+Follow the root README to [install the extension](../README.md#install-the-extension), configure an API profile, and [run the demos](../README.md#run-the-demos). Reload the extension and app tabs after extension rebuilds. Your own app can connect from any `localhost` or `127.0.0.1` port during development and from any top-level HTTPS origin once deployed; each exact origin needs its own approval.
 
 Check the integration with sample data:
 
@@ -183,33 +183,17 @@ CHROME_FOR_TESTING_BIN='/path/to/Chrome for Testing' pnpm test:browser
 
 The test uses a temporary browser profile and a loopback mock provider. See the [browser test guide](../byoa-extension/tests/browser/README.md) for details. If you change a demo's tools or workflow, update the corresponding integration coverage.
 
-## Current operating limits
+## Limits your app should handle
 
-Site tasks run independently of sidebar chats, with at most 3 running globally, 2 per profile, and 1 outstanding task per tab. Excess tasks wait in eligible FIFO order. Queue wait is limited to five minutes and does not consume run time. Run time is two minutes by default (Options: 1–10 minutes); an app’s optional `timeoutMs` can shorten it. Inactivity is 60 seconds without a stream chunk, tool call or result; a tool waiting on a person would hit this limit. Same-document port drops get ten seconds to reattach with bounded replay. Navigation stops the run; a worker restart marks unfinished tasks `interrupted`. Neither resumes a provider stream or retries automatically. Store the active task ID in `sessionStorage` and call `getTask(id)` on reload (poll if still busy), or `listTasks()` for up to ten recent summaries on this tab and exact origin. No gesture is needed for these summary-only lookups; prompts, responses and tool activity stay extension-private. Show existing proposals and a Retry button for retryable terminal events; its trusted click calls `request()` again with validated current context. See Margin’s recovery banner for an example.
+The full list of limits, approval durations, budgets and data-flow rules is in [Limits, permissions and privacy](limits-and-privacy.md). The parts that shape app code:
 
-App tasks receive only the requested site-provenance WebMCP tools; Workspace sharing is off by default. In BYOA’s popup, you can share read-only snapshots of Persona (IDENTITY.md and SOUL.md), About you (USER.md), or Memory (MEMORY.md) for that exact origin and chosen connection duration. Shared content can reach destinations used by the site’s tools. AGENTS.md, journals, file tools, and remote-MCP context remain excluded. The page API exposes no sharing state. Every script on an approved origin shares that origin's authority. The page transport does not isolate scripts from one another.
-
-Credentials stay in the extension, but prompts, tool definitions, and tool results go to the configured model endpoint. API billing applies; this does not use a consumer ChatGPT or Claude subscription. Use sample content for development.
-
-See the [SDK contract](../packages/browser/README.md) for the full prototype boundaries and client behavior. Packages are locally distributed until a separate npm release; spending budgets and provider discovery are already implemented.
-
-
-### Connection duration and activity
-
-BYOA’s approval popup defaults to “Until I close the browser”; the person can choose “For 30 days” or “Until I disconnect”. Incognito approvals are session-only. Persistent grants remain on this device across browser restarts and extension updates. Expiry is checked when access is read, without background alarms. Deleting a profile revokes its site grants.
-
-Options → Connected sites lists profiles, shared files, duration, expiry and last use. Disconnecting there stops running tasks. Its clearable local activity log retains at most 500 entries and 30 days: connection events and task IDs, status, profile names, tool names and duration. It contains no prompts, tool arguments or results. Grants and activity are excluded from settings export/import. The page-facing Connection API is unchanged and exposes no duration, expiry, sharing state or activity.
-
-### Spending budgets and usage
-
-People control app budgets in BYOA Options, its connection popup and Connected sites. Apps cannot set budgets, prices, grants or sharing flags. The default per-task cap is 200,000 total tokens; a person can override it per site and set site or all-sites daily token/dollar caps. Days follow the browser's local calendar. Sidebar chats are excluded.
-
-Task events and recovery summaries carry cumulative `usage: { inputTokens, outputTokens, totalTokens, usageKnown }`. Render `usageKnown: false` as incomplete usage, never as a free or zero-token run. Missing provider usage falls back to the profile step limit; known counts still accrue. A budget stop has `status: 'error'` and `code: 'budget'`. Keep existing proposals available for review. A task already over its cap starts no provider call. Usage arrives after a step, so each concurrently running task can overshoot a cap by at most one step. Retrying is a fresh task, subject to the same daily ledger.
-
-Costs and profile prices remain extension-private. Dollar caps require configured prices or an explicitly reported provider cost; missing costs cannot enforce a dollar cap and are labelled incomplete in Connected sites. No price table is bundled. Keyless local profiles count tokens with zero cost. Provider metadata support varies; the bundled OpenAI-compatible adapter does not preserve arbitrary OpenRouter billing fields, so enter profile prices when needed.
-
-Regular daily ledgers are kept locally for 35 calendar days; each day holds up to 1,000 site buckets plus an overflow bucket for already-running steps. New sites are refused at capacity until the next day. Private browsing has a separate session-only ledger and daily aggregate; it never contributes to regular persistent accounting. Provider usage is written before waiting for outstanding page tools and before the next step is authorized. Cancellation before a usage report, and working tasks interrupted by a worker restart, are marked incomplete. A worker killed before usage is received cannot recover unreported provider usage; interrupted tasks are never retried automatically.
-
+- **Concurrency.** One outstanding task per tab (3 globally, 2 per profile). Extra tasks queue for up to five minutes; render `queued`.
+- **Timeouts.** Run time is two minutes by default (the person can set 1–10 minutes); `timeoutMs` can only shorten it. A task also stops after 60 seconds without progress, so a tool that waits on a person will trip it. Return proposals promptly and let the app handle review.
+- **Interruptions.** Navigation stops a run and a worker restart marks it `interrupted`. Nothing resumes or retries automatically. Store the active task ID in `sessionStorage`, call `getTask(id)` on reload (poll while it is still busy), or `listTasks()` for up to ten recent summaries. Show existing proposals and a **Retry** button for retryable terminal events; its click calls `request()` again with freshly validated context. Margin's recovery banner is an example.
+- **Budgets.** People set token and dollar caps in the extension; apps cannot. A budget stop is `status: 'error'` with `code: 'budget'`. Keep existing proposals available for review.
+- **Usage.** Task events and recovery summaries carry cumulative `usage: { inputTokens, outputTokens, totalTokens, usageKnown }`. Render `usageKnown: false` as incomplete usage, never as a free or zero-token run. Costs and prices are never exposed to the page.
+- **Scope.** A task receives only the site tools you named. The page API exposes no connection duration, expiry, sharing state or activity, and every script on an approved origin shares that origin's authority.
+- **Data.** Prompts, tool definitions and tool results go to the person's configured model endpoint. Return bounded, relevant data from tools, and use sample content while developing.
 
 ## Optional floating site voice
 

@@ -1,33 +1,43 @@
 # Changelog
 
-## Unreleased — SDK packaging and provider discovery
+## Unreleased
 
-- Build ESM and declarations for `@byoagent/browser`, with lazy `byoa`, `createClient`, provider selection and SSR-safe imports. Keep `agentboard` as a deprecated alias.
-- Add neutral request-only provider discovery and MAIN-world provider, preserving isolated-world/worker authority checks and the full recovery/token-only usage contract.
-- Keep v1 `agentboard:*` transport compatibility; eventual removal is planned with no scheduled date.
-- Build demos from package output and verify npm pack installation, consumer types and SSR import in CI. No registry publication or store submission.
+### Connecting web apps
 
-## Unreleased — task recovery
+- Choose session-only, 30-day, or until-disconnect site approvals; incognito stays session-only.
+- Manage Connected sites in Options, including duration, shared files, last use and revocation that cancels running tasks.
+- Keep a clearable, metadata-only local activity log (500 entries, 30 days), excluded with grants from settings backups.
+- Revoke approvals when their profile is deleted and enforce expiry on read.
+- Add optional per-origin sharing of read-only persona, user, and memory snapshots with site tasks. Sharing defaults off, excludes file tools, and is recorded in extension transcripts.
 
+### Site tasks
+
+- Isolate sidebar and site model streams. Run up to three site tasks concurrently, with two per profile and one per tab; report provider rate limits clearly.
 - Same-document task-port reattachment with a ten-second grace period and 50-event replay buffer.
 - Session-only sequenced task records, tab/origin-scoped summary lookup, and restart interruption reporting.
 - Separate queue, run and inactivity limits; Options run limit (1–10 minutes), with app requests clamped to it.
 - SDK lookup and retryability; Margin reload recovery with explicit gesture-based retry. No automatic retry or stream resumption.
 
-## Unreleased
+### Spending budgets and usage
+
+- Added person-controlled per-task, site daily and all-sites daily budgets, a serialized 35-day local ledger, and isolated private session accounting.
+- Added cumulative token usage to task events/recovery and Boardwalk, with explicit incomplete usage and step-limit fallback. Budget stops preserve proposals and use `error` / `budget`.
+- Added optional profile pricing and extension-private cost/activity reporting. No built-in prices; sidebar chats are excluded. Caps are checked at provider step boundaries and may overshoot by one step per running task.
+
+### SDK packaging and provider discovery
+
+- Build ESM and declarations for `@byoagent/browser`, with lazy `byoa`, `createClient`, provider selection and SSR-safe imports. Keep `agentboard` as a deprecated alias.
+- Add neutral request-only provider discovery and MAIN-world provider, preserving isolated-world/worker authority checks and the full recovery/token-only usage contract.
+- Keep v1 `agentboard:*` transport compatibility; eventual removal is planned with no scheduled date.
+- Build demos from package output and verify npm pack installation, consumer types and SSR import in CI. No registry publication or store submission.
+- Add `@byoagent/react` components and hooks, the shared `<byoa-connection-dialog>` element, and the coding-agent integration recipes.
+
+### Sidebar and voice
 
 - Keep sidebar conversations in browser-session storage and continue active responses when the sidebar closes. Reopening restores messages and tool activity without rerunning work; Stop and Clear remain explicit actions. Agent switching retains the same history.
-
-- Isolate sidebar and site model streams. Run up to three site tasks concurrently, with two per profile and one per tab; report provider rate limits clearly.
-- Choose session-only, 30-day, or until-disconnect site approvals; incognito stays session-only.
-- Manage Connected sites in Options, including duration, shared files, last use and revocation that cancels running tasks.
-- Keep a clearable, metadata-only local activity log (500 entries, 30 days), excluded with grants from settings backups.
-- Revoke approvals when their profile is deleted and enforce expiry on read.
-
-
-## Unreleased
-
-- Add optional per-origin, session-only sharing of persona, user, and memory snapshots with site tasks. Sharing defaults off, excludes file tools, and is recorded in extension transcripts.
+- Add local-only dictation in the sidebar, and an optional floating microphone on connected sites that opt in.
+- Redesign settings and the sidebar composer; add an Actions picker.
+- Add an Ollama provider preset with origin setup guidance.
 
 ## 0.1.1
 
@@ -43,9 +53,3 @@ Initial BYOA release, based on AgentBoard by Ilya Grigorik.
 - Interact with WebMCP tools through the browser sidebar.
 - Connect agents to the included local writing editor and Kanban demos.
 - Optionally configure remote MCP servers and a local workspace.
-
-### Spending budgets and usage
-
-- Added person-controlled per-task, site daily and all-sites daily budgets, a serialized 35-day local ledger, and isolated private session accounting.
-- Added cumulative token usage to task events/recovery and Boardwalk, with explicit incomplete usage and step-limit fallback. Budget stops preserve proposals and use `error` / `budget`.
-- Added optional profile pricing and extension-private cost/activity reporting. No built-in prices; sidebar chats are excluded. Caps are checked at provider step boundaries and may overshoot by one step per running task.

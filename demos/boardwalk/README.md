@@ -62,4 +62,4 @@ CHROME_FOR_TESTING_BIN='/path/to/Chrome for Testing' pnpm test:browser:apps:buil
 
 The test uses a fresh temporary browser profile and a loopback mock model provider. It verifies tool scopes, background work, batch review/acceptance, manual edits, cross-app queuing, cancellation, origin-specific disconnect, optional transcript viewing, and mobile layout. It never loads your normal browser profile or real provider credentials.
 
-The app now calls `agentboard.connect()` without building a profile picker. BYOA opens its own window showing the requesting site and all profiles. Select a profile and approve there. Cancel or close preserves any existing connection. Profile lists are no longer exposed to app code.
+The app calls the SDK client's `connect()` without building a profile picker. (The demo source names its client variable `agentboard`; it is the same `byoa` client.) BYOA opens its own window showing the requesting site and all profiles. Select a profile and approve there. Cancel or close preserves any existing connection. Profile lists are not exposed to app code.

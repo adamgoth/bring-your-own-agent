@@ -4,41 +4,87 @@ BYOA lets you use your own AI agent inside any web app that supports it, instead
 
 ![A visitor connects their agent to the Margin demo, approves the site in BYOA's own window, asks for a warmer opening paragraph, watches the agent work, then accepts the suggested edit in the page.](docs/media/byoa-demo.gif)
 
-Configure your agent once in a browser extension. Connect an app, send a request from inside it, and review the results there. The extension runs the agent in the background; its sidebar is optional.
+Configure your agent once in the BYOA browser extension: your provider, your model, your API key. When an app supports BYOA, click **Connect Agent**, approve the site, and ask for work from inside the app. The agent runs in the background and its results show up in the app for you to review.
 
 [Watch the demo on YouTube](https://www.youtube.com/watch?v=2dbfm2v9eKE)
 
-This repo contains the BYOA browser extension (a modified AgentBoard), the SDK packages that add BYOA to a web app, and three WebMCP demos:
+## How it works
 
-| Folder                | What it does                                                                                                                                                                                             |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `byoa-extension/`     | Our AgentBoard fork: provider configuration, background tasks, scoped page tools, cancellation, and optional chat transcripts. The extension is branded BYOA; internal identifiers retain compatibility. |
-| `packages/react/` | Optional React components and hooks: the same connection dialog as the custom element, plus request and status UI. |
-| `packages/browser/` | The SDK for any web app: connection and request client, the `<byoa-connection-dialog>` custom element, shared styles, and the coding-agent recipes. |
-| `demos/margin/`       | Selection-first writing app with inline suggestions and comments. Port 5183.                                                                                                                             |
-| `demos/boardwalk/`    | Kanban board with reviewable card and column changes. Port 5184.                                                                                                                                         |
-| `demos/piano-tutor/`  | Voice-driven piano tutor: shows chords and keys, listens to MIDI. No backend; BYOA's floating voice drives its tools. Port 5185. See [its README](demos/piano-tutor/README.md). |
+```mermaid
+flowchart TB
+  subgraph Page["Web app (the page)"]
+    direction LR
+    UI["App UI<br/>Connect Agent, prompts,<br/>review and undo"]
+    SDK["BYOA SDK<br/>@byoagent/browser<br/>@byoagent/react"]
+    Tools["WebMCP tools<br/>registered by the app"]
+  end
+  subgraph Ext["BYOA extension"]
+    direction LR
+    Approve["Approval popup<br/>you approve the site<br/>and pick a profile"]
+    Agent["Background agent<br/>profiles, keys,<br/>budgets, limits"]
+    Side["Optional<br/>sidebar chat,<br/>floating voice"]
+  end
+  Model["Your model provider<br/>your API key"]
 
-## Add BYOA to your app with a coding agent
-
-Point your coding agent at the recipe. It works in any web app (React or not) and walks the agent through everything: surveying the app, choosing or creating the WebMCP tools (it stops for your approval before creating any), installing the SDK, adding the **Connect Agent** button and dialog, wiring one request, and testing with a mock provider.
-
-```text
-Add Bring Your Own Agent (BYOA) to this app. Follow this recipe step by step:
-https://raw.githubusercontent.com/adamgoth/bring-your-own-agent/main/packages/browser/prompts/add-byoa.md
+  UI --> SDK
+  SDK -- "1 connect" --> Approve
+  SDK -- "2 request: prompt + tool names" --> Agent
+  Agent <-- "3 model calls" --> Model
+  Agent -- "4 tool calls" --> Tools
+  Tools -- "5 proposals" --> UI
+  Approve --> Agent
+  Agent -.-> Side
 ```
 
-The recipe is [add-byoa.md](packages/browser/prompts/add-byoa.md); it hands off to [add-webmcp-tools.md](packages/browser/prompts/add-webmcp-tools.md) when the app needs tools. Both are also shipped in the browser package under `prompts/`.
+The app registers its actions (read the selection, propose an edit) as [WebMCP](https://github.com/webmachinelearning/webmcp) tools in the page. Then:
 
-The SDK isn't on npm yet. The agent builds it from this repository with one command that installs only the two packages and writes their archives into the app:
+1. **Connect.** The app's **Connect Agent** button calls the SDK. BYOA opens its own window where you approve that exact site and pick an agent profile. The app never sees your keys or your other profiles.
+2. **Request.** The app sends a prompt and the names of the tools the agent may use.
+3. **Model calls.** BYOA runs your agent in the background against your model provider, with your key.
+4. **Tool calls.** When the agent uses a tool, BYOA routes the call back to the page, where the app's own code runs it.
+5. **Proposals.** The app shows what the agent proposed, and you accept, reject or undo.
 
-```sh
-pnpm sdk:vendor --out /absolute/path/to/your-app/vendor/byoa
-```
+The sidebar is optional: tasks run without it, and you can open a task's transcript there when you want to see what the agent did.
 
-Then it installs `./vendor/byoa/byoagent-browser-0.1.0.tgz` (plus `byoagent-react-0.1.0.tgz` for React apps) and commits them with the app's lockfile. To use the result, people need the [BYOA extension](#install-the-extension).
+| Piece | Owns |
+| --- | --- |
+| The app | Its interface, state, tools, validation, and the review and undo flow. |
+| WebMCP | The in-page registry of tool names, schemas and execution functions. |
+| BYOA SDK | The connection and request client, plus optional connection and prompt UI. |
+| BYOA extension | Agent profiles and credentials, site approval, model requests, budgets, progress and cancellation. |
 
-See the [browser SDK](packages/browser/README.md) (any framework, including the `<byoa-connection-dialog>` element), [React components and styling](packages/react/README.md), and [the integration guide](docs/web-app-integration.md).
+## Features
+
+**For people using BYOA-enabled apps**
+
+- **Any model.** OpenAI-style (Responses or Chat Completions), Anthropic, Google, OpenRouter, a compatible proxy, or local Ollama.
+- **Multiple agent profiles.** Choose which one each site gets when you connect.
+- **Per-site approval.** Nothing is shared until you approve the exact origin, for the browser session, 30 days, or until you disconnect.
+- **Spending budgets.** A token cap per task, plus daily token or dollar caps per site and across all sites.
+- **Connected sites.** Review what each site can use, change its duration, disconnect it, and see a local metadata-only activity log.
+- **Background work.** Tasks run without the sidebar, up to three at once. Open a task's transcript only when you want it.
+- **Optional context sharing.** Share read-only persona, about-you or memory files from a local workspace with a site. Off by default.
+- **Floating voice (beta).** Dictate a request on sites that opt in. Speech is transcribed on your device.
+- **A sidebar agent for any page.** Chat with page tools for reading pages, PDFs, GitHub pull requests and YouTube transcripts; connect remote MCP servers; script your own WebMCP tools; save prompt commands. See the [extension README](byoa-extension/README.md).
+
+**For app developers**
+
+- **Browser SDK** (`@byoagent/browser`). Connect, request work, stream progress, cancel and look up tasks from any framework. ESM and SSR-safe.
+- **Drop-in connection UI.** A `<byoa-connection-dialog>` custom element, or React components and hooks (`@byoagent/react`), themed with `--byoa-*` CSS variables.
+- **Coding-agent recipes.** Point your coding agent at one prompt and it adds BYOA to your app, including the WebMCP tools.
+- **Your tools stay yours.** Apps expose actions through WebMCP and pass tool names. The extension needs no app-specific code.
+- **Task lifecycle.** Queued, working and terminal events, token usage, timeouts, and recovery after a reload with an explicit retry.
+- **Voice opt-in.** One call (`configureVoice`) adds the extension-owned microphone to your connected app.
+- **Open provider protocol.** Discovery and requests work [without the SDK](docs/provider-spec.md), and other providers can implement the same interface.
+- **Worked examples.** [Margin](demos/margin/README.md), a writing app, [Boardwalk](demos/boardwalk/README.md), a Kanban board, and [Piano Tutor](demos/piano-tutor/README.md), a voice-driven app with no backend.
+
+**Safety model**
+
+- Credentials stay in the extension and never reach the page.
+- A site task gets only the page tools the app named, never your sidebar tools, files or remote MCP servers.
+- Connecting and requesting work need a real click from you.
+- Both demos apply changes as proposals you review, with stale-proposal checks and undo. That pattern is the recommended one for any app.
+- BYOA has no account, telemetry or proxy. Your prompts and tool results go to the provider you configured.
 
 ## Install the extension
 
@@ -53,55 +99,79 @@ pnpm build
 
 Open `chrome://extensions`, turn on Developer mode, choose **Load unpacked** and select `byoa-extension/dist`. In BYOA's Options, add an agent profile with your provider, model and API key. Then open a BYOA-enabled app and click **Connect Agent**.
 
-## Get running
+Load only one BYOA installation at a time, and reload the extension and app tabs after a rebuild.
 
-Use Node 22.13+ and pnpm 10.28.0 (npm ships with Node).
+## Run the demos
+
+From the repository root, with the extension loaded:
 
 ```sh
-cd bring-your-own-agent
 pnpm run setup
 pnpm build
 pnpm dev:demos
 ```
 
-`pnpm run setup` installs each project's pinned dependencies using its existing lockfile. The projects keep independent lockfiles; this is a single project folder, not a pnpm workspace. No provider credentials or browser profiles are part of the repo.
+This starts [Margin](http://localhost:5183/) on port 5183 and [Boardwalk](http://localhost:5184/) on port 5184. Ctrl+C stops both. `pnpm run setup` installs each project from its own lockfile; the repository is a single folder of independent projects, not a pnpm workspace.
 
-1. Open `chrome://extensions`, enable Developer mode, and **Load unpacked** → this repo's `byoa-extension/dist` folder.
-2. Configure your API agent profiles in the extension's Options.
-3. Open [Margin](http://localhost:5183/) and [Boardwalk](http://localhost:5184/). Both `localhost` and `127.0.0.1` work; each origin needs its own connection approval.
-4. In each app, choose **Connect Agent** in the header, then **Connect Agent** in the dialog. BYOA opens its own popup: check the requesting site, select a profile, then approve. The picker is shown even when only one profile exists. The header displays your agent's profile name.
-5. Send a request inside the app. Proposals appear there for review. **Open in sidebar** explicitly opens the extension's task transcript.
+1. In each app, choose **Connect Agent** in the header, then **Connect Agent** in the dialog.
+2. In BYOA's popup, check the requesting site, select a profile and approve. The header then shows your profile's name.
+3. Send a request inside the app and review what comes back. **Open in sidebar** shows the task transcript.
 
-Load only one BYOA installation while testing to avoid duplicate bridges on the same page. Keep settings exports private; they can contain credentials. Reload the extension and app tabs after extension rebuilds.
+Things to try:
 
-The servers bind to loopback and use strict ports. Ports 5183/5184 keep the demos separate from apps using Vite’s default port 5173. Ctrl+C stops both servers.
+- **Margin:** highlight a passage → **Improve this** → "Make this clearer and more concise" → **Suggest edit**. Accept or reject the inline suggestion.
+- **Boardwalk:** select a card → **Ask agent** → "Break this into three actionable tasks. Keep the original card" → **Send**. Review the batch before accepting.
+- **Boardwalk, bigger:** "Create a column called Next week, move two high-priority cards into it, rename Ready to Up next, and propose deleting the sample-board card." Everything arrives as one proposal, and **Undo** restores cards and columns together.
 
-## Demo prompts
+Both `localhost` and `127.0.0.1` work, but each origin needs its own approval. Use sample content: your provider receives the instructions, tool definitions and tool results.
 
-**Margin:** highlight a passage → Suggest replacement → “Make this clearer and more concise” → Send. Accept or reject the inline suggestion.
+## Add BYOA to your app
 
-**Boardwalk:** select any card → Ask agent → “Break this into three actionable tasks. Keep the original card” → Send. Review the batch before accepting.
+Point your coding agent at the recipe. It works in any web app (React or not) and walks the agent through everything: surveying the app, choosing or creating the WebMCP tools (it stops for your approval before creating any), installing the SDK, adding the **Connect Agent** button and dialog, wiring one request, and testing with a mock provider.
 
-Also try: “Create a column called Next week, move two high-priority cards into it, rename Ready to Up next, and propose deleting the sample-board card.” Card deletion and column changes are proposals, not immediate mutations. Undo restores accepted cards and columns together. Editing the board invalidates older proposals.
+```text
+Add Bring Your Own Agent (BYOA) to this app. Follow this recipe step by step:
+https://raw.githubusercontent.com/adamgoth/bring-your-own-agent/main/packages/browser/prompts/add-byoa.md
+```
 
-`pnpm dev:demos` starts both demos together: Margin at http://localhost:5183/ and Boardwalk at http://localhost:5184/. `pnpm dev` is an equivalent shortcut. Press Ctrl+C to stop both.
+The recipe is [add-byoa.md](packages/browser/prompts/add-byoa.md); it hands off to [add-webmcp-tools.md](packages/browser/prompts/add-webmcp-tools.md) when the app needs tools. Both also ship in the browser package under `prompts/`.
 
-## Shared contract
+The SDK isn't on npm yet. The agent builds it from this repository with one command that installs only the two packages and writes their archives into the app:
 
-Apps expose their actions with WebMCP. They pass registered tool names to `byoa.request()` through the shared client; they never supply executable tool definitions to the provider interface. No app-specific extension handler is needed.
+```sh
+pnpm sdk:vendor --out /absolute/path/to/your-app/vendor/byoa
+```
 
-- Margin: `get_selection`, `get_document_outline`, `find_text`, `propose_replacement`, `add_comment`.
-- Boardwalk: `get_board_snapshot`, `get_selected_cards`, `propose_board_changes` (card create/update/move/delete; column create/rename).
+Then it installs `./vendor/byoa/byoagent-browser-0.1.0.tgz` (plus `byoagent-react-0.1.0.tgz` for React apps) and commits them with the app's lockfile. To use the result, people need the [BYOA extension](#install-the-extension).
 
-The SDKs are packaged locally as `@byoagent/browser` and `@byoagent/react` (no npm publication in this change). Use `pnpm sdk:vendor --out /path/to/app/vendor/byoa` to build both archives into an app (or `pnpm pack:sdk` to also verify them in fresh consumer installs), then install them with relative paths. Import `{ byoa }` from `@byoagent/browser`; the deprecated `agentboard` alias still works. See the [neutral provider spec](docs/provider-spec.md) for discovery, provider selection, security and use without the SDK.
+Doing it by hand, or want the detail?
 
-To build BYOA into a web app, start with the [web app integration guide](docs/web-app-integration.md). See [the SDK contract](packages/browser/README.md) for the client API, and [Margin's guide](demos/margin/README.md), [Boardwalk's guide](demos/boardwalk/README.md) and [Piano Tutor's guide](demos/piano-tutor/README.md) for worked examples.
+| Doc | What it covers |
+| --- | --- |
+| [Web app integration guide](docs/web-app-integration.md) | Registering tools, connecting, requesting work, reviewable changes, testing. |
+| [Browser SDK](packages/browser/README.md) | The client API and its contract, including the `<byoa-connection-dialog>` element. |
+| [React components](packages/react/README.md) | Components, hooks, styling and accessibility. |
+| [Provider protocol](docs/provider-spec.md) | Discovery, methods, errors and security, for use without the SDK. |
+| [Limits, permissions and privacy](docs/limits-and-privacy.md) | Who can connect, approvals, task limits, budgets and data flow. |
+| [Margin](demos/margin/README.md), [Boardwalk](demos/boardwalk/README.md), [Piano Tutor](demos/piano-tutor/README.md) | Worked examples. |
 
-This is a prototype. Any HTTPS site, and `localhost`/`127.0.0.1` on any port, can ask to connect; nothing is shared until you approve that exact origin in BYOA's popup. Connections are per origin, lasting until the browser closes by default, for 30 days, or until you disconnect; page tasks run independently of sidebar chats (up to 3 globally, 2 per profile, and 1 per tab), with separate limits of five minutes queued, two minutes running by default (1–10 minutes in Options), and 60 seconds without progress. Apps may shorten the run limit. A dropped port can reattach within the same document for ten seconds; navigation and worker restarts stop the run, leaving session-only task summaries for lookup and an explicit Retry action. There is no automatic retry. BYOA owns the profile picker and site-approval popup. Person-controlled spending budgets and cumulative token reporting are available.
+## What's in this repository
 
-Provider API billing applies. This does not use a ChatGPT or Claude consumer subscription. Use sample content: the configured provider receives instructions, tool definitions, and tool results. Workspace sharing is off by default. In BYOA’s popup, you can share read-only snapshots of Persona (IDENTITY.md and SOUL.md), About you (USER.md), or Memory (MEMORY.md) for that exact origin for the chosen connection duration. Shared content can reach destinations used by the site’s tools. AGENTS.md, journals, file tools, and remote-MCP context remain excluded. The page API exposes no sharing state. Credentials remain in the extension.
+| Folder | What it does |
+| --- | --- |
+| `byoa-extension/` | The browser extension: agent profiles, site approval, background tasks, budgets, sidebar chat and voice. A fork of AgentBoard; some internal identifiers keep the old name for compatibility. |
+| `packages/browser/` | The SDK for any web app: connection and request client, the `<byoa-connection-dialog>` custom element, shared styles, and the coding-agent recipes. |
+| `packages/react/` | Optional React components and hooks over the browser SDK. |
+| `demos/margin/` | Selection-first writing app with inline suggestions and comments. |
+| `demos/boardwalk/` | Kanban board with reviewable card and column changes. |
+| `demos/piano-tutor/` | Voice-driven piano tutor: shows chords and keys, listens to MIDI. No backend; BYOA's floating voice drives its tools. Port 5185. |
+| `docs/` | Integration guide, provider protocol, limits, and design notes. |
 
-Manage approvals in **Options → Connected sites**: review shared files, change duration, disconnect one or all sites, and view or clear metadata-only activity. Disconnecting cancels running tasks. Incognito approvals stay session-only. Activity is kept locally for up to 30 days and 500 entries; grants and activity are excluded from settings backups.
+## Status and limits
+
+This is a prototype. Any HTTPS site, and `localhost` or `127.0.0.1` on any port, can ask to connect; nothing is shared until you approve that exact origin. Provider API billing applies, and BYOA does not use a ChatGPT or Claude consumer subscription.
+
+Timeouts, concurrency, connection durations, budgets, workspace sharing and data flow are all in [Limits, permissions and privacy](docs/limits-and-privacy.md).
 
 ## Checks
 

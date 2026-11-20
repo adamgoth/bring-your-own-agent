@@ -56,3 +56,46 @@ button:focus-visible {
 [hidden] {
   display: none !important;
 }
+.speech-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--byoa-space-3);
+}
+.speech-controls > * {
+  min-height: 44px;
+  line-height: 1.2;
+}
+.speech-controls button {
+  padding: 0 16px;
+}
+select {
+  appearance: none;
+  padding: 0 40px 0 14px;
+  border: 1px solid var(--byoa-line-strong);
+  border-radius: var(--byoa-radius-md);
+  background-color: var(--byoa-surface);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--byoa-ink-muted) 50%),
+    linear-gradient(135deg, var(--byoa-ink-muted) 50%, transparent 50%);
+  background-position:
+    right 20px center,
+    right 15px center;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  color: var(--byoa-ink);
+  font: 600 14px var(--byoa-font-body);
+  cursor: pointer;
+}
+select:hover {
+  border-color: var(--byoa-ink);
+}
+select:focus-visible {
+  outline: 2px solid var(--byoa-focus);
+  outline-offset: 3px;
+}
+@media (max-width: 480px) {
+  .speech-controls > * {
+    flex: 1 1 100%;
+  }
+}
