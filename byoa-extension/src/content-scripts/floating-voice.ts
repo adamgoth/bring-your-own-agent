@@ -18,6 +18,8 @@ export function createFloatingVoice() {
   let bindingId: string | undefined;
   let frame: HTMLIFrameElement | undefined;
   let visibility: ReturnType<typeof setInterval> | undefined;
+  /** The frame being dragged; it ignores the pointer meanwhile, so hit-testing cannot see it. */
+  let dragging: HTMLIFrameElement | undefined;
   /** Where the person dragged it, as distances from the right and bottom edges. */
   let wanted: Offset = { right: MARGIN, bottom: MARGIN };
   /** Keep the whole frame on screen; an expanded panel may shift, but `wanted` is kept for when it collapses. */
@@ -51,6 +53,7 @@ export function createFloatingVoice() {
   const drag = (grabX: number, grabY: number) => {
     if (!frame) return;
     const moving = frame;
+    dragging = moving;
     moving.style.setProperty('pointer-events', 'none', 'important');
     const root = document.documentElement;
     const cursor = root.style.cursor;
@@ -72,6 +75,7 @@ export function createFloatingVoice() {
       globalThis.removeEventListener('pointerup', stop, true);
       globalThis.removeEventListener('pointercancel', stop, true);
       globalThis.removeEventListener('blur', stop);
+      if (dragging === moving) dragging = undefined;
       moving.style.removeProperty('pointer-events');
       root.style.cursor = cursor;
       save();
@@ -171,10 +175,12 @@ export function createFloatingVoice() {
         rect.top > globalThis.innerHeight ||
         rect.right < 0 ||
         rect.left > globalThis.innerWidth ||
-        document.elementFromPoint(
-          Math.min(globalThis.innerWidth - 1, Math.max(0, rect.x + rect.width / 2)),
-          Math.min(globalThis.innerHeight - 1, Math.max(0, rect.y + rect.height / 2))
-        ) !== frame ||
+        // A drag sets pointer-events: none, which hides the frame from hit-testing; skip only this check then.
+        (dragging !== frame &&
+          document.elementFromPoint(
+            Math.min(globalThis.innerWidth - 1, Math.max(0, rect.x + rect.width / 2)),
+            Math.min(globalThis.innerHeight - 1, Math.max(0, rect.y + rect.height / 2))
+          ) !== frame) ||
         style.visibility === 'hidden' ||
         style.display === 'none' ||
         Number(style.opacity) === 0
