@@ -23,7 +23,7 @@ import { composeSystemPrompt, formatMemoryContext } from './system-prompt';
 import { getToolRegistry, type ToolSourceType } from '../webmcp/tool-registry';
 import { parseUserScript } from '../webmcp/script-parser';
 import { COMPILED_TOOLS } from '../webmcp/tools';
-import { createModelRuntime } from './model-runtime';
+import { createModelRuntime, createRoutingSessionId, isRoutingSessionId } from './model-runtime';
 import { isOpenAIProtocol, providerForApiProtocol, type ApiProtocol } from './protocol';
 import { decideStreamStop } from './stream-policy';
 import { recordToolSet, summarizeCacheUsage } from './prompt-cache-telemetry';
@@ -321,6 +321,9 @@ export class AIClient {
    * @param tabId - Optional tab ID to scope tools to a specific tab
    * @param streamId - Ownership token required to cancel this specific stream
    * @param workspaceContext - Fixed hidden bootstrap returned by this chat's first stream
+   * @param routing.sessionId - Opaque key shared by every request of one conversation. Callers
+   *   with a conversation pass their own; otherwise this call (all of its tool-loop steps) gets
+   *   a fresh one. Only OpenRouter agents send it.
    */
   async streamChat(
     agentId: string,
@@ -337,7 +340,8 @@ export class AIClient {
       tools: readonly string[];
       share?: SiteShare;
       onContext?: (shared: string[], notice?: string) => void;
-    }
+    },
+    routing: { sessionId?: string } = {}
   ): Promise<void> {
     const lane = siteTask?.lane ?? (siteTask ? `site:${streamId}` : 'sidebar');
     const requestSequence = ++this.streamRequestSequence;
@@ -448,7 +452,11 @@ export class AIClient {
         // Source labels are informational; unavailable script metadata must not block chat.
       }
 
-      const runtime = createModelRuntime(agent);
+      const runtime = createModelRuntime(agent, {
+        sessionId: isRoutingSessionId(routing.sessionId)
+          ? routing.sessionId
+          : createRoutingSessionId(),
+      });
       const toolRegistry = getToolRegistry();
       // Recheck after every asynchronous preparation phase, immediately before binding tools.
       // A tab ID is not authority to acquire a replacement document's same-named tools.

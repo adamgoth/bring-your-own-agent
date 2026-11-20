@@ -10,6 +10,7 @@ import { saveSiteTask, type SiteTaskRecord } from './site-tasks';
 import type { TaskCode, TaskEvent } from '../lib/task-event';
 import { clampTaskTimeout } from '../lib/storage/config-migration';
 import type { AIClient } from '../lib/ai/client';
+import { createRoutingSessionId } from '../lib/ai/model-runtime';
 import type { ConfigStorage } from '../lib/storage/config';
 
 /** One independent site task per click; no sidebar or durable conversation required. */
@@ -616,7 +617,10 @@ export function createSiteAgentHandler(
                   // Keep context metadata inside the extension; page progress must not disclose it.
                   saveChat();
                 },
-              }
+              },
+              // A voice conversation keeps one routing key across its turns; an independent
+              // task gets its own, never shared with the sidebar or another task.
+              { sessionId: conversation?.routingSessionId ?? createRoutingSessionId() }
             );
           } finally {
             release();

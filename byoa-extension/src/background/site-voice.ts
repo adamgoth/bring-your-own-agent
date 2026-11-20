@@ -9,6 +9,7 @@ import { lookupSiteTasks, type SiteTaskRecord } from './site-tasks';
 import { siteChatPrefix } from '../lib/site-chat';
 import type { ConfigStorage } from '../lib/storage/config';
 import { createVoiceOwner } from './voice-owner';
+import { createRoutingSessionId } from '../lib/ai/model-runtime';
 
 export function setupSiteVoice(options: {
   config: ConfigStorage;
@@ -29,6 +30,8 @@ export function setupSiteVoice(options: {
     policy: SiteVoiceOptions;
     readonly bindingId: string;
     id: string;
+    /** Separate from `id`, which the page sees; rotated with it on a new conversation. */
+    routingSessionId: string;
     history: CoreMessage[];
     widget?: chrome.runtime.Port;
     taskId?: string;
@@ -124,6 +127,7 @@ export function setupSiteVoice(options: {
       checkCancelled();
       const context: SiteConversationContext = {
         id: entry.id,
+        routingSessionId: entry.routingSessionId,
         agentId: entry.agentId,
         history: [...entry.history],
         instructions: entry.policy.instructions ?? '',
@@ -264,6 +268,7 @@ export function setupSiteVoice(options: {
           policy,
           bindingId,
           id: bindingId,
+          routingSessionId: createRoutingSessionId(),
           history: [],
           busy: false,
           submissionEpoch: 0,
@@ -394,6 +399,7 @@ export function setupSiteVoice(options: {
         entry.history = [];
         entry.taskId = undefined;
         entry.id = globalThis.crypto.randomUUID();
+        entry.routingSessionId = createRoutingSessionId();
         return;
       }
       const token = generation;

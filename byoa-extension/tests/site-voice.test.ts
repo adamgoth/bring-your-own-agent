@@ -335,3 +335,34 @@ it('starts a new conversation that drops history and retires the old conversatio
   expect(context.id).not.toBe(bindingId);
   expect(context.history).toEqual([]);
 });
+
+it('keeps one private routing session across voice turns and rotates it with a new conversation', async () => {
+  const { port, send, bindingId } = await boundWidget();
+  const settle = async (call: number, taskId: string) => {
+    const channel = mocks.execute.mock.calls[call][0] as chrome.runtime.Port;
+    vi.mocked(port.postMessage).mockClear();
+    channel.postMessage({ taskId, status: 'cancelled', detail: 'Done', busy: false });
+    await vi.waitFor(() =>
+      expect(port.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'result' }))
+    );
+    await flush();
+  };
+  const routing = (call: number) =>
+    (mocks.execute.mock.calls[call][1] as { routingSessionId: string }).routingSessionId;
+
+  send({ type: 'submit', text: 'First' });
+  await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalledTimes(1));
+  await settle(0, 'first');
+  send({ type: 'submit', text: 'Follow-up' });
+  await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalledTimes(2));
+  await settle(1, 'second');
+  send({ type: 'new-conversation' });
+  send({ type: 'submit', text: 'Fresh' });
+  await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalledTimes(3));
+
+  expect(routing(0)).toMatch(/^[0-9a-f-]{36}$/);
+  // The page sees the conversation id; the routing key must be a different, private value.
+  expect(routing(0)).not.toBe(bindingId);
+  expect(routing(1)).toBe(routing(0));
+  expect(routing(2)).not.toBe(routing(0));
+});

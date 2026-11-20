@@ -94,6 +94,7 @@ describe('Site background tasks', () => {
     const validate = vi.fn(async () => true);
     const h = harness({
       id: 'conversation',
+      routingSessionId: 'voice-routing-session',
       agentId: 'configured',
       history: [{ role: 'assistant', content: 'Prior approved site response' }],
       instructions: 'Site guidance',
@@ -114,10 +115,28 @@ describe('Site background tasks', () => {
     ]);
     expect(validate).toHaveBeenCalled();
     expect(h.streamChat.mock.calls[0][6].tools).toEqual(['get_selection']);
+    // A voice conversation's turns share its private routing key, not the page-visible id.
+    expect(h.streamChat.mock.calls[0][7]).toEqual({ sessionId: 'voice-routing-session' });
+  });
+  it('gives each independent page task its own opaque routing session', async () => {
+    const h = harness();
+    const first = h.connect('http://localhost:5183/private?q=secret', 7, false, 'doc-1');
+    first.send({ type: 'start', tools: ['get_selection'], text: 'Private prompt text' });
+    await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledTimes(1));
+    const second = h.connect('http://localhost:5183/', 8, false, 'doc-2');
+    second.send({ type: 'start', tools: ['get_selection'], text: 'Another task' });
+    await vi.waitFor(() => expect(h.streamChat).toHaveBeenCalledTimes(2));
+    const [a, b] = h.streamChat.mock.calls.map((call) => call[7].sessionId as string);
+    expect(a).toMatch(/^[0-9a-f-]{36}$/);
+    expect(b).toMatch(/^[0-9a-f-]{36}$/);
+    expect(a).not.toBe(b);
+    // The routing key is independent of the stream id and carries no page or prompt data.
+    expect(a).not.toBe(h.streamChat.mock.calls[0][4]);
   });
   it('refuses site history after authorization changes', async () => {
     const h = harness({
       id: 'conversation',
+      routingSessionId: 'voice-routing-session',
       agentId: 'configured',
       history: [],
       instructions: '',

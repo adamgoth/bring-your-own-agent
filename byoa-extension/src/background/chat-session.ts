@@ -16,6 +16,7 @@ import {
 import { raceWithAbort } from '../lib/abort';
 import { toModelMessages } from '../lib/ai/model-history';
 import { buildPageContextXml } from '../lib/ai/page-context';
+import { createRoutingSessionId, isRoutingSessionId } from '../lib/ai/model-runtime';
 import {
   selectStreamContinuation,
   toolsChangedContinuationMessage,
@@ -194,6 +195,9 @@ export function createChatSessionService(
           existing?.version === 1 && existing.incognito === (tab.incognito === true)
             ? existing
             : { version: 1, tabId, incognito: tab.incognito === true, turns: [], revision: 0 };
+        // A restored conversation keeps its routing key; older snapshots gain one now.
+        if (!isRoutingSessionId(data.routingSessionId))
+          data.routingSessionId = createRoutingSessionId();
         const s: Session = {
           data,
           subscribers: new Set(),
@@ -345,7 +349,9 @@ export function createChatSessionService(
             },
           },
           run.streamId,
-          workspace
+          workspace,
+          undefined,
+          { sessionId: s.data.routingSessionId }
         );
         if (!current(s, run)) return;
         if (failure) throw failure;
@@ -482,6 +488,8 @@ export function createChatSessionService(
             case 'clear':
               cancel(s);
               s.data.turns = [];
+              // Clear starts a new conversation: never share a routing key with the old one.
+              s.data.routingSessionId = createRoutingSessionId();
               s.size = bytes(s.data);
               s.workspace = undefined;
               s.epoch++;

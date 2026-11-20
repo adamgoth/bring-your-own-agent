@@ -24,7 +24,7 @@ Settings backups are plaintext and may contain credentials or other sensitive co
 
 BYOA may make limited third-party requests to load its interface. Those services receive ordinary network information, such as your IP address and request headers.
 
-When you configure or use a provider, server, tool, or script, BYOA or that tool may send data to the relevant third-party services. These services can include model providers, proxies, MCP servers, websites, and services contacted by tools or scripts.
+When you configure or use a provider, server, tool, or script, BYOA or that tool may send data to the relevant third-party services. These services can include model providers, proxies, MCP servers, websites, and services contacted by tools or scripts. For OpenRouter connections, BYOA also sends a random conversation identifier (`session_id`) that groups one conversation's requests for routing and appears in your OpenRouter logs. It contains no page addresses, prompt text, or account details. It also sends BYOA's name and project URL so the requests are labeled as BYOA there.
 
 Depending on the action, shared data may include content you provide, attachments, Local Workspace file contents, URL and title context from current or earlier conversation turns, page content, tool definitions and instructions, tool inputs and results, model settings, and credentials or browser-session data needed to access the selected service.
 
