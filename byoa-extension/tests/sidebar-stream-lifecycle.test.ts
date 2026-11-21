@@ -170,3 +170,47 @@ it('clear replay preserves app history and profile changes preserve the conversa
   expect(document.querySelectorAll('.chat-session-turn')).toHaveLength(0);
   expect(document.querySelector('#site-agent-chat')?.textContent).toBe('App history');
 });
+
+function connectWithoutSnapshot() {
+  return connectChatSession({
+    container: document.querySelector('#messages')!,
+    busy: vi.fn(),
+    selected: vi.fn(),
+    scroll: () => {},
+    message: (_role, content) => {
+      const element = document.createElement('div');
+      element.textContent = String(content);
+      return element;
+    },
+  });
+}
+
+it('a send before the first snapshot waits for it and then goes through', async () => {
+  const view = connectWithoutSnapshot();
+  const port = ports[0];
+  const submitted = view.submit('m1', 'a', 'Hello');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(port.postMessage).not.toHaveBeenCalled();
+  port.emit({ type: 'snapshot', snapshot: structuredClone(empty) });
+  await vi.advanceTimersByTimeAsync(0);
+  const command = port.postMessage.mock.calls[0][0];
+  expect(command).toMatchObject({ type: 'submit', id: 'm1', agentId: 'a', content: 'Hello' });
+  port.emit({ type: 'reply', requestId: command.requestId });
+  await expect(submitted).resolves.toBeUndefined();
+});
+
+it('a send before the first snapshot gives up after a bounded wait', async () => {
+  const view = connectWithoutSnapshot();
+  const submitted = view.submit('m1', 'a', 'Hello');
+  const outcome = expect(submitted).rejects.toThrow('Chat is reconnecting');
+  await vi.advanceTimersByTimeAsync(10_000);
+  await outcome;
+  expect(ports[0].postMessage).not.toHaveBeenCalled();
+});
+
+it('a send while reconnecting after the first snapshot still fails at once', async () => {
+  const { view } = setup();
+  ports[0].drop();
+  await expect(view.submit('m1', 'a', 'Hello')).rejects.toThrow('Chat is reconnecting');
+  expect(ports[0].postMessage).not.toHaveBeenCalled();
+});
