@@ -29,6 +29,9 @@ interface View {
 }
 
 /** A view owns DOM and a subscription, never model execution or model history. */
+/** How long a send waits for the first session snapshot before reporting the chat unavailable. */
+const INITIAL_SNAPSHOT_WAIT_MS = 10_000;
+
 export function connectChatSession(options: {
   container: HTMLElement;
   message: (
@@ -48,8 +51,13 @@ export function connectChatSession(options: {
   const views = new Map<string, View>();
   const pending = new Map<string, { resolve(): void; reject(error: Error): void }>();
   let initialResolve!: () => void;
+  // True once the first connection has answered with a snapshot or `unavailable`.
+  let initialSettled = false;
   const initialized = new Promise<void>((resolve) => {
-    initialResolve = resolve;
+    initialResolve = () => {
+      initialSettled = true;
+      resolve();
+    };
   });
   const setBusy = () => options.busy(!!activeTurnId);
   const finishText = (view: View) => {
@@ -223,7 +231,7 @@ export function connectChatSession(options: {
       if (!stopped) retry = setTimeout(connect, 1000);
     });
   };
-  const request = (command: ChatSessionRequest) => {
+  const send = (command: ChatSessionRequest) => {
     if (!ready || !port)
       return Promise.reject(new Error('Chat is reconnecting. Please wait before sending.'));
     const attached = port;
@@ -237,6 +245,22 @@ export function connectChatSession(options: {
         reject(new Error('Chat connection is unavailable.'));
       }
     });
+  };
+  /**
+   * The composer is enabled once agents load, which can be before the first session snapshot
+   * arrives. A command sent in that window waits for the snapshot (bounded) instead of failing.
+   * After the first connection, a disconnected session still rejects at once, so a reconnect is
+   * never mistaken for a send that will go through.
+   */
+  const request = (command: ChatSessionRequest) => {
+    if (ready || initialSettled) return send(command);
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, INITIAL_SNAPSHOT_WAIT_MS);
+      void initialized.then(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+    }).then(() => send(command));
   };
   connect();
   window.addEventListener('pagehide', () => {
