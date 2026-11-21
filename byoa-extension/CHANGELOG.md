@@ -37,6 +37,7 @@ BYOA's first release after its Chrome Web Store launch. Web apps can now connect
 - Add local-only dictation in the sidebar, and an optional floating microphone on connected sites that opt in.
 - The floating voice control can be dragged anywhere on the page without stopping voice, shows a live voice wave while listening, and has a launcher pill, conversation controls and a compact task line. Its binding survives starting a new conversation.
 - Redesign settings and the sidebar composer; add an Actions picker.
+- A message sent right after opening the sidebar now waits for the conversation to finish loading instead of failing with "Chat is reconnecting".
 - Add an Ollama provider preset with origin setup guidance.
 
 ### OpenRouter sticky routing
