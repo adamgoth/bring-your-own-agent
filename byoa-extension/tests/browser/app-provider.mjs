@@ -231,7 +231,11 @@ try {
   );
   let ext = await page(`chrome-extension://${new URL(worker.url).host}/src/options/index.html`);
   await waitFor(() => ext.evaluate(`document.readyState==='complete'&&!!chrome.tabs`), 'options');
-  assert.equal(await ext.evaluate(`chrome.runtime.getManifest().name`), 'BYOA');
+  assert.equal(
+    await ext.evaluate(`chrome.runtime.getManifest().name`),
+    'BYOA - Bring Your Own AI Agent'
+  );
+  assert.equal(await ext.evaluate(`chrome.runtime.getManifest().short_name`), 'BYOA');
   assert.equal(await ext.evaluate(`document.title`), 'BYOA: settings');
   await ext.evaluate(
     `chrome.storage.local.get('config').then(({config})=>chrome.storage.local.set({config:{...config,schemaVersion:2,agents:[{id:'fixture',name:'Demo deepseek',provider:'openai',apiProtocol:'openai-chat-completions',model:'fixture',endpoint:${JSON.stringify(endpoint)},temperature:0.7,maxSteps:8,isDefault:true}],defaultAgentId:'fixture'}}))`
