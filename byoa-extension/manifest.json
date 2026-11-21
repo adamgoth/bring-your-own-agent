@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "BYOA",
+  "name": "BYOA - Bring Your Own AI Agent",
+  "short_name": "BYOA",
   "version": "0.0.0",
-  "description": "Bring Your Own Agent: connect the AI agent you already use to apps that support BYOA.",
+  "description": "Use your own AI agent, model and API key inside web apps. Approve each site, set spending caps, and keep your key private.",
   "permissions": [
     "storage",
     "tabs",

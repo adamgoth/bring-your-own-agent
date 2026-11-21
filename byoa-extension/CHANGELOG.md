@@ -1,11 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
-### OpenRouter sticky routing
+BYOA's first release after its Chrome Web Store launch. Web apps can now connect to your agent and run tasks in the background, with per-site approvals, spending caps, voice control and an SDK for app developers.
 
-- OpenRouter connections (Responses and Chat Completions) now send an opaque, random `session_id` on every request of a conversation, including each tool-loop step, to improve provider affinity and prompt-cache reuse. Sidebar chats keep one key across turns, agent switches and worker restarts, and get a new key when cleared. Each page task gets its own key; a site voice conversation keeps one until it starts a new conversation. Fallback is unchanged and cache hits are not guaranteed. Other providers and compatible endpoints receive no such field.
-- OpenRouter requests also send app attribution headers (`HTTP-Referer` and `X-OpenRouter-Title: BYOA`), so they show up as BYOA in OpenRouter's activity log. Other providers don't receive them.
+### Listing and permissions
+
+- The extension is now named "BYOA - Bring Your Own AI Agent" (short name and toolbar title stay "BYOA"), with a new summary describing what it does.
+- New `offscreen` permission: hosts on-device speech recognition and the microphone level meter for optional voice input. Audio is not recorded, stored or sent anywhere; only the transcript goes to your configured provider.
 
 ### Connecting web apps
 
@@ -29,6 +31,19 @@
 - Added cumulative token usage to task events/recovery and Boardwalk, with explicit incomplete usage and step-limit fallback. Budget stops preserve proposals and use `error` / `budget`.
 - Added optional profile pricing and extension-private cost/activity reporting. No built-in prices; sidebar chats are excluded. Caps are checked at provider step boundaries and may overshoot by one step per running task.
 
+### Sidebar and voice
+
+- Keep sidebar conversations in browser-session storage and continue active responses when the sidebar closes. Reopening restores messages and tool activity without rerunning work; Stop and Clear remain explicit actions. Agent switching retains the same history.
+- Add local-only dictation in the sidebar, and an optional floating microphone on connected sites that opt in.
+- The floating voice control can be dragged anywhere on the page without stopping voice, shows a live voice wave while listening, and has a launcher pill, conversation controls and a compact task line. Its binding survives starting a new conversation.
+- Redesign settings and the sidebar composer; add an Actions picker.
+- Add an Ollama provider preset with origin setup guidance.
+
+### OpenRouter sticky routing
+
+- OpenRouter connections (Responses and Chat Completions) now send an opaque, random `session_id` on every request of a conversation, including each tool-loop step, to improve provider affinity and prompt-cache reuse. Sidebar chats keep one key across turns, agent switches and worker restarts, and get a new key when cleared. Each page task gets its own key; a site voice conversation keeps one until it starts a new conversation. Fallback is unchanged and cache hits are not guaranteed. Other providers and compatible endpoints receive no such field.
+- OpenRouter requests also send app attribution headers (`HTTP-Referer` and `X-OpenRouter-Title: BYOA`), so they show up as BYOA in OpenRouter's activity log. Other providers don't receive them.
+
 ### SDK packaging and provider discovery
 
 - Build ESM and declarations for `@byoagent/browser`, with lazy `byoa`, `createClient`, provider selection and SSR-safe imports. Keep `agentboard` as a deprecated alias.
@@ -36,13 +51,6 @@
 - Keep v1 `agentboard:*` transport compatibility; eventual removal is planned with no scheduled date.
 - Build demos from package output and verify npm pack installation, consumer types and SSR import in CI. No registry publication or store submission.
 - Add `@byoagent/react` components and hooks, the shared `<byoa-connection-dialog>` element, and the coding-agent integration recipes.
-
-### Sidebar and voice
-
-- Keep sidebar conversations in browser-session storage and continue active responses when the sidebar closes. Reopening restores messages and tool activity without rerunning work; Stop and Clear remain explicit actions. Agent switching retains the same history.
-- Add local-only dictation in the sidebar, and an optional floating microphone on connected sites that opt in.
-- Redesign settings and the sidebar composer; add an Actions picker.
-- Add an Ollama provider preset with origin setup guidance.
 
 ## 0.1.1
 
